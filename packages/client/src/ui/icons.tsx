@@ -6,7 +6,7 @@ const Svg = ({ children, size, className }: { children: ReactNode; size?: number
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" width={size} height={size} className={className}>{children}</svg>
 );
 
-export type IconKey = UnitType | 'trench' | 'factory' | 'barracks';
+export type IconKey = UnitType | 'trench' | 'factory' | 'barracks' | 'airfield' | 'pill' | 'fort' | 'flak';
 
 export function Icon({ k, size, className }: { k: IconKey; size?: number; className?: string }) {
   let p: ReactNode;
@@ -18,6 +18,11 @@ export function Icon({ k, size, className }: { k: IconKey; size?: number; classN
     case 'trench': p = <path d="M2 19h5v-6h4v6h4v-6h4v6h3" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />; break;
     case 'factory': p = <path d="M3 20V10l5 3V9l5 3V5h3v7h5v8z" />; break;
     case 'barracks': p = <path d="M3 20v-9l9-6 9 6v9zM10 20h4v-5h-4z" fillRule="evenodd" />; break;
+    case 'plane': p = <><path d="M2 10.5h20v2.2H2zM3 15h18v1.8H3z" /><path d="M10 6h3v14h-3z" /><path d="M8 18.5h7V20H8z" /></>; break;
+    case 'airfield': p = <><path d="M2 19h20v2H2z" /><path d="M4 17V9.5C4 7 6 5 8.5 5h0C11 5 13 7 13 9.5V17z" /><path d="M15 17V11h6v6z" /></>; break;
+    case 'pill': p = <><path d="M3 18v-5.5C3 9 7 6 12 6s9 3 9 6.5V18z" /><path d="M7 12h10v1.8H7z" fill="#000" fillOpacity=".55" /></>; break;
+    case 'fort': p = <><path d="M2 19c0-3 2-5 4-5h12c2 0 4 2 4 5z" /><path d="M10 12l11-6 .9 1.8L11.5 14z" /></>; break;
+    case 'flak': p = <><path d="M4 20h16v-2H4z" /><path d="M8 18l2-5h4l2 5z" /><path d="M11 13L17.5 3l1.7 1-6.3 10z" /></>; break;
   }
   return <Svg size={size} className={className}>{p}</Svg>;
 }

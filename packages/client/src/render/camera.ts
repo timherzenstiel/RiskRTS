@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { HH, HW } from '@riskrts/shared';
 import { clamp, lerp, smooth } from './util';
 
-export const MIN_DIST = 1.6, MAX_DIST = 170;
+export const MIN_DIST = 1.1, MAX_DIST = 170;
 const SUN_DIR = new THREE.Vector3(-.45, 1, .55).normalize();
 
 export class CameraRig {
@@ -32,7 +32,8 @@ export class CameraRig {
     this.gx = clamp(this.gx + panX * sp, -HW, HW); this.gz = clamp(this.gz + panZ * sp, -HH, HH);
     const k = 1 - Math.exp(-dt * 7);
     this.tx = lerp(this.tx, this.gx, k); this.tz = lerp(this.tz, this.gz, k); this.dist = lerp(this.dist, this.gdist, k);
-    const pitch = lerp(.62, 1.08, smooth(2, 70, this.dist));
+    // steep, Command & Conquer style view up close; flatter tilt only for the world map
+    const pitch = lerp(.92, 1.12, smooth(4, 70, this.dist));
     this.camera.position.set(this.tx, this.dist * Math.sin(pitch), this.tz + this.dist * Math.cos(pitch));
     this.camera.lookAt(this.tx, .5, this.tz); this.camera.updateMatrixWorld();
     const S = clamp(this.dist * .8, 3, 95), sc = this.sun.shadow.camera, texel = 2 * S / this.shadowSize;

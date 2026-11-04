@@ -9,7 +9,8 @@ import { DIFFICULTIES, supplyTick } from './economy';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
 import { TICK_SECONDS } from '../data/units';
-import type { GameState } from './types';
+import { DEFAULT_SETTINGS, type GameSettings, type GameState } from './types';
+import { DT } from '../data/units';
 
 export interface GameOptions {
   seed?: number;
@@ -18,19 +19,21 @@ export interface GameOptions {
   difficulty?: number;
   /** Collect visual effects (set false on a headless server). */
   fx?: boolean;
+  /** Lobby rules (attack cap, battle pace). */
+  settings?: Partial<GameSettings>;
 }
 
 export function createGame(opt: GameOptions): GameState {
   const W = world(), seed = (opt.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0, R = new Rng(seed);
   const g: GameState = {
-    v: 1, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1,
-    regions: W.regions.map(r => ({ id: r.id, owner: -1, units: emptyUnits(), trench: 0, factory: false, barracks: false, capitalOf: -1, battle: -1 })),
+    v: 2, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
+    regions: W.regions.map(r => ({ id: r.id, owner: -1, units: emptyUnits(), trench: 0, factory: false, barracks: false, airfield: false, defs: [], contested: -1, capitalOf: -1, battle: -1 })),
     factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id) })),
     armies: [], battles: [], over: false, winner: null, nextId: 1,
     stats: { won: Array(NUM_FACTIONS).fill(0), lost: Array(NUM_FACTIONS).fill(0) },
     events: [], fx: opt.fx === false ? null : [],
   };
-  FACTIONS.forEach((f, id) => { const t = g.regions[W.byName[f.capital].id]; t.owner = id; t.capitalOf = id; t.units = { inf: 6, mg: 2, art: 1, tank: 0 }; t.trench = 2; t.factory = true; });
+  FACTIONS.forEach((f, id) => { const t = g.regions[W.byName[f.capital].id]; t.owner = id; t.capitalOf = id; t.units = { inf: 6, mg: 2, art: 1, tank: 0, plane: 0 }; t.trench = 2; t.factory = true; t.defs.push({ id: g.nextId++, k: 'pill', s: -1, hp: DT.pill.hp, f: id }); });
   const rest = R.shuffle(g.regions.filter(t => t.owner < 0)), off = R.int(6);
   rest.forEach((t, k) => { t.owner = (k + off) % NUM_FACTIONS; t.units.inf = 2 + (R.next() < .5 ? 1 : 0); });
   const pool = R.shuffle(buildMissions());

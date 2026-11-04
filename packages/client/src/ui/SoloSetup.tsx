@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { DIFFICULTIES, FACTIONS } from '@riskrts/shared';
+import { DEFAULT_SETTINGS, DIFFICULTIES, FACTIONS, type GameSettings } from '@riskrts/shared';
+import { RulesPicker } from './Rules';
 import { HostSession } from '../game/session';
 import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
 import { click } from './actions';
 
 export function SoloSetup() {
-  const [pick, setPick] = useState(-1); const [diff, setDiff] = useState(1);
+  const [pick, setPick] = useState(-1); const [diff, setDiff] = useState(1); const [rules, setRules] = useState<GameSettings>({ ...DEFAULT_SETTINGS });
   const begin = () => {
     if (pick < 0) return; Sfx.init();
-    const s = new HostSession(pick, { humans: [pick], difficulty: diff });
+    const s = new HostSession(pick, { humans: [pick], difficulty: diff, settings: rules });
     const ui = useUi.getState(); ui.startSession(s); ui.setOverlay('orders'); // pauses until the orders are read
   };
   return (
@@ -24,6 +25,7 @@ export function SoloSetup() {
             </button>
           ))}
         </div>
+        <RulesPicker value={rules} onChange={p => setRules(r => ({ ...r, ...p }))} />
         <div className="row spread">
           <div><div className="lbl"><span>Difficulty · {DIFFICULTIES[diff].desc}</span></div>
             <div className="seg" role="group" aria-label="Difficulty">

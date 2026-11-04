@@ -4,7 +4,7 @@ import type { UnitType } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { useNet } from './netStore';
 
-const KEY_UNITS: UnitType[] = ['inf', 'mg', 'art', 'tank'];
+const KEY_UNITS: UnitType[] = ['inf', 'mg', 'art', 'tank', 'plane'];
 let lastSpeed = 1;
 
 export function useGameKeys() {
@@ -26,7 +26,9 @@ export function useGameKeys() {
         e.preventDefault();
         if (!s.canControlTime || ui.overlay) return;
         if (s.speed > 0) { lastSpeed = s.speed; ui.setSpeed(0); } else ui.setSpeed(lastSpeed || 1);
-      } else if (e.key >= '1' && e.key <= '4' || (e.code >= 'Digit1' && e.code <= 'Digit4')) {
+      } else if ((e.key === 'a' || e.key === 'A') && ui.sel >= 0 && s.state.regions[ui.sel].owner === s.me && s.state.regions[ui.sel].units.plane > 0) {
+        ui.beginOrder('air');
+      } else if (e.key >= '1' && e.key <= '5' || (e.code >= 'Digit1' && e.code <= 'Digit5')) {
         if (ui.overlay || ui.sel < 0 || s.state.regions[ui.sel].owner !== s.me) return;
         const i = (e.code.startsWith('Digit') ? Number(e.code.slice(5)) : Number(e.key)) - 1;
         ui.recruit(ui.sel, KEY_UNITS[i], e.shiftKey ? 5 : 1);

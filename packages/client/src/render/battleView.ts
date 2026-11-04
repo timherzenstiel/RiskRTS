@@ -1,13 +1,17 @@
 // One zoomed-in battlefield: a dithered pixel-art ground canvas (trenches, wire, craters, camps), static props, and per-agent display smoothing.
 import * as THREE from 'three';
-import { Rng, hash2, trenchX, vnoise, type Agent, type Battle, type UnitType } from '@riskrts/shared';
+import { Rng, hash2, isDef, trenchX, vnoise, type Agent, type Battle, type UnitType } from '@riskrts/shared';
 import type { Models } from './models';
 import type { FxSystem } from './fxSystem';
-import { K } from './palette';
+import { K, facCol } from './palette';
 import { clamp, hex3, seedOf, smooth } from './util';
 
 /** World units per battle-local unit; the battlefield is BF_W x BF_H local units. */
 export const BS = .11, BF_W = 48, BF_H = 34;
+/** Model scale of troops on the battlefield: a soldier is a fraction of a tent, a tank about a wagon. */
+export const US = .42;
+/** Height aircraft fly at over a battlefield (world units). */
+export const AIR_Y = .34;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const MUD = ['#352c20', '#3f3424', '#4a3d2a', '#55462f', '#605136', '#6b5b3d'].map(hex3);
 const GRASS = ['#43502c', '#4d5a32', '#586638', '#64723f', '#6f7d47'].map(hex3);
@@ -164,14 +168,16 @@ export class BattleView {
 
   /** Draw static props into the lit pool. */
   drawProps(m: Models) {
-    const y = this.y, fy = Math.atan2(this.ax, this.az), p = m.part.bind(m);
+    // props share the troops' scale (PS); sandbags keep their length so the parapet stays closed
+    const y = this.y, fy = Math.atan2(this.ax, this.az), PS = .6;
+    const p = (x: number, yy: number, z: number, r: number, lx: number, ly: number, lz: number, sx: number, sy: number, sz: number, c: Parameters<Models['part']>[10]) => m.part(x, yy, z, r, lx * PS, ly * PS, lz * PS, sx * PS, sy * PS, sz * PS, c);
     for (const q of this.props) {
       const wx = q.wx, wz = q.wz;
       switch (q.k) {
         case 'stump': p(wx, y, wz, q.r, 0, q.h / 2, 0, .025, q.h, .025, K.stump); p(wx, y, wz, q.r, .02, q.h * .7, 0, .04, .01, .01, K.stump); break;
         case 'ruin': p(wx, y, wz, q.r, 0, .05, 0, .24, .1, .03, K.stone); p(wx, y, wz, q.r, -.08, .12, 0, .08, .06, .03, K.stone); p(wx, y, wz, q.r, .1, .025, .08, .03, .05, .16, K.stone); p(wx, y, wz, q.r, .04, .01, .06, .06, .02, .04, K.stone); break;
         case 'crate': p(wx, y, wz, q.r, 0, .02, 0, .05, .04, .04, K.crate); break;
-        case 'bag': p(wx, y, wz, fy, 0, .016, 0, .08, .03, .045, K.sand); p(wx, y, wz, fy, .02, .045, 0, .07, .028, .04, K.sand2); break;
+        case 'bag': m.part(wx, y, wz, fy, 0, .01, 0, .08, .02, .03, K.sand); m.part(wx, y, wz, fy, .012, .028, 0, .07, .018, .027, K.sand2); break;
         case 'post': p(wx, y, wz, 0, 0, .03, 0, .012, .06, .012, K.stump); p(wx, y, wz, 0, 0, .062, 0, .03, .006, .006, K.gun); break;
         case 'tent': p(wx, y, wz, q.r, 0, .022, 0, .14, .044, .2, K.canvas); p(wx, y, wz, q.r, 0, .058, 0, .1, .03, .19, K.canvas); p(wx, y, wz, q.r, 0, .082, 0, .05, .02, .18, K.canvas2); p(wx, y, wz, q.r, 0, .1, 0, .01, .016, .2, K.beam); break;
         case 'wagon':
@@ -197,16 +203,24 @@ export class BattleView {
   drawAgents(m: Models, fx: FxSystem, agents: Agent[], simTime: number, now: number) {
     const y = this.y;
     for (let i = 0; i < agents.length; i++) {
-      const a = agents[i], d = this.disp[i]; if (!d) continue;
-      const wx = this.cx + d.x * BS, wz = this.cz + d.z * BS;
+      const a = agents[i], d = this.disp[i]; if (!d || a.out) continue;
+      const wx = this.cx + d.x * BS, wz = this.cz + d.z * BS, recoil = clamp(1 - (simTime - a.fireT) * 4, 0, 1);
       if (a.dead) {
         if (d.deadAt < 0 || now - d.deadAt > 40) continue;
         if (a.dieT > 0 && simTime - a.dieT > 40) continue;
-        if (a.type === 'tank') { m.unit('tank', wx, y, wz, a.face, a.f, 1, 0, 0); if (Math.random() < .04) fx.spawn(wx, y + .15, wz, .02, .15, 0, 0, 2, .04, .15, K.smoke2); }
-        else m.corpse(wx, y, wz, a.face, a.f);
+        if (a.type === 'plane') { const t = Math.min(1, (now - d.deadAt) / 1.2); if (t < 1) m.plane(wx, y + AIR_Y * (1 - t), wz, a.face + t * 3, K.smoke2, .45); else m.part(wx, y, wz, a.face, 0, .01, 0, .1, .02, .05, K.smoke2); if (t < 1 && Math.random() < .5) fx.spawn(wx, y + AIR_Y * (1 - t), wz, 0, .05, 0, 0, 1.2, .02, .08, K.smoke2); continue; }
+        if (isDef(a.type)) { m.part(wx, y, wz, a.face, 0, .015, 0, .12, .03, .1, K.concrete2); m.part(wx, y, wz, a.face + .7, .03, .03, .02, .05, .03, .04, K.concrete); if (Math.random() < .03) fx.spawn(wx, y + .05, wz, .01, .12, 0, 0, 2, .03, .1, K.smoke2); continue; }
+        if (a.type === 'tank') { m.unit('tank', wx, y, wz, a.face, a.f, US, 0, 0); if (Math.random() < .04) fx.spawn(wx, y + .07, wz, .02, .12, 0, 0, 2, .02, .08, K.smoke2); }
+        else m.corpse(wx, y, wz, a.face, a.f, US);
         continue;
       }
-      m.unit(a.type as UnitType, wx, y, wz, a.face, a.f, 1, a.moving ? a.phase : 0, clamp(1 - (simTime - a.fireT) * 4, 0, 1));
+      switch (a.type) {
+        case 'plane': m.plane(wx, y + AIR_Y + Math.sin(now * 2 + i) * .01, wz, a.face, facCol[a.f] ?? K.wing, .45); break;
+        case 'pill': m.pillbox(wx, y, wz, a.face, a.f, .6); break;
+        case 'fort': m.emplacement(wx, y, wz, a.face, a.f, .6, recoil); break;
+        case 'flak': m.flak(wx, y, wz, a.face, a.f, .55, recoil); break;
+        default: m.unit(a.type as UnitType, wx, y, wz, a.face, a.f, US, a.moving ? a.phase : 0, recoil);
+      }
     }
   }
 

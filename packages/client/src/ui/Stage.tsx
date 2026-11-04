@@ -23,10 +23,11 @@ export function Stage() {
       renderer = createWorldRenderer(canvas, labels, {
         onSelect: (id) => ui().select(id < 0 ? -1 : id),
         onOrder: (id) => {
-          const { sel, session: s } = ui();
+          const { sel, session: s, orderMode, orderKind } = ui();
           if (!s || id < 0) { ui().say('Pick a region to march on.'); return; }
+          if (orderMode && orderKind === 'air' && sel >= 0) { if (id === sel) { ui().say('Pick a different region as the target.'); return; } ui().air(sel, id); return; }
           if (sel < 0 || s.state.regions[sel].owner !== s.me) { ui().say('Select one of your own regions first, then right-click a neighbour.'); ui().cancelOrder(); return; }
-          if (!buildWorld().regions[sel].adj.includes(id)) { ui().say(id === sel ? 'Pick a different region as the target.' : `${buildWorld().regions[id].name} does not border ${buildWorld().regions[sel].name}.`); return; }
+          if (!buildWorld().regions[sel].adj.includes(id)) { ui().say(id === sel ? 'Pick a different region as the target.' : `${buildWorld().regions[id].name} does not border ${buildWorld().regions[sel].name}. Infantry and tanks need a direct border; aircraft reach two borders.`); return; }
           ui().march(sel, id);
         },
         onHover: (id) => ui().setHover(id),

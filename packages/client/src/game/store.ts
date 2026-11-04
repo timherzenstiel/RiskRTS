@@ -1,11 +1,12 @@
 // UI state (zustand). Game state itself lives in the Session; components read it through useSim() and re-render on `rev`.
 import { create } from 'zustand';
-import { describeEvent, type Command, type GameEvent, type UnitType } from '@riskrts/shared';
+import { describeEvent, type BuildKind, type Command, type DefKind, type GameEvent, type UnitType } from '@riskrts/shared';
 import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
-export type Tab = 'rec' | 'build' | 'march';
+export type Tab = 'rec' | 'build' | 'fort' | 'march';
+export type OrderKind = 'march' | 'air';
 export type Overlay = null | 'menu' | 'orders' | 'help' | 'end';
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number }
 
@@ -14,7 +15,9 @@ interface Ui {
   session: Session | null;
   /** Bumped ~5×/s and after every command so components re-read session.state. */
   rev: number;
-  sel: number; hover: number; tab: Tab; sendFrac: number; orderMode: boolean;
+  sel: number; hover: number; tab: Tab; sendFrac: number; orderMode: boolean; orderKind: OrderKind;
+  /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
+  fortMarker: [number, number] | null;
   overlay: Overlay; scoreOpen: boolean;
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
@@ -29,7 +32,8 @@ interface Ui {
   setHover(id: number): void;
   setTab(t: Tab): void;
   setSendFrac(f: number): void;
-  beginOrder(): void;
+  beginOrder(kind?: OrderKind): void;
+  setFortMarker(m: [number, number] | null): void;
   cancelOrder(): void;
   setOverlay(o: Overlay): void;
   toggleScore(): void;
@@ -41,8 +45,11 @@ interface Ui {
   advanceTut(n: number): void;
   /** Convenience actions that send a command and surface errors as toasts. */
   recruit(region: number, unit: UnitType, n?: number): void;
-  build(region: number, kind: 'trench' | 'factory' | 'barracks'): void;
+  build(region: number, kind: BuildKind): void;
+  fortify(region: number, kind: DefKind, sector: number): void;
   march(from: number, to: number): void;
+  air(from: number, to: number): void;
+  assault(region: number): void;
   /** Called by the game loop ~5×/s: pulls events from the session into the feed and bumps rev. */
   pump(): void;
   bump(): void;
@@ -53,21 +60,22 @@ const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } ca
 let feedId = 1;
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, overlay: null, scoreOpen: false,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
   sound: lsGet('f14snd') !== '0', fatal: null,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, overlay: 'orders', tab: 'rec', scoreOpen: false });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
-  select: (id) => { const s = get().session; set({ sel: id, orderMode: false }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
+  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
-  setTab: (tab) => set({ tab }),
+  setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
-  beginOrder: () => set({ orderMode: true }),
+  beginOrder: (orderKind = 'march') => set({ orderMode: true, orderKind }),
+  setFortMarker: (fortMarker) => set({ fortMarker }),
   cancelOrder: () => set({ orderMode: false }),
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
@@ -83,6 +91,12 @@ export const useUi = create<Ui>((set, get) => ({
     if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(2); Sfx.click(); } get().bump();
   },
   build: (region, kind) => { const s = get().session; if (!s) return; const err = s.send({ t: 'build', region, kind }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },
+  fortify: (region, kind, sector) => { const s = get().session; if (!s) return; const err = s.send({ t: 'fortify', region, kind, sector }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },
+  air: (from, to) => {
+    const s = get().session; if (!s) return; const err = s.send({ t: 'air', from, to, frac: get().sendFrac });
+    if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); set({ orderMode: false, orderKind: 'march' }); get().bump();
+  },
+  assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },
   march: (from, to) => {
     const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac });
     if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(3); Sfx.click(); } set({ orderMode: false }); get().bump();

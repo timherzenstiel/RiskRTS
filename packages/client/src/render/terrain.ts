@@ -59,14 +59,18 @@ export function computeHeights(w: World): Float32Array {
 
 const nb4 = (i: number, out: number[]) => { const c = i % COLS; out[0] = c > 0 ? i - 1 : -1; out[1] = c < COLS - 1 ? i + 1 : -1; out[2] = i >= COLS ? i - COLS : -1; out[3] = i + COLS < N ? i + COLS : -1; return out; };
 
+/** Shared uniform: 0 = full faction colouring (strategic view), 1 = natural terrain with coloured borders only (close-up). */
+export const uNear = { value: 0 };
+
 function detailMaterial(tex: THREE.DataTexture, strength: number) {
   const m = new THREE.MeshLambertMaterial();
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uDetail = { value: tex };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec4 _w = modelMatrix * instanceMatrix * vec4(transformed,1.0); vWP=_w.xyz; vWN=normalize(mat3(instanceMatrix)*objectNormal);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uDetail; varying vec3 vWP; varying vec3 vWN;')
+    sh.uniforms.uDetail = { value: tex }; sh.uniforms.uNear = uNear;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aNat; varying vec3 vWP; varying vec3 vWN; varying vec3 vNat;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec4 _w = modelMatrix * instanceMatrix * vec4(transformed,1.0); vWP=_w.xyz; vWN=normalize(mat3(instanceMatrix)*objectNormal); vNat=aNat;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uDetail; uniform float uNear; varying vec3 vWP; varying vec3 vWN; varying vec3 vNat;')
       .replace('#include <color_fragment>', `#include <color_fragment>
+  diffuseColor.rgb = mix(diffuseColor.rgb, vNat, uNear);
   vec3 _an=abs(vWN); float _n;
   if(_an.y>.5){ _n=texture2D(uDetail,vWP.xz*.5).r; diffuseColor.rgb*=${(1 - strength).toFixed(2)}+${(2 * strength).toFixed(2)}*_n; }
   else { vec2 _uv=_an.x>.5?vWP.zy:vWP.xy; _n=texture2D(uDetail,_uv*.5+.37).r; float _st=step(.5,fract(vWP.y*10.)); diffuseColor.rgb*=(.74+.2*_n)*(.95+.05*_st)*mix(.7,1.,clamp(vWP.y*2.,0.,1.)); }`);
@@ -92,11 +96,14 @@ export class Terrain {
   readonly groundY: number[];
   readonly railMat: THREE.LineBasicMaterial;
   private readonly bag = new DisposeBag();
-  private readonly instOf = new Int32Array(N).fill(-1);
-  private readonly biome = new Uint8Array(N);
-  private readonly baseCol: Float32Array;
-  private readonly cityT = new Uint8Array(N);
-  private readonly roadT = new Uint8Array(N);
+  readonly instOf = new Int32Array(N).fill(-1);
+  readonly biome = new Uint8Array(N);
+  readonly baseCol: Float32Array;
+  readonly cityT = new Uint8Array(N);
+  readonly roadT = new Uint8Array(N);
+  readonly fieldT = new Uint8Array(N);
+  readonly coastT = new Uint8Array(N);
+  private readonly natAttr: THREE.InstancedBufferAttribute;
   private readonly tileMesh: THREE.InstancedMesh;
   private readonly treeMesh: THREE.InstancedMesh;
   private readonly houseMesh: THREE.InstancedMesh;
@@ -119,12 +126,15 @@ export class Terrain {
     const m4 = new THREE.Matrix4();
     for (const i of landIdx) { const h = tileH[i]; m4.makeScale(TS, h, TS); m4.setPosition(tx(i % COLS), h / 2, tz((i / COLS) | 0)); this.tileMesh.setMatrixAt(this.instOf[i], m4); }
     this.tileMesh.setColorAt(0, WHITE);
+    this.natAttr = new THREE.InstancedBufferAttribute(new Float32Array(landIdx.length * 3).fill(1), 3);
+    this.tileMesh.geometry = boxGeo.clone(); this.bag.add(this.tileMesh.geometry);
+    this.tileMesh.geometry.setAttribute('aNat', this.natAttr);
     this.add(this.tileMesh);
 
     // base biome colours, beaches and patchwork fields
-    const coastLand = new Uint8Array(N), NB = [0, 0, 0, 0];
+    const coastLand = this.coastT, NB = [0, 0, 0, 0];
     for (const i of landIdx) { nb4(i, NB); for (const j of NB) if (j >= 0 && !land[j]) coastLand[i] = 1; }
-    const fieldT = new Uint8Array(N), tmp = new THREE.Color();
+    const fieldT = this.fieldT, tmp = new THREE.Color();
     this.baseCol = new Float32Array(landIdx.length * 3);
     landIdx.forEach((i, k) => {
       const c = i % COLS, r = (i / COLS) | 0, lon = lonOf(c), lat = latOf(r);
@@ -271,19 +281,23 @@ export class Terrain {
   paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3) {
     const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE;
     const { river, borderNb } = this.world;
-    const A = this.tileMesh.instanceColor!.array as Float32Array, base = this.baseCol;
+    const A = this.tileMesh.instanceColor!.array as Float32Array, base = this.baseCol, NA = this.natAttr.array as Float32Array;
     const hlC = hl === 2 ? WHITE : hl === 1 ? WHITE : hl === 3 ? RED : null, hlA = hl === 2 ? .26 : hl === 1 ? .12 : hl === 3 ? .15 : 0;
     for (const i of reg.tiles) {
       const k = this.instOf[i] * 3;
-      let r = base[k], g = base[k + 1], b = base[k + 2];
+      let nr = base[k], ng = base[k + 1], nbb = base[k + 2];
+      // strategic view: rivers fill their tile; close-up: grassy banks, the detail layer draws the channel
+      let r = nr, g = ng, b = nbb;
+      if (river[i]) { r += (RIVERC.r - r) * .72; g += (RIVERC.g - g) * .72; b += (RIVERC.b - b) * .72; nr *= .9; ng *= .95; nbb *= .9; }
+      else if (this.cityT[i]) { nr += (CITYC.r - nr) * .35; ng += (CITYC.g - ng) * .35; nbb += (CITYC.b - nbb) * .35; r = nr; g = ng; b = nbb; }
+      else if (this.roadT[i]) { nr += (ROADC.r - nr) * .3; ng += (ROADC.g - ng) * .3; nbb += (ROADC.b - nbb) * .3; r = nr; g = ng; b = nbb; }
       r += (fc.r - r) * .46; g += (fc.g - g) * .46; b += (fc.b - b) * .46;
-      if (river[i]) { r += (RIVERC.r - r) * .72; g += (RIVERC.g - g) * .72; b += (RIVERC.b - b) * .72; }
-      else if (this.cityT[i]) { r += (CITYC.r - r) * .35; g += (CITYC.g - g) * .35; b += (CITYC.b - b) * .35; }
-      else if (this.roadT[i]) { r += (ROADC.r - r) * .3; g += (ROADC.g - g) * .3; b += (ROADC.b - b) * .3; }
+      // close-up: natural ground with a light owner tint
+      nr += (fc.r - nr) * .1; ng += (fc.g - ng) * .1; nbb += (fc.b - nbb) * .1;
       const nb = borderNb[i];
-      if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; }
-      if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; }
-      A[k] = r; A[k + 1] = g; A[k + 2] = b;
+      if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; if (owners[nb] !== owner) { nr = r; ng = g; nbb = b; } }
+      if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; nr += (hlC.r - nr) * hlA; ng += (hlC.g - ng) * hlA; nbb += (hlC.b - nbb) * hlA; }
+      A[k] = r; A[k + 1] = g; A[k + 2] = b; NA[k] = nr; NA[k + 1] = ng; NA[k + 2] = nbb;
     }
     const T = this.treeMesh.instanceColor?.array as Float32Array | undefined;
     if (T) {
@@ -299,11 +313,12 @@ export class Terrain {
 
   /** Call after one or more paintRegion calls. */
   commitColors() {
-    this.tileMesh.instanceColor!.needsUpdate = true;
+    this.tileMesh.instanceColor!.needsUpdate = true; this.natAttr.needsUpdate = true;
     if (this.treeMesh.instanceColor) this.treeMesh.instanceColor.needsUpdate = true;
   }
 
   setCameraDistance(dist: number) {
+    uNear.value = 1 - clamp((dist - 9) / 14, 0, 1);
     const o = 1 - clamp((dist - 22) / 18, 0, 1);
     this.railMat.opacity = o * o * (3 - 2 * o); this.railMat.visible = this.railMat.opacity > .02;
   }

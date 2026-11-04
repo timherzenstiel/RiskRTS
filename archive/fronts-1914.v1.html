@@ -1,0 +1,1193 @@
+<title>Fronts of 1914</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap">
+<style>
+/* Layout: full-bleed voxel map; HUD as pinned dispatch panels on the edges (top bar, region file left, powers right, telegrams bottom) */
+:root{
+  --ink:#0b0f0d;          /* ground behind the map */
+  --panel:#141a16;        /* dispatch panel */
+  --panel-2:#1c241e;      /* raised controls */
+  --rule:#34412f;         /* pixel borders */
+  --paper:#e6dec3;        /* text, like old map paper */
+  --muted:#a3a990;        /* secondary text */
+  --brass:#d7aa4e;        /* accent: insignia brass */
+  --alarm:#e86a52;        /* battle / danger */
+  --ok:#94c46f;
+  --f-display:'Silkscreen','Courier New',monospace;
+  --f-body:'VT323','Courier New',monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--ink);color:var(--paper);font-family:var(--f-body);font-size:20px;line-height:1.1;overflow:hidden;-webkit-font-smoothing:none}
+#app{position:fixed;inset:0;overflow:hidden;user-select:none;-webkit-user-select:none}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:grab}
+#view.drag{cursor:grabbing}
+#view.order{cursor:crosshair}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+
+.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:2px solid var(--rule);box-shadow:4px 4px 0 rgba(0,0,0,.55)}
+.lbl{font-family:var(--f-display);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.lbl b{color:var(--paper);font-weight:400}
+.btn{font-family:var(--f-display);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--paper);background:var(--panel-2);border:2px solid var(--rule);box-shadow:2px 2px 0 #000;padding:7px 8px 6px;cursor:pointer;min-height:32px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--brass)}
+.btn:active:not(:disabled){transform:translate(2px,2px);box-shadow:none}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn.on{background:var(--brass);color:#1a1408;border-color:var(--brass)}
+.btn:focus-visible,.pick:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.chip{display:inline-block;width:10px;height:10px;background:var(--c);border:2px solid #000;flex:none}
+
+/* top bar */
+#top{position:absolute;top:calc(8px + env(safe-area-inset-top,0px));left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));display:flex;align-items:center;gap:14px;padding:6px 8px;flex-wrap:wrap}
+.crest{width:34px;height:34px;display:grid;place-items:center;background:var(--c,#555);color:#0b0f0d;font-family:var(--f-display);font-weight:700;font-size:12px;border:2px solid #000;flex:none}
+.tb{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tb .v{font-size:22px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tb .v .inc{color:var(--ok);font-size:18px}
+.bar{width:120px;height:8px;background:#000;border:2px solid var(--rule);position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--brass);width:0}
+.spacer{flex:1}
+.speed{display:flex;gap:4px}
+.speed .btn{min-width:38px}
+.tbtns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* region file */
+#tp{position:absolute;left:max(8px,env(safe-area-inset-left,0px));top:calc(70px + env(safe-area-inset-top,0px));width:300px;max-height:calc(100% - 90px);overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+#tp h2{font-family:var(--f-display);font-size:18px;font-weight:700;margin:0;letter-spacing:.02em;text-wrap:balance}
+#tp .eyebrow{font-family:var(--f-display);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+#tp .owner{display:flex;align-items:center;gap:8px;font-size:20px}
+#tp .cap{font-family:var(--f-display);font-size:9px;color:#1a1408;background:var(--brass);padding:2px 4px 1px;letter-spacing:.06em}
+#tp .x{position:absolute;right:8px;top:8px;width:32px;height:32px;background:transparent;border:0;color:var(--muted);cursor:pointer;display:grid;place-items:center}
+#tp .x:hover{color:var(--paper)}
+#tp{position:absolute}
+.sect{display:flex;flex-direction:column;gap:8px;border-top:2px solid var(--rule);padding-top:10px}
+.garr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.garr div{background:#0d120f;border:2px solid var(--rule);padding:4px 6px;display:flex;flex-direction:column;gap:2px}
+.garr .ut{font-family:var(--f-display);font-size:9px;color:var(--muted);letter-spacing:.06em}
+.garr b{font-weight:400;font-size:24px;font-variant-numeric:tabular-nums}
+.works{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:19px}
+.works .off{color:#5d6555;text-decoration:line-through}
+.pips{letter-spacing:2px;color:var(--brass)}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.btn.u{flex-direction:column;align-items:flex-start;gap:3px;padding:6px 8px;min-height:44px}
+.btn.u em{font-style:normal;font-family:var(--f-body);font-size:18px;letter-spacing:0;text-transform:none;color:var(--brass)}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.seg .btn{padding:6px 2px}
+.hint{margin:0;color:var(--muted);font-size:18px;line-height:1.05}
+.hint b{color:var(--paper);font-weight:400}
+.alarm{color:var(--alarm)}
+.sect.alarm .lbl{color:var(--alarm)}
+.atk{display:flex;flex-direction:column;gap:6px}
+.atk .btn{justify-content:space-between}
+
+/* powers */
+#powers{position:absolute;right:max(8px,env(safe-area-inset-right,0px));top:calc(70px + env(safe-area-inset-top,0px));width:260px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+#powers table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+#powers td{padding:2px 0;font-size:18px;white-space:nowrap}
+#powers td.n{text-align:right;padding-left:8px}
+#powers tr.me td{color:var(--brass)}
+#powers tr.dead td{color:#5d6555;text-decoration:line-through}
+#powers .hd td{font-family:var(--f-display);font-size:9px;color:var(--muted);letter-spacing:.06em}
+
+/* telegrams */
+#log{position:absolute;right:max(8px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:min(360px,calc(100% - 16px));padding:8px 10px;display:flex;flex-direction:column;gap:4px}
+#log ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+#log li{font-size:17px;line-height:1.05;color:var(--muted)}
+#log li time{color:#6f7766;margin-right:6px;font-variant-numeric:tabular-nums}
+#log li.me{color:var(--paper)}
+#log li.bad{color:var(--alarm)}
+#log li.good{color:var(--ok)}
+
+/* battle card */
+#bcard{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100% - 16px));padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+#bcard h3{margin:0;font-family:var(--f-display);font-size:13px;letter-spacing:.04em}
+.side{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:18px}
+.side .sb{height:8px;background:#000;border:2px solid var(--rule);position:relative}
+.side .sb i{position:absolute;inset:0 auto 0 0;background:var(--c)}
+
+/* labels on map */
+.tl{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:var(--f-display);font-size:10px;line-height:1;white-space:nowrap;will-change:transform}
+.tl .n{background:var(--c);color:#0b0f0d;border:2px solid #0b0f0d;padding:2px 4px 1px;min-width:14px;text-align:center;font-variant-numeric:tabular-nums}
+.tl .nm{color:var(--paper);text-shadow:1px 0 #000,-1px 0 #000,0 1px #000,0 -1px #000,1px 1px #000;font-size:9px;letter-spacing:.06em;text-transform:uppercase}
+.tl.sel .n{outline:2px solid var(--paper)}
+.tl.tg .n{outline:2px dashed var(--alarm);outline-offset:1px}
+.tl.ar .n{border-style:dashed}
+.bm{position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;background:#0b0f0d;border:2px solid var(--alarm);color:var(--alarm);padding:3px 5px;display:flex;align-items:center;gap:5px;font-family:var(--f-display);font-size:9px;will-change:transform}
+.bm svg{display:block}
+.bm:hover{background:#2a120d}
+
+#toast{position:absolute;left:50%;top:calc(76px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:#0b0f0d;border:2px solid var(--brass);padding:6px 12px;font-size:20px;max-width:calc(100% - 32px);text-align:center;box-shadow:4px 4px 0 #000;pointer-events:none}
+
+/* modal */
+.modal{position:absolute;inset:0;background:rgba(5,8,6,.72);display:grid;place-items:center;padding:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow:auto}
+.sheet{width:min(720px,100%);padding:24px;display:flex;flex-direction:column;gap:14px;max-height:100%;overflow:auto}
+.sheet h1{font-family:var(--f-display);font-weight:700;font-size:clamp(28px,6vw,48px);margin:0;line-height:1;letter-spacing:.02em;text-wrap:balance}
+.sheet h2{font-family:var(--f-display);font-weight:700;font-size:20px;margin:0;text-wrap:balance}
+.kicker{font-family:var(--f-display);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass)}
+.lede{font-size:22px;margin:0;max-width:62ch;color:var(--paper)}
+.sheet p{margin:0;max-width:62ch}
+.picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.pick{font:inherit;color:var(--paper);background:var(--panel-2);border:2px solid var(--rule);box-shadow:3px 3px 0 #000;padding:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;min-height:44px}
+.pick:hover{border-color:var(--c)}
+.pick i{display:block;height:8px;background:var(--c);border:2px solid #000}
+.pick b{font-family:var(--f-display);font-size:11px;font-weight:700;letter-spacing:.03em}
+.pick span{color:var(--muted);font-size:18px}
+.orders{border:2px dashed var(--brass);padding:14px;display:flex;flex-direction:column;gap:8px;background:#100f0a}
+.orders .stamp{font-family:var(--f-display);font-size:9px;color:var(--alarm);border:2px solid var(--alarm);align-self:flex-start;padding:3px 5px 2px;letter-spacing:.1em}
+.prog{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--muted);font-size:19px}
+.prog b{color:var(--paper);font-weight:400}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
+.keys dt{font-family:var(--f-display);font-size:10px;color:var(--brass);padding-top:4px;letter-spacing:.04em}
+.keys dd{margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+
+@media (max-width:860px){
+  #powers{display:none}
+  #powers.open{display:flex}
+  #log{display:none}
+  .conv .bar{width:70px}
+  .hidem{display:none!important}
+}
+@media (max-width:640px){
+  #top{gap:8px}
+  #tp{left:8px;right:8px;width:auto;top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:46%}
+  #bcard{bottom:auto;top:calc(120px + env(safe-area-inset-top,0px))}
+  .picks{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #powers{left:8px;right:8px;width:auto;top:calc(120px + env(safe-area-inset-top,0px))}
+}
+@media (prefers-reduced-motion:reduce){.btn:active:not(:disabled){transform:none}}
+</style>
+
+<div id="app">
+  <canvas id="view" aria-label="World map of 1914"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <header id="top" class="panel">
+    <div class="crest" id="crest">GB</div>
+    <div class="tb hidem"><div class="lbl">Power</div><div class="v" id="tb-name">—</div></div>
+    <div class="tb"><div class="lbl">Supply</div><div class="v"><span id="tb-sup">0</span> <span class="inc" id="tb-inc">+0</span></div></div>
+    <div class="tb conv"><div class="lbl">Convoy <b id="tb-sec">20s</b></div><div class="bar"><i id="tb-bar"></i></div></div>
+    <div class="tb hidem"><div class="lbl">Date</div><div class="v" id="tb-date">1 Aug 1914</div></div>
+    <div class="spacer"></div>
+    <div class="speed" role="group" aria-label="Game speed">
+      <button class="btn" data-speed="0" aria-label="Pause">II</button>
+      <button class="btn on" data-speed="1">1×</button>
+      <button class="btn" data-speed="2">2×</button>
+      <button class="btn" data-speed="4">4×</button>
+    </div>
+    <div class="tbtns">
+      <button class="btn" id="b-orders">Orders</button>
+      <button class="btn" id="b-powers">Powers</button>
+      <button class="btn" id="b-help">Help</button>
+      <button class="btn hidem" id="b-px">Pixels 3×</button>
+    </div>
+  </header>
+
+  <aside id="tp" class="panel" hidden aria-live="polite"></aside>
+  <aside id="powers" class="panel" aria-label="Powers"></aside>
+  <section id="log" class="panel" aria-label="Telegrams"><div class="lbl">Telegrams</div><ol id="log-list"></ol></section>
+  <div id="bcard" class="panel" hidden></div>
+  <div id="toast" hidden></div>
+  <div id="modal" class="modal"><div class="sheet panel" id="sheet"></div></div>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* =========================================================
+   helpers
+   ========================================================= */
+const $ = s => document.querySelector(s);
+const rand = Math.random;
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp = (a,b,t) => a+(b-a)*t;
+const smooth = (e0,e1,x) => { const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
+const cap = s => s[0].toUpperCase()+s.slice(1);
+const pick = arr => arr[Math.floor(rand()*arr.length)];
+const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+function hash2(x,y){ let h=Math.imul(x|0,374761393)^Math.imul(y|0,668265263); h=Math.imul(h^(h>>>13),1274126177); h^=h>>>16; return (h>>>0)/4294967296; }
+function vnoise(x,y){ const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi; const s=t=>t*t*(3-2*t);
+  const a=hash2(xi,yi),b=hash2(xi+1,yi),c=hash2(xi,yi+1),d=hash2(xi+1,yi+1); const u=s(xf),v=s(yf);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+
+/* =========================================================
+   world geometry (lon,lat outlines rasterised to 1.5° voxels)
+   ========================================================= */
+const RES=1.5, COLS=240, ROWS=94, LAT_TOP=84, N=COLS*ROWS;
+const LAND=[
+ // North America
+ [-168,66,-162,70,-156,71.5,-141,69.6,-128,70,-115,68.5,-100,68,-95,68,-88,67,-86,64,-92,62,-94,59,-92,57,-87,55.5,-82,52.5,-79,52,-78.5,55,-77,58.5,-78,62,-73,62.5,-70,61,-65,60,-61,56,-56,52,-60,47,-66,44.5,-70,42,-74,40.5,-76,37,-75.5,35,-81,31,-80,25.5,-82.5,28,-84,30,-89,30,-94,29.5,-97.5,26,-97.5,21,-95,18.5,-91,19,-87,21.5,-88,16,-83.5,15,-83.5,11,-79,9,-77.5,8,-80,7.5,-86,11,-92,14.5,-96,16,-105,20,-106,23,-109,25.5,-112,29,-114.7,31.5,-117,32.5,-120.5,34.5,-124,40,-124,46,-125,48.5,-130,54,-135,58,-140,60,-147,61,-152,59,-158,57,-164,55,-158,58.5,-162,60,-165,62.5,-166,64.5],
+ [-80,73,-68,70,-62,66.5,-65,63,-72,62.8,-78,64,-90,70,-88,73],
+ [-120,77,-85,80,-75,77,-92,74,-120,72,-125,74],
+ [-73,78,-60,82,-30,83,-20,81,-18,76,-22,70,-32,68,-40,65,-43,60,-48,61,-52,65,-54,69,-58,75,-66,77],
+ [-59.4,47.6,-56,51.6,-53.5,49.3,-52.7,47.5,-55.5,46.9],
+ [-85,21.9,-82,23.1,-77.2,21.6,-74.2,20.2,-77.5,19.9,-80,21.8,-83,22],
+ [-74.4,18.3,-72.8,19.9,-69.9,19.6,-68.4,18.6,-71.4,17.6],
+ // South America
+ [-77.5,8,-72,12,-64,10.5,-60,8.5,-52,5,-50,0,-44,-2.5,-35,-5.5,-35,-9,-39,-13,-39,-18,-41,-22,-45,-23.5,-48.5,-26,-50,-30,-53,-34,-57,-35,-57.5,-38,-62,-39,-65,-42,-65,-45,-67.5,-46.5,-66,-48,-69,-51,-68.5,-52.5,-70,-55,-74,-53,-75.5,-48,-73.5,-42,-73.5,-37,-71.5,-32,-71,-25,-70,-18,-76,-14,-81,-6,-80,-1,-80,1,-78,3,-77.5,7],
+ // Eurasia
+ [-8,43.7,-2,43.4,-1.3,44.5,-1.2,46,-2.2,47.2,-4.6,48,-3,48.8,-1.6,48.7,-1.3,49.6,0.2,49.5,1.6,50.3,2.5,51.1,4,51.4,4.5,52.5,5,53.4,7,53.6,8.6,53.9,8.6,55.5,8.1,56.6,9.5,57.2,10.6,57.7,10.5,56.5,10.9,56.3,10.1,55.4,10.8,54.4,12.5,54.4,14,54,16,54.5,18.5,54.6,20,54.9,21,56,21,57,22,57.6,23.5,57,24.5,57.4,23.5,58.5,23.5,59.2,28,59.5,29.5,60,28,60.5,22.5,60,21.5,61,21.5,63,24.5,64.8,25.5,65.3,24,65.8,22,65.5,21,64.5,19,63.5,17.5,62.3,17.2,61,18.7,60,17.8,59.2,16.5,57.5,16,56.1,14.3,55.5,12.9,55.4,12.6,56.2,11.8,58,11,59,10.5,59.5,8.3,58,6,58,5,59.5,5,61.6,6,62.5,8,63.5,10.5,64.5,13,66,15,68.2,18,69.7,21,70.2,24,71,26,70.9,28.5,71,31,70.3,33,69.4,36,69,41,67.5,40.5,66.2,36,66.8,34.5,66.4,34.8,65,37,64,40,64.5,41.5,66,44,66.3,43.8,68.4,46,68,53.5,68.5,57,68.5,60,69,66,69.3,67,71,69,73,72.5,72.8,72.5,71,73.5,68.5,75,67,75,69,78,72.5,81,73.6,87,74,94,76,101,77,104.5,77.7,108,77,113,76,112,74,118,73.5,127,73.5,129,71,131,71,140,72.5,146,72.3,150,71.6,155,71,160,70.5,166,69.7,170,70,176,69.8,180,69,180,65,177,64.5,179,62.4,173,61,170,60,164,59.8,163,57.5,162,56,160,54,158,52.5,156.7,51,156,53,155.6,56,156.8,57.8,160,59.5,161,60.5,159,61.8,154,59.3,150,59.6,146,59.3,142,59.1,138,56.5,136,54.6,139.5,54.2,141.4,53,140.6,51,140.5,48.5,138,46,135.3,43.5,133,42.8,131,42.5,129.7,41,129.5,37,129.3,35.2,127,34.6,126.3,34.6,126.6,37.5,125,39.5,124.3,40,122.2,40.4,121.3,39,121,40.8,119,39.5,118,39,118.5,38,119,37.2,121.5,37.5,122.5,37,120.4,36,119.2,35,120.8,32.5,121.9,31,121.5,29.6,120.5,27.5,119.5,25.5,118,24.5,116,22.8,114,22.3,111,21.4,110,20.3,109.7,21.5,108,21.6,106.7,20.6,105.7,19,106.6,17.4,108.8,15.4,109.3,12.5,108.9,11.2,107,10.4,106.4,9.5,104.8,8.6,104.9,10.3,103,11,102.5,12.2,101,12.7,100,13.4,99.2,10.3,99.9,9.2,100.3,7.5,101.3,6.8,102.3,6.1,103.4,4.8,103.4,2.8,104.2,1.4,103.5,1.3,101.3,2.8,100.4,4.5,100.1,6.4,98.3,8,98.5,10,98.6,12.5,97.7,16.5,94.3,16,94.5,18.5,93.7,19.5,92.3,20.8,91.8,22.4,90.5,22,89,21.7,87,21.5,86.8,20.5,85,19.4,83.5,18,82,16.5,80.3,15.6,80.2,13.3,79.8,11,79.3,10.3,78.2,8.9,77.5,8.1,76.5,8.9,75.8,11.3,74.7,13.5,73.5,16,72.8,19,72.6,21.3,70.4,20.9,69,22.3,68.6,23.6,67.4,24.6,66.6,25.4,64,25.3,61.6,25.2,58.8,25.6,57.3,25.8,56.5,27.1,54.8,26.5,53.5,26.8,51.4,27.9,50.3,29.3,48.9,30.4,47.9,30,48,29,48.8,27.6,49.6,26.9,50.2,26.2,50.6,25,51.5,25.8,51.6,24.6,52.5,24.2,54.5,24.2,56,25.3,56.3,26.3,56.4,24.9,57.2,23.9,58.6,23.6,59.8,22.5,58.5,20.4,57.7,19,56.6,18.5,55.3,17.4,52.2,15.7,49,14,45.5,13,43.5,12.7,43.2,14,42.8,15.5,42.6,16.6,41.5,18,40.3,19.8,39.2,21.4,38.6,23.5,37.5,24.5,36.5,26,35.6,27.4,34.8,28.2,34.5,29.5,34.2,27.8,32.6,29.9,32.3,31.2,34.2,31.3,34.5,31.5,35,32.8,35.5,34,35.9,35.4,36.1,36.6,34.6,36.8,32.5,36.1,30.6,36.8,29.2,36.3,28.2,36.7,27.3,37,27.2,38.2,26.4,38.5,26.8,39.4,26.2,39.8,26.4,40.3,26,40.8,24.5,40.9,23,40.6,23.9,39.5,22.9,38.2,23.2,37.5,22.6,36.5,21.7,36.8,21.1,37.8,21.3,38.4,20.7,39.1,20,39.7,19.4,40.4,19.4,41.8,18.5,42.5,17.5,43,16,43.5,15.2,44.2,14,44.9,13.6,45.7,12.4,45.4,12.3,44.4,13.6,43.5,14.4,42.3,16.1,41.9,17.9,40.6,18.5,40.1,17.2,39.4,17.1,38.9,16.6,38.4,16.1,37.9,15.7,38,15.8,38.9,15.1,40.2,14.3,40.7,13.6,41.3,12.2,41.8,11.1,42.4,10.5,42.9,10.2,43.9,8.8,44.4,7.5,43.8,6.6,43.2,5,43.4,4.3,43.5,3.1,43.1,3.2,42.4,3.2,41.9,2.1,41.3,0.8,40.7,0,39.6,-0.3,38.9,0.1,38.7,-0.7,37.6,-1.4,37.4,-2.1,36.7,-4.4,36.7,-5.3,36.1,-6.2,36.5,-6.5,37,-7.4,37.2,-8.9,37,-8.8,38.5,-9.4,39.3,-8.9,40.5,-8.7,42,-9,42.6,-9.2,43.2],
+ [-5.7,50,1.4,51.2,1.7,52.7,0.2,53.5,-0.5,54.5,-1.8,55.6,-2,57.6,-3.3,58.6,-5,58.6,-6.2,57.5,-5.6,56,-4.9,55,-3,54.9,-3.5,53.4,-4.6,53.3,-4.2,52.4,-5.3,51.9,-3.2,51.4,-4.5,51.2],
+ [-6,52,-6.2,53.4,-5.6,54.6,-6.2,55.3,-7.3,55.4,-8.4,54.9,-10,54.2,-10,53.2,-9.3,52.6,-10.4,52,-9.7,51.5,-8.2,51.8],
+ [-22,64,-24,65.5,-22,66.4,-16,66.5,-13.6,65.2,-14.9,64.3,-18.7,63.4],
+ [12.4,38.1,15.6,38.3,15.1,36.7],
+ [8.4,39,9.6,39.1,9.8,41,9.4,43,8.6,42.6,8.2,40.9],
+ [52,71,56,73.5,60,76.5,68,77,57,74.5,54,71.5,57,70.5],
+ [11,78.5,17,80,27,80,24,77,15,77],
+ [130,31.2,131.5,31.5,132,33.8,134.5,33.5,135.7,33.5,137,34.6,139,34.8,140.8,35.7,141,38,142,39.5,141.4,41.4,140,40.7,139.8,39,138.5,37.8,136.8,37.2,136,35.8,133,35.5,131,34.5,129.6,33.3],
+ [140,41.5,141.3,41.8,143.3,42,145.5,43.3,144,44.1,141.8,45.4,141.3,43.3,140.4,43.3],
+ [142,46,143.5,49,143,54,142.5,54.3,141.8,51,141.8,47],
+ [120.2,22.6,121,25.2,122,25,121,22],
+ [108.6,19,110,20.1,111,19.6,110,18.2],
+ [79.8,6,79.9,9.8,81.9,7.5,81.2,6.1],
+ [95.3,5.6,97.5,5.2,100.4,2.2,103.8,-1,106,-3.2,105.8,-5.8,104.6,-5.9,102.3,-4,100.3,-0.8,98.6,1.7],
+ [105.2,-6.8,108.3,-6.2,111,-6.4,114.5,-7.7,114.4,-8.7,110.4,-8.1,106.4,-7.4],
+ [109,1.5,110.6,1.7,113,3.2,115.5,5.4,117.3,6.9,119.2,5.4,118.3,4.3,117.9,1,118.9,0.9,116.6,-1.5,116.3,-3.9,114.6,-4.2,111.7,-3,110.2,-2.9,109.6,-0.9,109.1,0.4],
+ [119.4,-5.5,120.5,-5.5,121,-3,123,-1,120.8,-1.2,120,0.6,124.5,1.2,124,0.3,120.3,0.1,119.7,-1,119.3,-3.5],
+ [131,-1,134,-0.9,135.5,-3.3,138,-1.6,141,-2.6,144.5,-3.8,147.5,-6,147.9,-8.1,150,-10.6,146.2,-8.9,143.3,-9.1,141,-9.2,138,-8.4,137.9,-5.4,133.6,-3.8,132,-2.8],
+ [120,18.5,122.3,18.5,122,16,124,13,122,13.5,120.6,14.3,119.8,16.3],
+ [122,7,125,5.5,126.5,7,126,9.2,123.5,8.5],
+ // Australia & NZ
+ [113.5,-22,114,-26,115,-30,115.7,-33.6,118,-35,123.5,-33.9,126,-32.3,131,-31.5,134,-32.7,135.6,-34.9,137.7,-33,138,-35.6,140,-38,143.5,-38.8,146.3,-39,150,-37.5,151.3,-33.7,153.6,-28.5,153,-25,150.8,-22.6,149,-20.3,146.3,-18.9,145.3,-15,143.8,-14,142.5,-10.7,141.6,-12.8,141.5,-17,139.5,-17.4,136,-15.5,135.5,-14.5,136.9,-12.2,132.6,-11.5,131,-12.2,129.4,-14.9,127.8,-14.3,125.5,-14.6,122.2,-17.5,121.5,-19.5,117.5,-20.6,114.5,-21.8],
+ [144.6,-40.7,148.3,-40.9,148,-43.2,146,-43.6,145,-42.2],
+ [172.7,-34.4,174.5,-35.5,176,-37.6,178.5,-37.7,177.9,-39.2,176.8,-40,175,-41.6,174.6,-39.9,173.8,-39.2,174.6,-38,174.3,-36.5],
+ [172.6,-40.5,174.3,-41.4,173,-43.7,171.3,-44.3,169,-46.6,166.5,-46,167.8,-44.5,170.7,-42.8],
+ // Africa
+ [-5.9,35.8,-2,35.1,1,36.5,5,36.8,8.6,36.9,10,37.3,11,37,10.3,36,11,35.2,10.1,34.2,11.2,33.2,13,32.9,15.2,32.3,15.7,31.4,18.5,30.4,20,31,20,32,21.5,32.9,23,32.6,25,31.7,29,30.9,31,31.6,32.3,31.2,32.6,29.9,32.7,29.4,33.8,27.3,35.1,24.5,36.9,22,37.4,18.8,38.6,17.9,39.7,15.1,41.2,14.5,43.3,12.5,43.1,11.5,44.6,10.4,47,11.1,51.2,11.8,51.1,10.6,49.6,7.5,48,5,46,2.2,43.5,-0.5,41.6,-1.7,40,-3.3,39.2,-4.7,38.7,-6.5,39.4,-8,39.7,-10.5,40.4,-11.8,40.5,-14.7,39.3,-16.8,37,-17.9,35.3,-19.5,35.5,-21.5,35.5,-24,32.6,-25.9,32.9,-26.9,32.4,-28.6,30.9,-30.4,28.2,-32.8,25.7,-34,22.5,-34,20,-34.8,18.4,-34,18.2,-32,17.3,-29.8,15.2,-27,14.5,-22.9,11.8,-17.3,11.8,-15.8,12.9,-13,13.7,-10.7,13,-8.5,12.3,-6.1,11.9,-5,9.6,-2.4,9.3,-0.4,9.8,2.5,9.6,3.8,8.5,4.5,6.1,4.3,5,5.6,4.3,6.3,1.6,6.2,-2,4.8,-4,5.2,-7.6,4.4,-9.8,5.6,-12.4,7.3,-13.2,8.9,-15,11,-16.7,12.4,-17.2,14.7,-16.5,16.2,-16.1,18.6,-17,21,-15,24.7,-13.6,27,-11,28,-9.8,29.9,-9.6,31.6,-6.9,34],
+ [49.3,-12,50.5,-15.5,49.5,-18.5,47.5,-24.9,45,-25.5,43.7,-23.5,43.3,-21.7,44.4,-19.8,44,-17,46.3,-15.7,48,-13.6],
+];
+const WATER=[
+ [28,41.6,29,41.2,31.5,41.2,34,42,35.5,41.7,38,41,40,41,41.6,41.6,41.5,42.4,40,43.4,38.5,44.4,37.3,44.8,38.2,46.5,39,47.2,35,46.3,35.3,45.3,34,44.4,33.4,44.8,33.5,45.6,32.3,46.1,31.5,46.6,30.2,46,29.6,45.3,28.7,44.2,28,43,27.9,42.5],
+ [47.5,45.6,49.2,46.4,51.7,47.1,53.1,46.8,53.2,45.3,51.3,44.5,51.3,43.2,52.7,42,54,40.8,53,39.5,53.9,37.3,51,36.7,49,37.6,48.9,38.5,49.4,40.2,50.3,40.4,49.5,40.8,48.5,41.8,47.5,43,47.5,44.5],
+ [-92,46.7,-89,48.5,-84.8,47,-82.5,46,-80.5,44.8,-82,43,-84.5,43.5,-86.3,41.8,-87.8,42.5,-86,45.8,-88,45.7],
+];
+const RIDGES=[[84,28.5,4,1.0],[78,33,4,.8],[90,28,4,.9],[88,33,9,.5],[10,46.3,2.2,.75],[0,42.7,1.5,.4],[24,47,2.5,.35],[44,42.8,2.5,.6],[59,58,2,.35],[59,64,2,.3],[-110,45,5,.7],[-115,52,5,.65],[-108,38,5,.6],[-120,58,5,.5],[-140,62,4,.5],[-70,-25,3,.9],[-77,-8,3,.8],[-73,3,3,.6],[-71,-40,3,.6],[-68,-15,4,.9],[39,9,4,.5],[-5,32,3,.4],[53,33,7,.35],[75,40,5,.6],[88,49,4,.45],[14,65,3,.35],[36,39,5,.3],[36,-3,5,.4],[29,-29,3,.35],[148,-28,4,.3],[-40,72,10,.5],[100,28,4,.5],[138,36,2,.35]];
+
+function prep(p){ let a=1e9,b=-1e9,c=1e9,d=-1e9; for(let i=0;i<p.length;i+=2){a=Math.min(a,p[i]);b=Math.max(b,p[i]);c=Math.min(c,p[i+1]);d=Math.max(d,p[i+1]);} return {p,a,b,c,d}; }
+function inPoly(P,x,y){ if(x<P.a||x>P.b||y<P.c||y>P.d) return false; const p=P.p; let ins=false;
+  for(let i=0,j=p.length-2;i<p.length;j=i,i+=2){ const xi=p[i],yi=p[i+1],xj=p[j],yj=p[j+1];
+    if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) ins=!ins; } return ins; }
+
+const land=new Uint8Array(N), tileH=new Float32Array(N), lonOf=c=>-180+(c+.5)*RES, latOf=r=>LAT_TOP-(r+.5)*RES;
+{
+  const LP=LAND.map(prep), WP=WATER.map(prep);
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const lon=lonOf(c), lat=latOf(r); let L=false;
+    for(const P of LP) if(inPoly(P,lon,lat)){L=true;break;}
+    if(L) for(const P of WP) if(inPoly(P,lon,lat)){L=false;break;}
+    land[r*COLS+c]=L?1:0;
+  }
+  for(let i=0;i<N;i++){ if(!land[i]) continue; const c=i%COLS, r=(i/COLS)|0, lon=lonOf(c), lat=latOf(r);
+    let e=0; for(const [x,y,rad,amp] of RIDGES){ const d2=((lon-x)**2+(lat-y)**2)/(rad*rad); if(d2<9) e+=amp*Math.exp(-d2); }
+    let h=.3+.16*vnoise(c*.21,r*.21)+.05*hash2(c,r)+Math.min(e,1.1);
+    tileH[i]=Math.max(.24,Math.round(h/.06)*.06);
+  }
+}
+const tx=c=>c-COLS/2+.5, tz=r=>r-ROWS/2+.5;
+
+/* =========================================================
+   regions
+   ========================================================= */
+const CONT={NA:{name:'North America',bonus:5},SA:{name:'South America',bonus:2},EU:{name:'Europe',bonus:6},AF:{name:'Africa',bonus:3},AS:{name:'Asia',bonus:8},OC:{name:'Oceania',bonus:2}};
+const SEEDS=[
+ ['Alaska','NA',-152,64],['Yukon','NA',-118,64],['Greenland','NA',-42,72],['Prairies','NA',-110,54],['Ontario','NA',-86,50],['Quebec','NA',-71,52],['Western States','NA',-113,40],['Eastern States','NA',-84,37],['Mexico','NA',-101,22],
+ ['Gran Colombia','SA',-68,6],['Peru','SA',-75,-10],['Brazil','SA',-50,-10],['Argentina','SA',-65,-35],
+ ['Iceland','EU',-19,65],['Britain','EU',-2,53],['Scandinavia','EU',15,62],['France','EU',2,47],['Iberia','EU',-4,40],['Germany','EU',10,51],['Italy','EU',13,42.5],['Austria-Hungary','EU',19,47],['Balkans','EU',22,43],['Poland','EU',21,52],['Petrograd','EU',32,59],['Ukraine','EU',34,49],
+ ['Maghreb','AF',2,30],['West Africa','AF',-6,13],['Egypt','AF',29,26],['East Africa','AF',37,2],['Congo','AF',21,-3],['South Africa','AF',25,-26],['Madagascar','AF',46.5,-19],
+ ['Anatolia','AS',33,39],['Mesopotamia','AS',42,33],['Arabia','AS',46,22],['Persia','AS',55,32],['Caucasus','AS',44.5,41.5],['Turkestan','AS',65,42],['India','AS',78,22],['Ural','AS',60,60],['Siberia','AS',85,63],['Irkutsk','AS',105,56],['Yakutsk','AS',125,65],['Kamchatka','AS',160,62],['Mongolia','AS',102,46],['China','AS',110,30],['Manchuria','AS',127,46],['Japan','AS',138,37],['Indochina','AS',102,16],
+ ['East Indies','OC',113,0],['New Guinea','OC',142,-5],['Western Australia','OC',122,-25],['Eastern Australia','OC',145,-27],['New Zealand','OC',175,-39],
+];
+const SEA=[['Alaska','Kamchatka'],['Greenland','Yukon'],['Greenland','Quebec'],['Greenland','Iceland'],['Iceland','Britain'],['Iceland','Scandinavia'],['Britain','France'],['Britain','Scandinavia'],['Britain','Germany'],['Brazil','West Africa'],['Iberia','Maghreb'],['Italy','Maghreb'],['Egypt','Mesopotamia'],['East Africa','Madagascar'],['South Africa','Madagascar'],['East Africa','Arabia'],['Japan','Manchuria'],['Japan','Kamchatka'],['Indochina','East Indies'],['East Indies','New Guinea'],['East Indies','Western Australia'],['New Guinea','Eastern Australia'],['Eastern Australia','New Zealand'],['Scandinavia','Germany'],['Balkans','Anatolia']];
+
+const terrOf=new Int16Array(N).fill(-1);
+const terrs=SEEDS.map(([name,cont,lon,lat],id)=>({id,name,cont,lon,lat,tiles:[],adj:new Set(),owner:-1,units:null,trench:0,factory:false,barracks:false,capitalOf:-1,battle:null}));
+const byName={}; terrs.forEach(t=>byName[t.name]=t);
+{
+  const q=[];
+  for(const t of terrs){
+    let c=Math.floor((t.lon+180)/RES), r=Math.floor((LAT_TOP-t.lat)/RES), best=-1, bd=1e9;
+    for(let dr=-6;dr<=6;dr++) for(let dc=-6;dc<=6;dc++){ const rr=r+dr, cc=c+dc; if(rr<0||rr>=ROWS||cc<0||cc>=COLS) continue; const i=rr*COLS+cc; if(land[i]&&terrOf[i]<0){ const d=dr*dr+dc*dc; if(d<bd){bd=d;best=i;} } }
+    if(best<0) console.warn('seed off land',t.name);
+    terrOf[best]=t.id; q.push(best);
+  }
+  for(let h=0;h<q.length;h++){ const i=q[h], c=i%COLS, r=(i/COLS)|0, id=terrOf[i];
+    const nb=[c>0?i-1:-1,c<COLS-1?i+1:-1,r>0?i-COLS:-1,r<ROWS-1?i+COLS:-1];
+    for(const j of nb) if(j>=0&&land[j]&&terrOf[j]<0){ terrOf[j]=id; q.push(j); } }
+  // islands without a seed join the nearest region
+  for(let i=0;i<N;i++){ if(!land[i]||terrOf[i]>=0) continue;
+    const comp=[i]; terrOf[i]=-2; let sx=0,sy=0;
+    for(let h=0;h<comp.length;h++){ const k=comp[h], c=k%COLS, r=(k/COLS)|0; sx+=c; sy+=r;
+      for(const j of [c>0?k-1:-1,c<COLS-1?k+1:-1,r>0?k-COLS:-1,r<ROWS-1?k+COLS:-1]) if(j>=0&&land[j]&&terrOf[j]===-1){terrOf[j]=-2;comp.push(j);} }
+    const mc=sx/comp.length, mr=sy/comp.length; let best=0, bd=1e9;
+    for(const t of terrs){ const c=(t.lon+180)/RES, r=(LAT_TOP-t.lat)/RES, d=(c-mc)**2+(r-mr)**2; if(d<bd){bd=d;best=t.id;} }
+    for(const k of comp) terrOf[k]=best;
+  }
+  for(let i=0;i<N;i++) if(land[i]) terrs[terrOf[i]].tiles.push(i);
+  for(let i=0;i<N;i++){ if(!land[i]) continue; const c=i%COLS;
+    for(const j of [c<COLS-1?i+1:-1,i+COLS<N?i+COLS:-1]) if(j>=0&&land[j]&&terrOf[j]!==terrOf[i]){ terrs[terrOf[i]].adj.add(terrOf[j]); terrs[terrOf[j]].adj.add(terrOf[i]); } }
+  for(const [a,b] of SEA){ byName[a].adj.add(byName[b].id); byName[b].adj.add(byName[a].id); }
+  for(const t of terrs){
+    let mx=0,mz=0; for(const i of t.tiles){mx+=i%COLS;mz+=(i/COLS)|0;} mx/=t.tiles.length; mz/=t.tiles.length;
+    let best=t.tiles[0], bd=1e9;
+    for(const i of t.tiles){ const c=i%COLS, r=(i/COLS)|0; let inner=0;
+      for(const j of [i-1,i+1,i-COLS,i+COLS]) if(j>=0&&j<N&&land[j]&&terrOf[j]===t.id) inner++;
+      const d=(c-mx)**2+(r-mz)**2+(4-inner)*6; if(d<bd){bd=d;best=i;} }
+    t.anchor=best; t.cx=tx(best%COLS); t.cz=tz((best/COLS)|0);
+  }
+}
+// border flags: neighbouring region id for border tiles
+const borderNb=new Int16Array(N).fill(-1);
+for(let i=0;i<N;i++){ if(!land[i]) continue; const c=i%COLS;
+  for(const j of [c>0?i-1:-1,c<COLS-1?i+1:-1,i-COLS,i+COLS]) if(j>=0&&j<N&&land[j]&&terrOf[j]!==terrOf[i]){ borderNb[i]=terrOf[j]; break; } }
+
+/* =========================================================
+   powers, units, missions
+   ========================================================= */
+const FACTIONS=[
+ {key:'GB',name:'British Empire',short:'Britain',color:'#cc4a3e',capital:'Britain'},
+ {key:'FR',name:'French Republic',short:'France',color:'#4f7fd4',capital:'France'},
+ {key:'RU',name:'Russian Empire',short:'Russia',color:'#56a85c',capital:'Petrograd'},
+ {key:'DE',name:'German Empire',short:'Germany',color:'#a8aeb6',capital:'Germany'},
+ {key:'AH',name:'Austria-Hungary',short:'Austria',color:'#dfb640',capital:'Austria-Hungary'},
+ {key:'OT',name:'Ottoman Empire',short:'Ottomans',color:'#ab66b9',capital:'Anatolia'},
+];
+const UT={
+ inf:{name:'Infantry',short:'INF',hp:10,range:7,dmg:2.2,rof:1.1,acc:.55,speed:1.25,power:1},
+ mg:{name:'Machine gun',short:'MG',hp:12,range:9.5,dmg:1.1,rof:.28,acc:.34,speed:.75,power:1.6},
+ art:{name:'Field gun',short:'ART',hp:9,range:22,dmg:7,rof:3.4,acc:.5,speed:.5,power:2.2,splash:2.4},
+ tank:{name:'Tank',short:'TNK',hp:45,range:8,dmg:5,rof:1.8,acc:.6,speed:.9,power:4},
+};
+const TYPES=['inf','mg','art','tank'];
+const COST={inf:1,mg:2,art:3,tank:5,factory:6,barracks:4};
+const TRENCH_COST=[3,5,8];
+const TICK=20;
+const emptyU=()=>({inf:0,mg:0,art:0,tank:0});
+const total=u=>u.inf+u.mg+u.art+u.tank;
+const power=u=>u.inf*UT.inf.power+u.mg*UT.mg.power+u.art*UT.art.power+u.tank*UT.tank.power;
+
+const factions=FACTIONS.map((f,i)=>({...f,the:f.key==='AH'?f.name:'the '+f.name,id:i,supply:0,alive:true,aiT:0,mission:null}));
+function buildMissions(){
+  const L=[
+    {type:'conts',conts:['NA','AF']},{type:'conts',conts:['NA','OC']},{type:'conts',conts:['AS','SA']},{type:'conts',conts:['AS','AF']},
+    {type:'conts1',conts:['EU','SA']},{type:'conts1',conts:['EU','OC']},{type:'count',n:30},{type:'count2',n:24},
+  ];
+  factions.forEach(f=>L.push({type:'destroy',target:f.id}));
+  return L;
+}
+function missionText(m){
+  const C=k=>CONT[k].name;
+  switch(m.type){
+    case 'conts': return [`Secure ${C(m.conts[0])} and ${C(m.conts[1])}`,`Hold every region of ${C(m.conts[0])} and of ${C(m.conts[1])} at the same time.`];
+    case 'conts1': return [`Secure ${C(m.conts[0])}, ${C(m.conts[1])} and one more`,`Hold every region of ${C(m.conts[0])} and ${C(m.conts[1])}, plus every region of one other continent of your choice.`];
+    case 'count': return [`Hold ${m.n} regions`,m.converted?`Your original target was destroyed by another power. New orders: hold ${m.n} regions of the world map.`:`Hold ${m.n} regions of the world map at the same time.`];
+    case 'count2': return [`Hold ${m.n} garrisoned regions`,`Hold ${m.n} regions, each with at least 2 units stationed in it.`];
+    case 'destroy': return [`Destroy ${factions[m.target].the}`,`Take the last region of ${factions[m.target].the}. If another power finishes them first, your orders change to holding 30 regions.`];
+  }
+}
+const ownsCont=(fid,k)=>terrs.every(t=>t.cont!==k||t.owner===fid);
+function missionDone(f){
+  const m=f.mission, mine=terrs.filter(t=>t.owner===f.id);
+  if(m.type==='conts') return m.conts.every(k=>ownsCont(f.id,k));
+  if(m.type==='conts1') return m.conts.every(k=>ownsCont(f.id,k)) && Object.keys(CONT).some(k=>!m.conts.includes(k)&&ownsCont(f.id,k));
+  if(m.type==='count') return mine.length>=m.n;
+  if(m.type==='count2') return mine.filter(t=>!t.battle&&total(t.units)>=2).length>=m.n;
+  return false;
+}
+function missionWants(f,t){
+  const m=f.mission; if(!m) return false;
+  if(m.type==='conts'||m.type==='conts1') return m.conts.includes(t.cont);
+  if(m.type==='destroy') return t.owner===m.target;
+  return true;
+}
+
+/* =========================================================
+   renderer & scene
+   ========================================================= */
+const canvas=$('#view'), app=$('#app');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(1);
+let PX=3;
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#0b0f0d');
+const camera=new THREE.PerspectiveCamera(40,1,.1,800);
+scene.add(new THREE.HemisphereLight(0xe3e8da,0x4a4a3a,1.55));
+const sun=new THREE.DirectionalLight(0xfff0d2,2.3); sun.position.set(-.45,1,.6); scene.add(sun);
+let VW=1,VH=1;
+function resize(){ VW=app.clientWidth; VH=app.clientHeight; renderer.setSize(Math.max(1,Math.floor(VW/PX)),Math.max(1,Math.floor(VH/PX)),false); camera.aspect=VW/VH; camera.updateProjectionMatrix(); }
+addEventListener('resize',resize);
+
+const col=h=>new THREE.Color(h);
+const BIOME={ice:col('#d2dbd8'),snow:col('#e7eae4'),rock:col('#8b8374'),tundra:col('#8f977c'),desert:col('#cbad6c'),jungle:col('#3f6c3b'),taiga:col('#4b6745'),steppe:col('#a7a066'),savanna:col('#9c9b55'),temperate:col('#6e8b4c')};
+function biome(lon,lat,h){
+  const al=Math.abs(lat);
+  if(lon>-75&&lon<-12&&lat>59) return BIOME.ice;
+  if(h>1.1) return BIOME.snow; if(h>.88) return BIOME.rock;
+  if(al>68) return BIOME.tundra;
+  if((lon>-17&&lon<34&&lat>15&&lat<31)||(lon>34&&lon<60&&lat>14&&lat<31)||(lon>48&&lon<66&&lat>25&&lat<36)||(lon>92&&lon<112&&lat>38&&lat<46)||(lon>118&&lon<142&&lat<-20&&lat>-31)||(lon>-117&&lon<-104&&lat>26&&lat<36)||(lon>15&&lon<26&&lat<-18&&lat>-28)||(lon>-75&&lon<-68&&lat<-15&&lat>-28)) return BIOME.desert;
+  if(al<11) return BIOME.jungle;
+  if(lat>55||lat<-50) return BIOME.taiga;
+  if((lon>45&&lon<90&&lat>38&&lat<52)||(lon>-112&&lon<-96&&lat>34&&lat<52)||(lon>-66&&lon<-58&&lat<-30&&lat>-40)) return BIOME.steppe;
+  if(al<24) return BIOME.savanna;
+  return BIOME.temperate;
+}
+const facCol=FACTIONS.map(f=>col(f.color));
+const WHITE=col('#ffffff'), RED=col('#ff6b4a');
+
+// tiles
+const landIdx=[]; const instOf=new Int32Array(N).fill(-1);
+for(let i=0;i<N;i++) if(land[i]){ instOf[i]=landIdx.length; landIdx.push(i); }
+const boxGeo=new THREE.BoxGeometry(1,1,1);
+const tileMesh=new THREE.InstancedMesh(boxGeo,new THREE.MeshLambertMaterial(),landIdx.length);
+tileMesh.frustumCulled=false; scene.add(tileMesh);
+const baseCol=landIdx.map(i=>{ const c=biome(lonOf(i%COLS),latOf((i/COLS)|0),tileH[i]).clone(); const j=.92+hash2(i,7)*.12; return c.multiplyScalar(j); });
+const tileTop=i=>tileH[i]+(terrOf[i]===G.sel?.14:0);
+const m4=new THREE.Matrix4(), tmpC=new THREE.Color();
+
+// water with pixel shallows
+const coast=new Uint8Array(N).fill(9);
+{ const q=[]; for(let i=0;i<N;i++) if(land[i]){coast[i]=0;q.push(i);}
+  for(let h=0;h<q.length;h++){ const i=q[h], c=i%COLS, d=coast[i]; if(d>=4) continue;
+    for(const j of [c>0?i-1:-1,c<COLS-1?i+1:-1,i-COLS,i+COLS]) if(j>=0&&j<N&&coast[j]>d+1){coast[j]=d+1;q.push(j);} } }
+const coastTex=new THREE.DataTexture(coast,COLS,ROWS,THREE.RedFormat,THREE.UnsignedByteType);
+coastTex.magFilter=coastTex.minFilter=THREE.NearestFilter; coastTex.needsUpdate=true;
+const waterMat=new THREE.ShaderMaterial({
+  uniforms:{uTime:{value:0},uCoast:{value:coastTex},uSize:{value:new THREE.Vector2(COLS,ROWS)}},
+  vertexShader:`varying vec2 vMap; uniform vec2 uSize; void main(){ vec4 w=modelMatrix*vec4(position,1.); vMap=vec2(w.x+uSize.x*.5,w.z+uSize.y*.5); gl_Position=projectionMatrix*viewMatrix*w; }`,
+  fragmentShader:`varying vec2 vMap; uniform vec2 uSize; uniform float uTime; uniform sampler2D uCoast;
+  void main(){
+    vec3 deep=vec3(.075,.125,.165);
+    if(vMap.x<0.||vMap.y<0.||vMap.x>uSize.x||vMap.y>uSize.y){ gl_FragColor=vec4(deep*.62,1.); return; }
+    vec2 cell=floor(vMap);
+    float d=texture2D(uCoast,(cell+.5)/uSize).r*255.;
+    vec3 c=deep;
+    if(d<1.5) c=vec3(.2,.33,.355); else if(d<2.5) c=vec3(.145,.245,.28); else if(d<3.5) c=vec3(.105,.18,.22);
+    vec2 q=floor(vMap*3.)/3.;
+    float w=sin(q.x*.55+uTime*.9+sin(q.y*.37+uTime*.3)*2.)*sin(q.y*.8-uTime*.7+q.x*.13);
+    if(w>.93) c+=vec3(.07,.09,.09);
+    vec2 g=abs(fract(vMap/10.+.5)-.5)*10.;
+    if(min(g.x,g.y)<.13) c+=vec3(.03,.04,.035);
+    gl_FragColor=vec4(c,1.);
+  }`
+});
+const water=new THREE.Mesh(new THREE.PlaneGeometry(COLS*3,ROWS*4).rotateX(-Math.PI/2),waterMat);
+water.position.y=.12; scene.add(water);
+
+// sea lanes
+{
+  const pts=[];
+  for(const [a,b] of SEA){ const A=byName[a], B=byName[b]; const y=.55;
+    let dx=B.cx-A.cx; if(Math.abs(dx)>COLS/2){ const ex=A.cx<0?-COLS/2:COLS/2; pts.push(A.cx,y,A.cz, ex,y,(A.cz+B.cz)/2, -ex,y,(A.cz+B.cz)/2, B.cx,y,B.cz); }
+    else pts.push(A.cx,y,A.cz,B.cx,y,B.cz); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  const lines=new THREE.LineSegments(g,new THREE.LineDashedMaterial({color:0x9aa58a,dashSize:.7,gapSize:.6,transparent:true,opacity:.55}));
+  lines.computeLineDistances(); scene.add(lines);
+}
+
+// dynamic voxel pools
+class Pool{
+  constructor(max,mat){ this.max=max; this.n=0; this.mesh=new THREE.InstancedMesh(boxGeo,mat,max); this.mesh.frustumCulled=false;
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.mesh.setColorAt(0,WHITE); this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.count=0; scene.add(this.mesh); this.M=this.mesh.instanceMatrix.array; this.C=this.mesh.instanceColor.array; }
+  begin(){ this.n=0; }
+  push(x,y,z,sx,sy,sz,ry,c){ if(this.n>=this.max) return; const i=this.n++, o=i*16, M=this.M, co=Math.cos(ry), si=Math.sin(ry);
+    M[o]=co*sx;M[o+1]=0;M[o+2]=-si*sx;M[o+3]=0;M[o+4]=0;M[o+5]=sy;M[o+6]=0;M[o+7]=0;M[o+8]=si*sz;M[o+9]=0;M[o+10]=co*sz;M[o+11]=0;M[o+12]=x;M[o+13]=y;M[o+14]=z;M[o+15]=1;
+    const k=i*3; this.C[k]=c.r; this.C[k+1]=c.g; this.C[k+2]=c.b; }
+  end(){ this.mesh.count=this.n; this.mesh.instanceMatrix.needsUpdate=true; this.mesh.instanceColor.needsUpdate=true; }
+}
+const lit=new Pool(24000,new THREE.MeshLambertMaterial());
+const glow=new Pool(4000,new THREE.MeshBasicMaterial({toneMapped:false}));
+const MAXL=6000;
+const lineGeo=new THREE.BufferGeometry();
+lineGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(MAXL*6),3).setUsage(THREE.DynamicDrawUsage));
+lineGeo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(MAXL*6),3).setUsage(THREE.DynamicDrawUsage));
+const lineSeg=new THREE.LineSegments(lineGeo,new THREE.LineBasicMaterial({vertexColors:true,toneMapped:false})); lineSeg.frustumCulled=false; scene.add(lineSeg);
+let nl=0; const LP=lineGeo.attributes.position.array, LC=lineGeo.attributes.color.array;
+function line(x0,y0,z0,x1,y1,z1,c){ if(nl>=MAXL) return; const o=nl*6; LP[o]=x0;LP[o+1]=y0;LP[o+2]=z0;LP[o+3]=x1;LP[o+4]=y1;LP[o+5]=z1; LC[o]=LC[o+3]=c.r;LC[o+1]=LC[o+4]=c.g;LC[o+2]=LC[o+5]=c.b; nl++; }
+
+const K={puttee:col('#3a3326'),skin:col('#d8b18c'),wood:col('#4a3424'),gun:col('#2f302c'),olive:col('#5c5b3b'),track:col('#353430'),brick:col('#7c4b37'),brick2:col('#5a382b'),roof:col('#4b4636'),bar:col('#6f6a4c'),pole:col('#2b2a24'),sand:col('#a08f63'),smoke:col('#8b8b84'),smoke2:col('#5c5c57'),dirt:col('#5d4b33'),fire:col('#ffb347'),flash:col('#ffe08a'),tracer:col('#ffd27a'),black:col('#111111')};
+const UNI=facCol.map(c=>c.clone().lerp(col('#7d7454'),.18));
+const HELM=facCol.map(c=>c.clone().multiplyScalar(.55));
+const TANKC=facCol.map(c=>c.clone().lerp(col('#6b6a52'),.45));
+const DEADC=facCol.map(c=>c.clone().multiplyScalar(.35));
+
+function part(x,y,z,face,lx,ly,lz,sx,sy,sz,c,pool=lit){ const s=Math.sin(face),co=Math.cos(face); pool.push(x+lx*co+lz*s,y+ly,z-lx*s+lz*co,sx,sy,sz,face,c); }
+function drawSoldier(x,y,z,face,f,S,crouch,bob){
+  y+=bob||0;
+  if(!crouch) part(x,y,z,face,0,.035*S,0,.055*S,.07*S,.04*S,K.puttee);
+  const ty=crouch?.05:.105;
+  part(x,y,z,face,0,ty*S,0,.075*S,.075*S,.05*S,UNI[f]);
+  part(x,y,z,face,0,(ty+.06)*S,0,.048*S,.048*S,.048*S,K.skin);
+  part(x,y,z,face,0,(ty+.09)*S,0,.075*S,.02*S,.075*S,HELM[f]);
+  part(x,y,z,face,.03*S,(ty+.005)*S,.045*S,.012*S,.012*S,.11*S,K.wood);
+}
+function drawUnit(type,x,y,z,face,f,S,bob){
+  if(type==='inf') return drawSoldier(x,y,z,face,f,S,false,bob);
+  if(type==='mg'){ drawSoldier(x-Math.sin(face)*.05*S,y,z-Math.cos(face)*.05*S,face,f,S,true,0);
+    part(x,y,z,face,0,.05*S,.06*S,.028*S,.028*S,.14*S,K.gun); part(x,y,z,face,0,.02*S,.09*S,.07*S,.03*S,.02*S,K.gun); return; }
+  if(type==='art'){ part(x,y,z,face,0,.05*S,0,.1*S,.05*S,.16*S,K.olive);
+    part(x,y,z,face,.075*S,.05*S,0,.025*S,.1*S,.1*S,K.wood); part(x,y,z,face,-.075*S,.05*S,0,.025*S,.1*S,.1*S,K.wood);
+    part(x,y,z,face,0,.09*S,.12*S,.035*S,.035*S,.2*S,K.gun); part(x,y,z,face,0,.1*S,.03*S,.15*S,.08*S,.015*S,K.olive);
+    const s=Math.sin(face),c=Math.cos(face); drawSoldier(x-s*.16*S,y,z-c*.16*S,face,f,S,true,0); return; }
+  if(type==='tank'){ part(x,y,z,face,0,.07*S,0,.18*S,.1*S,.3*S,TANKC[f]);
+    part(x,y,z,face,.11*S,.065*S,0,.055*S,.13*S,.34*S,K.track); part(x,y,z,face,-.11*S,.065*S,0,.055*S,.13*S,.34*S,K.track);
+    part(x,y,z,face,.155*S,.07*S,.03*S,.04*S,.05*S,.08*S,TANKC[f]); part(x,y,z,face,-.155*S,.07*S,.03*S,.04*S,.05*S,.08*S,TANKC[f]);
+    part(x,y,z,face,.17*S,.07*S,.09*S,.015*S,.015*S,.07*S,K.gun); part(x,y,z,face,-.17*S,.07*S,.09*S,.015*S,.015*S,.07*S,K.gun);
+    part(x,y,z,face,0,.14*S,.06*S,.09*S,.05*S,.1*S,TANKC[f]); }
+}
+
+/* =========================================================
+   state
+   ========================================================= */
+const G={time:0,day:0,speed:1,running:false,over:false,supplyT:0,player:0,sel:-1,hover:-1,sendFrac:.5,orderMode:false,started:false};
+const armies=[], battles=[], parts=[], tracers=[], logs=[];
+let armyId=0;
+const START=Date.UTC(1914,7,1), MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dateStr=()=>{ const d=new Date(START+G.day*864e5); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+
+function tileColor(i,out){
+  const t=terrs[terrOf[i]], fc=facCol[t.owner]||WHITE;
+  out.copy(baseCol[instOf[i]]).lerp(fc,.52);
+  const nb=borderNb[i];
+  if(nb>=0){ const o=terrs[nb].owner; out.copy(fc).multiplyScalar(o===t.owner?.78:.5); }
+  if(t.id===G.sel) out.lerp(WHITE,.26);
+  else if(t.id===G.hover) out.lerp(WHITE,.13);
+  else if(isTarget(t.id)) out.lerp(RED,.16);
+  return out;
+}
+function isTarget(id){ const s=terrs[G.sel]; return s&&s.owner===G.player&&s.adj.has(id)&&terrs[id].owner!==G.player; }
+function paintTerr(t){
+  for(const i of t.tiles){ const k=instOf[i], h=tileTop(i);
+    m4.makeScale(1,h,1); m4.setPosition(tx(i%COLS),h/2,tz((i/COLS)|0)); tileMesh.setMatrixAt(k,m4);
+    tileMesh.setColorAt(k,tileColor(i,tmpC)); }
+  tileMesh.instanceMatrix.needsUpdate=true; tileMesh.instanceColor.needsUpdate=true;
+}
+function paintAll(){ terrs.forEach(paintTerr); }
+function paintAround(id){ const t=terrs[id]; if(!t) return; paintTerr(t); t.adj.forEach(j=>paintTerr(terrs[j])); }
+
+/* =========================================================
+   actions
+   ========================================================= */
+function log(text,cls=''){ logs.unshift({d:dateStr(),text,cls}); if(logs.length>40) logs.pop(); renderLog(); }
+function addUnits(t,type,n){
+  if(t.battle&&!t.battle.ended){ const u=emptyU(); u[type]=n; joinBattle(t.battle,t.owner,u,null,true); }
+  else t.units[type]+=n;
+}
+function recruit(fid,t,type){
+  const f=factions[fid], c=COST[type];
+  if(t.owner!==fid) return 'You can only recruit in your own regions.';
+  if(type==='tank'&&!t.factory) return 'Tanks need a factory in this region.';
+  if(f.supply<c) return `Not enough supply: ${UT[type].name} costs ${c}.`;
+  f.supply-=c; addUnits(t,type,1); return null;
+}
+function build(fid,t,kind){
+  const f=factions[fid];
+  if(t.owner!==fid) return 'You can only build in your own regions.';
+  let c;
+  if(kind==='trench'){ if(t.trench>=3) return 'Trenches are already at full depth.'; c=TRENCH_COST[t.trench]; }
+  else { if(t[kind]) return 'Already built.'; c=COST[kind]; }
+  if(f.supply<c) return `Not enough supply: this costs ${c}.`;
+  f.supply-=c;
+  if(kind==='trench') t.trench++; else t[kind]=true;
+  return null;
+}
+function wrapDx(A,B){ let dx=B.cx-A.cx; if(dx>COLS/2) dx-=COLS; if(dx<-COLS/2) dx+=COLS; return dx; }
+function sendArmy(fid,fromId,toId,frac){
+  const A=terrs[fromId], B=terrs[toId];
+  if(A.owner!==fid) return 'Select one of your own regions first.';
+  if(A.battle) return `${A.name} is under attack. Its troops cannot leave.`;
+  if(!A.adj.has(toId)) return `${B.name} does not border ${A.name}.`;
+  const tot=total(A.units); if(tot<2) return `${A.name} needs at least 2 units to march. One always stays behind.`;
+  const u=emptyU(); let sent=0;
+  for(const k of TYPES){ u[k]=Math.round(A.units[k]*frac); sent+=u[k]; }
+  if(sent>=tot){ for(const k of TYPES) if(u[k]>0){u[k]--;sent--;break;} }
+  if(sent<=0){ for(const k of TYPES) if(A.units[k]>0){u[k]=1;sent=1;break;} }
+  for(const k of TYPES) A.units[k]-=u[k];
+  const dx=wrapDx(A,B), dz=B.cz-A.cz, dist=Math.hypot(dx,dz);
+  const a={id:++armyId,owner:fid,units:u,from:fromId,to:toId,t:0,dur:Math.max(2.5,dist/2.4),ax:A.cx,az:A.cz,dx,dz,y0:tileH[A.anchor],y1:tileH[B.anchor]};
+  a.el=document.createElement('div'); a.el.className='tl ar'; a.el.style.setProperty('--c',FACTIONS[fid].color); a.el.innerHTML='<span class="n"></span>';
+  labelsEl.appendChild(a.el); armies.push(a);
+  return null;
+}
+function armyPos(a){ let x=a.ax+a.dx*a.t; if(x<-COLS/2) x+=COLS; if(x>COLS/2) x-=COLS; return [x,a.az+a.dz*a.t]; }
+function arrive(a){
+  const t=terrs[a.to]; a.el.remove();
+  const len=Math.hypot(a.dx,a.dz)||1, dir={x:-a.dx/len,z:-a.dz/len};
+  if(t.battle&&!t.battle.ended) joinBattle(t.battle,a.owner,a.units,dir,a.owner===t.owner);
+  else if(t.owner===a.owner){ for(const k of TYPES) t.units[k]+=a.units[k]; }
+  else { const b=startBattle(t,dir,a.owner); joinBattle(b,a.owner,a.units,dir,false); }
+}
+
+/* =========================================================
+   battles
+   ========================================================= */
+const BS=.11, BF_W=48, BF_H=34, TW=96, TH=68;
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+function groundY(t){ let m=0; const r=4; const c0=t.anchor%COLS, r0=(t.anchor/COLS)|0;
+  for(let dr=-r;dr<=r;dr++) for(let dc=-r;dc<=r;dc++){ const rr=r0+dr, cc=c0+dc; if(rr<0||rr>=ROWS||cc<0||cc>=COLS) continue; const i=rr*COLS+cc; if(land[i]) m=Math.max(m,tileH[i]); }
+  return Math.max(m,.3)+.02; }
+function makeGround(b){
+  const cv=document.createElement('canvas'); cv.width=TW; cv.height=TH; const g=cv.getContext('2d');
+  const img=g.createImageData(TW,TH), d=img.data, seed=Math.floor(rand()*999);
+  const mud=['#3b3123','#463a28','#52442e','#5e5035'].map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  const grass=['#46512e','#525f35','#5f6c3c','#6b7744'].map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  for(let y=0;y<TH;y++) for(let x=0;x<TW;x++){
+    const lx=x/2-24, n=vnoise(x*.25+seed,y*.25)*.7+hash2(x+seed,y)*.3;
+    const gr=smooth(-2,-9,lx)+ (lx>18?smooth(18,23,lx)*.7:0);
+    const pal=(hash2(x,y+seed)<gr)?grass:mud; const p=pal[Math.min(3,Math.floor(n*4))];
+    const e=Math.min(x,TW-1-x,y,TH-1-y)/9, th=(BAYER[(y&3)*4+(x&3)]+.5)/16;
+    const o=(y*TW+x)*4; d[o]=p[0]; d[o+1]=p[1]; d[o+2]=p[2]; d[o+3]=e>th?255:0;
+  }
+  g.putImageData(img,0,0);
+  // trench line
+  for(let y=6;y<TH-6;y++){ const z=y/2-17, zig=((Math.floor((z+40)/3))%2?.7:-.7)+1.8, px=Math.round((zig+24)*2);
+    g.fillStyle='#1d1811'; g.fillRect(px-1,y,3,1); g.fillStyle='#9a8a62'; if(y%2) g.fillRect(px+2,y,1,1); }
+  // wire
+  g.fillStyle='#8a8a80'; for(let y=6;y<TH-6;y+=2){ const px=Math.round((6.5+24)*2)+((y>>1)%2); g.fillRect(px,y,1,1); }
+  // shell holes in no-man's land
+  for(let k=0;k<22;k++) crater(g,(4+rand()*16+24)*2,(rand()*26-13+17)*2,1+rand()*2);
+  const tex=new THREE.CanvasTexture(cv); tex.magFilter=tex.minFilter=THREE.NearestFilter; tex.generateMipmaps=false; tex.colorSpace=THREE.SRGBColorSpace;
+  b.cv=cv; b.g=g; b.tex=tex;
+  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.5,opacity:0,depthWrite:true});
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(BF_W*BS,BF_H*BS).rotateX(-Math.PI/2),mat);
+  mesh.rotation.y=Math.atan2(-b.a.z,b.a.x); mesh.position.set(b.cx,b.y,b.cz); mesh.renderOrder=2; scene.add(mesh); b.mesh=mesh;
+}
+function crater(g,px,py,r){ px=Math.round(px); py=Math.round(py);
+  for(let dy=-3;dy<=3;dy++) for(let dx=-3;dx<=3;dx++){ const d=Math.hypot(dx,dy); if(d>r+.6) continue;
+    g.fillStyle=d<r-.6?'#241c13':'#6e5d41'; g.fillRect(px+dx,py+dy,1,1); } }
+
+function startBattle(t,dir,attacker){
+  const b={t,a:dir,cx:t.cx,cz:t.cz,y:groundY(t),agents:[],shells:[],age:0,ended:false,removeAt:0,endCheck:.5,puffT:0,sides:new Set()};
+  b.p={x:-dir.z,z:dir.x};
+  makeGround(b);
+  b.el=document.createElement('button'); b.el.className='bm'; b.el.type='button'; b.el.setAttribute('aria-label',`Watch the battle of ${t.name}`);
+  b.el.innerHTML='<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 1h2v1h1v1h1v1h1v1h1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1zM13 1h-2v1h-1v1h-1v1h-1v1h-1v1h1v1h1v-1h1v-1h1v-1h1v-1h1zM2 10h2v2h-2zM10 10h2v2h-2zM4 9h1v1h-1zM9 9h1v1h-1z" fill="currentColor"/></svg><span></span>';
+  b.el.addEventListener('click',()=>{ flyTo(t,7.5); select(t.id); });
+  labelsEl.appendChild(b.el);
+  t.battle=b; battles.push(b);
+  if(total(t.units)>0) joinBattle(b,t.owner,t.units,dir,true);
+  t.units=emptyU();
+  const A=factions[attacker], D=factions[t.owner];
+  if(attacker===G.player) log(`Our troops open the battle of ${t.name} against ${D.the}.`,'me');
+  else if(t.owner===G.player) log(`${cap(A.the)} attacks ${t.name}!`,'bad');
+  return b;
+}
+function joinBattle(b,f,u,dir,def){
+  b.sides.add(f);
+  const a=def?b.a:(dir||b.a), p={x:-a.z,z:a.x};
+  for(const k of TYPES) for(let n=0;n<u[k];n++){
+    let along,lat;
+    if(def){ along=k==='art'?-7-rand()*2:(k==='tank'?-2+rand()*2:1.4+rand()*.9); lat=(rand()-.5)*26; }
+    else { along=(k==='art'?26:20)+rand()*4; lat=(rand()-.5)*22; }
+    const s=UT[k];
+    b.agents.push({f,type:k,x:a.x*along+p.x*lat,z:a.z*along+p.z*lat,hp:s.hp,cd:rand()*s.rof,rt:0,tgt:null,dead:false,dieT:0,face:Math.atan2(-a.x,-a.z)+(def?Math.PI:0),phase:rand()*6,moving:false,trench:def&&k!=='art'&&k!=='tank'});
+  }
+}
+function nearestEnemy(b,a){ let best=null,bd=1e9; for(const o of b.agents){ if(o.dead||o.f===a.f) continue; const d=(o.x-a.x)**2+(o.z-a.z)**2; if(d<bd){bd=d;best=o;} } return best; }
+function damage(b,t,dmg,src){
+  if(t.dead) return;
+  if(t.type==='tank'&&(src==='inf'||src==='mg')) dmg*=.25;
+  if(t.trench&&t.f===b.t.owner) dmg*=Math.max(.35,.8-.15*b.t.trench);
+  t.hp-=dmg; if(t.hp<=0){ t.dead=true; t.dieT=G.time; if(visibleBattle(b)&&t.type==='tank') boom(b,t.x,t.z,1.4); }
+}
+function visibleBattle(b){ return cam.dist<30&&Math.hypot(b.cx-cam.tx,b.cz-cam.tz)<15; }
+function wpos(b,x,z){ return [b.cx+x*BS,b.cz+z*BS]; }
+function boom(b,x,z,s=1){
+  const [wx,wz]=wpos(b,x,z), y=b.y;
+  parts.push({x:wx,y:y+.05,z:wz,vx:0,vy:0,vz:0,g:0,life:0,max:.16,s:.16*s,s1:.28*s,c:K.fire,glow:true});
+  for(let i=0;i<7;i++){ const an=rand()*6.28, sp=.3+rand()*.6; parts.push({x:wx,y:y+.03,z:wz,vx:Math.cos(an)*sp*s,vy:(1+rand())*s,vz:Math.sin(an)*sp*s,g:4,life:0,max:.7,s:.035,s1:.03,c:K.dirt,floor:y}); }
+  for(let i=0;i<3;i++) parts.push({x:wx+(rand()-.5)*.1,y:y+.08,z:wz+(rand()-.5)*.1,vx:(rand()-.5)*.05,vy:.18,vz:(rand()-.5)*.05,g:0,life:0,max:1.6+rand(),s:.08*s,s1:.2*s,c:rand()<.5?K.smoke:K.smoke2});
+  const lx=x*b.a.x+z*b.a.z, lz=x*b.p.x+z*b.p.z;
+  if(Math.abs(lx)<21&&Math.abs(lz)<14){ crater(b.g,(lx+24)*2,(lz+17)*2,1.2+rand()*1.2*s); b.tex.needsUpdate=true; }
+}
+function stepBattle(b,dt){
+  if(b.ended) return;
+  b.age+=dt; const A=b.agents, charge=b.age>180, vis=visibleBattle(b);
+  for(const a of A){
+    if(a.dead) continue; const s=UT[a.type];
+    a.cd-=dt; a.rt-=dt;
+    if(!a.tgt||a.tgt.dead||a.rt<=0){ a.tgt=nearestEnemy(b,a); a.rt=.35+rand()*.45; }
+    const t=a.tgt; if(!t){ a.moving=false; continue; }
+    const dx=t.x-a.x, dz=t.z-a.z, d=Math.hypot(dx,dz)||.001;
+    a.face=Math.atan2(dx,dz);
+    if(d<=s.range){
+      a.moving=false;
+      if(a.cd<=0){
+        a.cd=s.rof*(.75+rand()*.5);
+        if(a.type==='art'){ b.shells.push({x:t.x+(rand()-.5)*3.5,z:t.z+(rand()-.5)*3.5,time:.5+d*.03,f:a.f,dmg:s.dmg});
+          if(vis){ const [wx,wz]=wpos(b,a.x+Math.sin(a.face)*1.6,a.z+Math.cos(a.face)*1.6); parts.push({x:wx,y:b.y+.1,z:wz,vx:0,vy:.2,vz:0,g:0,life:0,max:.1,s:.07,s1:.12,c:K.flash,glow:true}); } }
+        else {
+          const hit=rand()<s.acc*(1-.45*d/s.range);
+          if(hit) damage(b,t,s.dmg,a.type);
+          if(vis){ const [x0,z0]=wpos(b,a.x,a.z), [x1,z1]=wpos(b,t.x+(hit?0:(rand()-.5)*1.5),t.z+(hit?0:(rand()-.5)*1.5));
+            tracers.push({x0,z0,x1,z1,y0:b.y+(a.type==='tank'?.08:.11),y1:b.y+.09,life:0,max:a.type==='mg'?.05:.07});
+            if(rand()<.5) parts.push({x:x0+Math.sin(a.face)*.06,y:b.y+.11,z:z0+Math.cos(a.face)*.06,vx:0,vy:0,vz:0,g:0,life:0,max:.06,s:.03,s1:.02,c:K.flash,glow:true}); }
+        }
+      }
+    } else if(!(a.trench&&!charge)&&!(a.type==='art'&&a.f===b.t.owner&&!charge)){
+      const st=s.speed*dt; a.x+=dx/d*st; a.z+=dz/d*st; a.moving=true; a.phase+=dt*9;
+    } else a.moving=false;
+  }
+  // spacing
+  for(let i=0;i<A.length;i++){ const a=A[i]; if(a.dead) continue;
+    for(let j=i+1;j<A.length;j++){ const o=A[j]; if(o.dead) continue; const dx=o.x-a.x, dz=o.z-a.z, d2=dx*dx+dz*dz;
+      const r=(a.type==='tank'||o.type==='tank')?1.8:.85;
+      if(d2<r*r&&d2>1e-6){ const d=Math.sqrt(d2), push=(r-d)*.5/d; if(!a.trench){a.x-=dx*push;a.z-=dz*push;} if(!o.trench){o.x+=dx*push;o.z+=dz*push;} } }
+    const R=Math.hypot(a.x,a.z); if(R>26){a.x*=26/R;a.z*=26/R;} }
+  for(let i=b.shells.length-1;i>=0;i--){ const sh=b.shells[i]; sh.time-=dt; if(sh.time>0) continue; b.shells.splice(i,1);
+    for(const o of A){ if(o.dead||o.f===sh.f) continue; const d=Math.hypot(o.x-sh.x,o.z-sh.z); if(d<UT.art.splash) damage(b,o,sh.dmg*(1-d/UT.art.splash*.6),'art'); }
+    if(vis) boom(b,sh.x,sh.z,1); }
+  if(!vis){ b.puffT-=dt; if(b.puffT<=0){ b.puffT=.22+rand()*.2; const an=rand()*6.28, r=rand()*1.4;
+    parts.push({x:b.cx+Math.cos(an)*r,y:b.y+.3,z:b.cz+Math.sin(an)*r,vx:0,vy:.35,vz:0,g:0,life:0,max:2,s:.25+rand()*.15,s1:.55,c:rand()<.5?K.smoke:K.smoke2,map:true});
+    if(rand()<.5) parts.push({x:b.cx+(rand()-.5)*2,y:b.y+.4,z:b.cz+(rand()-.5)*2,vx:0,vy:0,vz:0,g:0,life:0,max:.18,s:.35,s1:.5,c:K.fire,glow:true,map:true}); } }
+  b.endCheck-=dt;
+  if(b.endCheck<=0){ b.endCheck=.3; const fs=new Set(); for(const a of A) if(!a.dead) fs.add(a.f);
+    if(fs.size<=1&&!b.shells.length) endBattle(b,fs.size?[...fs][0]:null); }
+}
+function endBattle(b,winner){
+  const t=b.t; b.ended=true; b.removeAt=G.time+10; t.battle=null;
+  const u=emptyU(); if(winner!==null) for(const a of b.agents) if(!a.dead&&a.f===winner) u[a.type]++;
+  const prev=t.owner; t.units=u;
+  if(winner!==null&&winner!==prev){
+    t.owner=winner; t.trench=Math.max(0,t.trench-1);
+    const W=factions[winner], P=factions[prev], capMsg=t.capitalOf===prev?' The capital has fallen.':'';
+    if(winner===G.player) log(`Victory at ${t.name}: taken from ${P.the}.${capMsg}`,'good');
+    else if(prev===G.player) log(`${t.name} has fallen to ${W.the}.${capMsg}`,'bad');
+    else log(`${cap(W.the)} takes ${t.name} from ${P.the}.${capMsg}`);
+    paintAround(t.id);
+  } else if(winner===prev&&prev===G.player) log(`${t.name} holds. The attack is beaten back.`,'good');
+  else if(winner===null&&(prev===G.player||b.sides.has(G.player))) log(`Battle of ${t.name}: no one is left standing.`,'me');
+  for(const f of b.sides) checkElim(f,winner);
+  if(prev!==winner) checkElim(prev,winner);
+  checkMissions(); panelDirty=true;
+}
+function disposeBattle(b){ scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.material.dispose(); b.tex.dispose(); b.el.remove(); }
+function checkElim(fid,by){
+  const f=factions[fid]; if(!f||!f.alive||G.over) return;
+  if(terrs.some(t=>t.owner===fid)||armies.some(a=>a.owner===fid)||battles.some(b=>!b.ended&&b.agents.some(a=>!a.dead&&a.f===fid))) return;
+  f.alive=false; log(`${cap(f.the)} has been destroyed.`,fid===G.player?'bad':'me');
+  for(const g of factions){ if(!g.alive||g.mission.type!=='destroy'||g.mission.target!==fid) continue;
+    if(by===g.id){ endGame(g.id); return; }
+    g.mission={type:'count',n:30,converted:true}; if(g.id===G.player){ log('New orders: hold 30 regions.','me'); toast('Your target fell to another power. New orders: hold 30 regions.'); } }
+  if(fid===G.player) endGame(null,'Your last region has fallen. The war is lost.');
+}
+function checkMissions(){ if(G.over) return; for(const f of factions) if(f.alive&&missionDone(f)){ endGame(f.id); return; } }
+
+/* =========================================================
+   economy & AI
+   ========================================================= */
+function income(fid){
+  const mine=terrs.filter(t=>t.owner===fid);
+  let v=Math.max(3,Math.floor(mine.length/3));
+  for(const k in CONT) if(ownsCont(fid,k)) v+=CONT[k].bonus;
+  v+=2*mine.filter(t=>t.factory).length;
+  return v;
+}
+function supplyTick(){
+  G.day+=7;
+  for(const f of factions){ if(!f.alive) continue; const inc=income(f.id); f.supply+=inc; if(f.id===G.player) flashInc(inc); }
+  for(const t of terrs) if(t.barracks&&factions[t.owner].alive) addUnits(t,'inf',1);
+  checkMissions(); panelDirty=true;
+}
+const enemyNb=(t,fid)=>[...t.adj].map(i=>terrs[i]).filter(n=>n.owner!==fid);
+const defPower=t=>t.battle?99:power(t.units)*(1+.3*t.trench)+.5;
+function aiThink(f){
+  const mine=terrs.filter(t=>t.owner===f.id); if(!mine.length) return;
+  for(const t of mine){ let e=0; for(const n of enemyNb(t,f.id)) e+=power(n.units); t._th=e*.6-power(t.units)*(1+.3*t.trench)+(t.battle?8:0); }
+  const border=mine.filter(t=>enemyNb(t,f.id).length);
+  let guard=50;
+  while(f.supply>=1&&guard-->0&&border.length){
+    const facs=mine.filter(t=>t.factory).length, bars=mine.filter(t=>t.barracks).length;
+    if(f.supply>=COST.factory+2&&facs<1+Math.floor(mine.length/5)&&rand()<.4){ const c=mine.filter(t=>!t.factory).sort((a,b)=>a._th-b._th)[0]; if(c&&!build(f.id,c,'factory')) continue; }
+    if(f.supply>=COST.barracks+1&&bars<Math.floor(mine.length/6)&&rand()<.25){ const c=mine.filter(t=>!t.barracks).sort((a,b)=>a._th-b._th)[0]; if(c&&!build(f.id,c,'barracks')) continue; }
+    let tgt=null,bs=-1e9; for(const t of border){ const s=t._th+rand()*3+(t.capitalOf===f.id?4:0)+(enemyNb(t,f.id).some(n=>missionWants(f,n))?2:0); if(s>bs){bs=s;tgt=t;} }
+    if(tgt._th>4&&tgt.trench<3&&f.supply>=TRENCH_COST[tgt.trench]&&rand()<.22){ build(f.id,tgt,'trench'); continue; }
+    const r=rand(); let type='inf';
+    if(tgt.factory&&f.supply>=5&&r<.22) type='tank'; else if(f.supply>=3&&r<.45) type='art'; else if(f.supply>=2&&r<.65) type='mg';
+    if(recruit(f.id,tgt,type)) break;
+    tgt._th-=UT[type].power;
+  }
+  let attacks=0;
+  for(const t of mine.filter(t=>!t.battle).sort((a,b)=>power(b.units)-power(a.units))){
+    if(attacks>=2) break; if(total(t.units)<3) continue;
+    const avail=power(t.units)*.85; let best=null,bs=-1e9;
+    for(const n of enemyNb(t,f.id)){
+      if(armies.some(a=>a.owner===f.id&&a.to===n.id)) continue;
+      const margin=avail-defPower(n)*1.3-1.5; if(margin<=0) continue;
+      const s=margin+(missionWants(f,n)?6:0)+(n.capitalOf>=0?3:0)-defPower(n)*.2+rand()*2;
+      if(s>bs){bs=s;best=n;} }
+    if(best&&!sendArmy(f.id,t.id,best.id,.85)) attacks++;
+  }
+  // move idle interior troops toward the front
+  const dist={}; const q=[]; for(const t of border){dist[t.id]=0;q.push(t);}
+  for(let h=0;h<q.length;h++){ const t=q[h]; for(const j of t.adj){ const n=terrs[j]; if(n.owner===f.id&&dist[j]===undefined){dist[j]=dist[t.id]+1;q.push(n);} } }
+  for(const t of mine){ if(t.battle||!dist[t.id]||total(t.units)<2) continue;
+    const n=[...t.adj].map(j=>terrs[j]).filter(n=>n.owner===f.id&&dist[n.id]<dist[t.id])[0]; if(n) sendArmy(f.id,t.id,n.id,1); }
+}
+
+/* =========================================================
+   simulation step
+   ========================================================= */
+function step(dt){
+  G.time+=dt; G.supplyT+=dt;
+  if(G.supplyT>=TICK){ G.supplyT-=TICK; supplyTick(); }
+  for(let i=armies.length-1;i>=0;i--){ const a=armies[i]; a.t+=dt/a.dur; if(a.t>=1){ armies.splice(i,1); arrive(a); panelDirty=true; } }
+  for(const b of battles) stepBattle(b,dt);
+  for(let i=battles.length-1;i>=0;i--) if(battles[i].ended&&G.time>battles[i].removeAt){ disposeBattle(battles[i]); battles.splice(i,1); }
+  for(const f of factions){ if(!f.alive||f.id===G.player) continue; f.aiT-=dt; if(f.aiT<=0){ f.aiT=2.5+rand()*1.8; aiThink(f); } }
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.life+=dt; if(p.life>=p.max){ parts[i]=parts[parts.length-1]; parts.pop(); continue; }
+    p.vy-=p.g*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt; if(p.floor!==undefined&&p.y<p.floor){p.y=p.floor;p.vx*=.4;p.vz*=.4;p.vy=0;} }
+  if(parts.length>3500) parts.splice(0,parts.length-3500);
+  for(let i=tracers.length-1;i>=0;i--){ tracers[i].life+=dt; if(tracers[i].life>=tracers[i].max) tracers.splice(i,1); }
+  // factory smoke
+  if(Math.floor(G.time*2)!==Math.floor((G.time-dt)*2)) for(const t of terrs) if(t.factory&&!t.battle&&rand()<.7){ const y=tileH[t.anchor];
+    parts.push({x:t.cx+1.1,y:y+.55,z:t.cz-.5,vx:.06,vy:.25,vz:-.02,g:0,life:0,max:2.4,s:.12,s1:.34,c:K.smoke,map:true}); }
+}
+
+/* =========================================================
+   camera & input
+   ========================================================= */
+const cam={tx:10,tz:-20,dist:70,gx:10,gz:-20,gdist:70};
+const keys=new Set();
+function updateCamera(dt){
+  const sp=cam.dist*.9*dt;
+  if(keys.has('w')||keys.has('arrowup')) cam.gz-=sp; if(keys.has('s')||keys.has('arrowdown')) cam.gz+=sp;
+  if(keys.has('a')||keys.has('arrowleft')) cam.gx-=sp; if(keys.has('d')||keys.has('arrowright')) cam.gx+=sp;
+  cam.gx=clamp(cam.gx,-COLS/2,COLS/2); cam.gz=clamp(cam.gz,-ROWS/2,ROWS/2);
+  const k=1-Math.exp(-dt*7);
+  cam.tx=lerp(cam.tx,cam.gx,k); cam.tz=lerp(cam.tz,cam.gz,k); cam.dist=lerp(cam.dist,cam.gdist,k);
+  const pitch=lerp(.66,1.08,smooth(3,70,cam.dist));
+  camera.position.set(cam.tx,cam.dist*Math.sin(pitch),cam.tz+cam.dist*Math.cos(pitch));
+  camera.lookAt(cam.tx,.5,cam.tz); camera.updateMatrixWorld();
+}
+function flyTo(t,d){ cam.gx=t.cx; cam.gz=t.cz; if(d) cam.gdist=d; }
+const ray=new THREE.Raycaster(), plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.55), ndc=new THREE.Vector2(), hitV=new THREE.Vector3();
+function screenToWorld(x,y){ const r=canvas.getBoundingClientRect(); ndc.set((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1); ray.setFromCamera(ndc,camera); return ray.ray.intersectPlane(plane,hitV)?hitV.clone():null; }
+function terrAt(x,y){ const p=screenToWorld(x,y); if(!p) return -1; const c=Math.floor(p.x+COLS/2), r=Math.floor(p.z+ROWS/2); if(c<0||c>=COLS||r<0||r>=ROWS) return -1; const i=r*COLS+c; return land[i]?terrOf[i]:-1; }
+
+const ptrs=new Map(); let down=null, dragging=false, pinch=0;
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===1){ down={x:e.clientX,y:e.clientY,b:e.button}; dragging=false; }
+  if(ptrs.size===2){ const [p,q]=[...ptrs.values()]; pinch=Math.hypot(p.x-q.x,p.y-q.y); dragging=true; }
+});
+canvas.addEventListener('pointermove',e=>{
+  const prev=ptrs.get(e.pointerId);
+  if(!prev){ const id=terrAt(e.clientX,e.clientY); if(id!==G.hover){ const o=G.hover; G.hover=id; if(o>=0) paintTerr(terrs[o]); if(id>=0) paintTerr(terrs[id]); } return; }
+  const cur={x:e.clientX,y:e.clientY};
+  if(ptrs.size===2){ ptrs.set(e.pointerId,cur); const [p,q]=[...ptrs.values()]; const d=Math.hypot(p.x-q.x,p.y-q.y); if(pinch>0){ cam.gdist=clamp(cam.gdist*pinch/d,2.5,170); } pinch=d; return; }
+  if(down&&(down.b===0||down.b===1)){
+    if(!dragging&&Math.hypot(cur.x-down.x,cur.y-down.y)>6){ dragging=true; canvas.classList.add('drag'); }
+    if(dragging){ const a=screenToWorld(prev.x,prev.y), b=screenToWorld(cur.x,cur.y); if(a&&b){ const dx=a.x-b.x, dz=a.z-b.z; cam.gx+=dx; cam.gz+=dz; cam.tx+=dx; cam.tz+=dz; } }
+  }
+  ptrs.set(e.pointerId,cur);
+});
+function endPtr(e){
+  if(!ptrs.has(e.pointerId)) return;
+  if(ptrs.size===1&&down&&!dragging){ const id=terrAt(e.clientX,e.clientY);
+    if(down.b===2||(down.b===0&&G.orderMode)) order(id); else if(down.b===0) select(id); }
+  ptrs.delete(e.pointerId); if(!ptrs.size){ down=null; dragging=false; canvas.classList.remove('drag'); }
+}
+canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId); if(!ptrs.size){down=null;dragging=false;}});
+canvas.addEventListener('dblclick',e=>{ const id=terrAt(e.clientX,e.clientY); if(id<0) return; const t=terrs[id]; flyTo(t,t.battle?7.5:Math.min(cam.gdist,28)); });
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); const f=Math.exp(clamp(e.deltaY,-120,120)*.0018); const p=screenToWorld(e.clientX,e.clientY);
+  const nd=clamp(cam.gdist*f,2.5,170), ff=nd/cam.gdist; cam.gdist=nd; if(p){ cam.gx=p.x+(cam.gx-p.x)*ff; cam.gz=p.z+(cam.gz-p.z)*ff; } },{passive:false});
+addEventListener('keydown',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea')) return;
+  const k=e.key.toLowerCase(); keys.add(k);
+  if(!G.running) return;
+  if(k===' '){ e.preventDefault(); setSpeed(G.speed?0:1); }
+  if(k==='escape'){ G.orderMode=false; canvas.classList.remove('order'); select(-1); }
+  const t=terrs[G.sel]; const map={'1':'inf','2':'mg','3':'art','4':'tank'};
+  if(map[k]&&t){ const err=recruit(G.player,t,map[k]); if(err) toast(err); panelDirty=true; }
+});
+addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+addEventListener('blur',()=>keys.clear());
+
+function select(id){
+  const o=G.sel; G.sel=id; G.orderMode=false; canvas.classList.remove('order');
+  if(o>=0) paintAround(o); if(id>=0) paintAround(id);
+  panelDirty=true; panelKey='';
+}
+function order(id){
+  G.orderMode=false; canvas.classList.remove('order');
+  if(!G.running||G.over) return;
+  const s=terrs[G.sel];
+  if(!s||s.owner!==G.player){ toast('Select one of your regions first, then right-click where its troops should march.'); return; }
+  if(id<0||id===s.id) return;
+  const err=sendArmy(G.player,s.id,id,G.sendFrac); if(err){ toast(err); return; }
+  const t=terrs[id]; const a=armies[armies.length-1];
+  if(t.owner!==G.player) log(`${total(a.units)} units march from ${s.name} on ${t.name}.`,'me');
+  panelDirty=true;
+}
+
+/* =========================================================
+   drawing
+   ========================================================= */
+const v3=new THREE.Vector3();
+function draw(){
+  lit.begin(); glow.begin(); nl=0;
+  const near=cam.dist<26;
+  // region pieces & works
+  for(const t of terrs){
+    const y=tileTop(t.anchor), x=t.cx, z=t.cz, f=t.owner;
+    if(t.capitalOf>=0&&t.capitalOf===f){ part(x,y,z,0,-.2,.45,-.55,.04,.9,.04,K.pole); const w=Math.sin(G.time*3+t.id)*.02;
+      part(x,y,z,0,.0,.8+w,-.55,.36,.22,.03,facCol[f]); }
+    else if(t.capitalOf>=0){ part(x,y,z,0,-.2,.3,-.55,.04,.6,.04,K.pole); }
+    if(t.battle&&near) continue;
+    if(t.factory){ part(x,y,z,0,.95,.15,-.35,.5,.3,.38,K.brick); part(x,y,z,0,.82,.34,-.35,.2,.08,.38,K.brick2); part(x,y,z,0,1.08,.34,-.35,.2,.08,.38,K.brick2); part(x,y,z,0,1.1,.3,-.5,.1,.6,.1,K.brick2); }
+    if(t.barracks){ part(x,y,z,0,-.95,.08,-.3,.6,.16,.3,K.bar); part(x,y,z,0,-.95,.19,-.3,.64,.06,.34,K.roof); }
+    for(let k=0;k<t.trench*4;k++){ const lx=-.55+(k%6)*.22, lz=.48+Math.floor(k/6)*.14; part(x,y,z,0,lx,.035,lz,.16,.07,.1,K.sand); }
+    if(t.battle) continue;
+    const tot=total(t.units); if(!tot) continue;
+    const S=3.2, n=tot>=15?3:tot>=6?2:1, offs=n===1?[[0,0]]:n===2?[[-.2,.02],[.2,-.04]]:[[-.32,.04],[0,-.08],[.32,.04]];
+    for(const [ox,oz] of offs) drawSoldier(x+ox,y,z+oz,0,f,S,false,0);
+    if(t.units.tank) drawUnit('tank',x+.62,y,z+.18,-.4,f,2.4,0);
+    if(t.units.art) drawUnit('art',x-.62,y,z+.18,.35,f,2.4,0);
+  }
+  // marching armies
+  for(const a of armies){
+    const [x,z]=armyPos(a), y=lerp(a.y0,a.y1,a.t)+Math.sin(a.t*Math.PI)*.5, face=Math.atan2(a.dx,a.dz);
+    const bob=Math.abs(Math.sin(G.time*10))*.05;
+    drawSoldier(x-.18*Math.cos(face),y,z+.18*Math.sin(face),face,a.owner,3,false,bob);
+    drawSoldier(x+.18*Math.cos(face),y,z-.18*Math.sin(face),face,a.owner,3,false,Math.abs(Math.sin(G.time*10+1.5))*.05);
+    const fc=facCol[a.owner]; let px=x,pz=z; const B=terrs[a.to], rem=1-a.t, steps=Math.ceil(rem*Math.hypot(a.dx,a.dz)/.8);
+    for(let s=0;s<steps;s++){ const t0=a.t+(s/steps)*rem, t1=a.t+((s+.5)/steps)*rem; let x0=a.ax+a.dx*t0, x1=a.ax+a.dx*t1;
+      if(x0<-COLS/2) x0+=COLS; if(x0>COLS/2) x0-=COLS; if(x1<-COLS/2) x1+=COLS; if(x1>COLS/2) x1-=COLS;
+      if(Math.abs(x1-x0)<5) line(x0,.62,a.az+a.dz*t0,x1,.62,a.az+a.dz*t1,fc); }
+  }
+  // battles up close
+  const fade=1-smooth(16,26,cam.dist);
+  for(const b of battles){
+    const vis=Math.hypot(b.cx-cam.tx,b.cz-cam.tz)<16;
+    b.mesh.material.opacity=vis?fade:0; b.mesh.visible=vis&&fade>.02;
+    if(!b.mesh.visible) continue;
+    for(const a of b.agents){
+      const [wx,wz]=wpos(b,a.x,a.z);
+      if(a.dead){ if(G.time-a.dieT<40){ if(a.type==='tank'){ drawUnit('tank',wx,b.y,wz,a.face,a.f,1,0); } else part(wx,b.y,wz,a.face+.4,0,.014,0,.075,.028,.17,DEADC[a.f]); } continue; }
+      drawUnit(a.type,wx,b.y,wz,a.face,a.f,1,a.moving?Math.abs(Math.sin(a.phase))*.012:0);
+    }
+  }
+  for(const p of parts){
+    if(p.map&&near) continue;
+    const k=p.life/p.max, s=lerp(p.s,p.s1,k);
+    (p.glow?glow:lit).push(p.x,p.y,p.z,s,s,s,p.life*2,p.c);
+  }
+  for(const t of tracers) line(t.x0,t.y0,t.z0,t.x1,t.y1,t.z1,K.tracer);
+  lit.end(); glow.end();
+  lineGeo.setDrawRange(0,nl*2); lineGeo.attributes.position.needsUpdate=true; lineGeo.attributes.color.needsUpdate=true;
+  waterMat.uniforms.uTime.value=G.time+performance.now()/4000;
+}
+
+/* =========================================================
+   labels
+   ========================================================= */
+const labelsEl=$('#labels');
+const tLabels=terrs.map(t=>{ const el=document.createElement('div'); el.className='tl'; el.innerHTML='<span class="n"></span><span class="nm"></span>'; el.querySelector('.nm').textContent=t.name; labelsEl.appendChild(el); return el; });
+function proj(x,y,z){ v3.set(x,y,z).project(camera); return [(v3.x+1)/2*VW,(1-v3.y)/2*VH,v3.z]; }
+function place(el,x,y,z){ const [sx,sy,sz]=proj(x,y,z); if(sz>1||sx<-80||sx>VW+80||sy<-40||sy>VH+40){ el.style.display='none'; return; } el.style.display=''; el.style.transform=`translate(${sx|0}px,${sy|0}px) translate(-50%,-100%)`; }
+function updateLabels(){
+  const showNames=cam.dist<75;
+  terrs.forEach((t,i)=>{ const el=tLabels[i];
+    if(t.battle){ el.style.display='none'; return; }
+    el.style.setProperty('--c',FACTIONS[t.owner]?.color||'#888');
+    const n=el.firstChild; const tx=String(total(t.units)); if(n.textContent!==tx) n.textContent=tx;
+    el.lastChild.style.display=(showNames||t.id===G.sel||t.id===G.hover)?'':'none';
+    el.classList.toggle('sel',t.id===G.sel); el.classList.toggle('tg',isTarget(t.id));
+    place(el,t.cx,tileTop(t.anchor)+1.05,t.cz); });
+  for(const a of armies){ const [x,z]=armyPos(a); const s=String(total(a.units)); if(a.el.firstChild.textContent!==s) a.el.firstChild.textContent=s; place(a.el,x,lerp(a.y0,a.y1,a.t)+Math.sin(a.t*Math.PI)*.5+.9,z); }
+  for(const b of battles){ if(b.ended||cam.dist<20){ b.el.style.display='none'; continue; }
+    const al=b.agents.filter(a=>!a.dead).length; const s=b.el.lastChild; const tx=`${b.t.name} · ${al}`; if(s.textContent!==tx) s.textContent=tx;
+    place(b.el,b.cx,b.y+1.2,b.cz); }
+}
+
+/* =========================================================
+   HUD
+   ========================================================= */
+let panelDirty=true, panelKey='';
+const tp=$('#tp'), powersEl=$('#powers');
+function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,2600); }
+function flashInc(v){ const el=$('#tb-inc'); el.textContent='+'+v; }
+function setSpeed(s){ G.speed=s; document.querySelectorAll('[data-speed]').forEach(b=>b.classList.toggle('on',+b.dataset.speed===s)); }
+document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
+$('#b-px').addEventListener('click',()=>{ PX=PX>=4?2:PX+1; $('#b-px').textContent=`Pixels ${PX}×`; resize(); });
+$('#b-orders').addEventListener('click',()=>showOrders(false));
+$('#b-help').addEventListener('click',showHelp);
+$('#b-powers').addEventListener('click',()=>{ powersEl.classList.toggle('open'); if(getComputedStyle(powersEl).display!=='none') powersEl.scrollIntoView?.({block:'nearest'}); });
+
+function buildPanel(){
+  const t=terrs[G.sel]; if(!t){ tp.hidden=true; return; }
+  tp.hidden=false;
+  const own=t.owner===G.player, F=FACTIONS[t.owner];
+  const myNb=[...t.adj].map(i=>terrs[i]).filter(n=>n.owner===G.player);
+  let h=`<button class="x" data-act="close" aria-label="Close region file"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><path d="M0 0h2v2h2v2h4v-2h2v-2h2v2h-2v2h-2v4h2v2h2v2h-2v-2h-2v-2h-4v2h-2v2h-2v-2h2v-2h2v-4h-2v-2h-2z" fill="currentColor"/></svg></button>
+  <div class="eyebrow">${CONT[t.cont].name} · continent bonus +${CONT[t.cont].bonus}</div>
+  <h2>${t.name}</h2>
+  <div class="owner"><i class="chip" style="--c:${F.color}"></i>${F.name}${t.capitalOf>=0?` <span class="cap">${t.capitalOf===t.owner?'Capital':'Captured capital'}</span>`:''}</div>
+  <div class="sect"><div class="lbl">Garrison <b data-k="power"></b></div>
+  <div class="garr">${TYPES.map(k=>`<div><span class="ut">${UT[k].short}</span><b data-k="${k}">0</b></div>`).join('')}</div></div>
+  <div class="sect"><div class="lbl">Works</div><div class="works"><span>Trenches <span class="pips" data-k="trench"></span></span><span data-k="fac">Factory</span><span data-k="bar">Barracks</span></div></div>`;
+  if(t.battle) h+=`<div class="sect alarm"><div class="lbl">Battle in progress <b data-k="bcount"></b></div><p class="hint">Troops fight on their own. Units you recruit here join the defence at once.</p><button class="btn" data-act="watch">Watch the battle</button></div>`;
+  if(own){
+    h+=`<div class="sect"><div class="lbl">Recruit <b data-k="sup"></b></div><div class="g2">
+      ${TYPES.map((k,i)=>`<button class="btn u" data-act="rec:${k}" title="Key ${i+1}"><span>${UT[k].name}</span><em>${COST[k]} supply</em></button>`).join('')}</div>
+      <div class="lbl">Build</div><div class="g3">
+      <button class="btn u" data-act="build:trench"><span>Trench</span><em data-k="tcost"></em></button>
+      <button class="btn u" data-act="build:factory"><span>Factory</span><em>${COST.factory} supply</em></button>
+      <button class="btn u" data-act="build:barracks"><span>Barracks</span><em>${COST.barracks} supply</em></button></div>
+      <p class="hint">Factory: +2 supply per convoy and unlocks tanks. Barracks: 1 free infantry per convoy.</p></div>
+    <div class="sect"><div class="lbl">March orders</div>
+      <div class="seg" role="group" aria-label="Share of troops to send">${[[.25,'25%'],[.5,'50%'],[.75,'75%'],[1,'All−1']].map(([v,l])=>`<button class="btn" data-frac="${v}">${l}</button>`).join('')}</div>
+      <p class="hint">Right-click a bordering region to march. On touch, tap <b>Choose target</b>, then the region.</p>
+      <button class="btn" data-act="order">Choose target</button></div>`;
+  } else if(myNb.length){
+    h+=`<div class="sect"><div class="lbl">Attack from</div><div class="atk">${myNb.map(n=>`<button class="btn" data-act="atk:${n.id}"><span>${n.name}</span><span data-k="atk${n.id}"></span></button>`).join('')}</div>
+    <p class="hint">Sends <b data-k="fracl"></b> of that region's troops. Change the share in your own region's file.</p></div>`;
+  } else h+=`<div class="sect"><p class="hint">None of your regions border ${t.name}. Take a neighbouring region first.</p></div>`;
+  tp.innerHTML=h;
+}
+tp.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.frac){ G.sendFrac=+b.dataset.frac; panelDirty=true; return; }
+  const [act,arg]=(b.dataset.act||'').split(':'); const t=terrs[G.sel]; if(!t) return;
+  let err=null;
+  if(act==='close') select(-1);
+  else if(act==='watch') flyTo(t,7.5);
+  else if(act==='rec') err=recruit(G.player,t,arg);
+  else if(act==='build') err=build(G.player,t,arg);
+  else if(act==='order'){ G.orderMode=true; canvas.classList.add('order'); toast('Tap a bordering region to march on it.'); }
+  else if(act==='atk'){ const from=terrs[+arg]; err=sendArmy(G.player,from.id,t.id,G.sendFrac); if(!err) log(`${total(armies[armies.length-1].units)} units march from ${from.name} on ${t.name}.`,'me'); }
+  if(err) toast(err); panelDirty=true;
+});
+function updatePanel(){
+  const t=terrs[G.sel]; const key=t?`${t.id}|${t.owner}|${t.battle?1:0}`:'none';
+  if(key!==panelKey){ panelKey=key; buildPanel(); }
+  if(!t) return;
+  const q=k=>tp.querySelector(`[data-k="${k}"]`), set=(k,v)=>{const e=q(k); if(e&&e.textContent!==String(v)) e.textContent=v;};
+  let u=t.units; if(t.battle){ u=emptyU(); for(const a of t.battle.agents) if(!a.dead&&a.f===t.owner) u[a.type]++; }
+  TYPES.forEach(k=>set(k,u[k])); set('power',`strength ${Math.round(power(u)*(1+.3*t.trench))}`);
+  set('trench','■'.repeat(t.trench)+'□'.repeat(3-t.trench));
+  const fe=q('fac'); if(fe) fe.className=t.factory?'':'off'; const be=q('bar'); if(be) be.className=t.barracks?'':'off';
+  const f=factions[G.player];
+  set('sup',`${f.supply} available`);
+  set('tcost',t.trench>=3?'full depth':`${TRENCH_COST[t.trench]} supply`);
+  if(t.battle) set('bcount',`${t.battle.agents.filter(a=>!a.dead).length} engaged`);
+  tp.querySelectorAll('[data-act^="rec:"]').forEach(b=>{ const k=b.dataset.act.slice(4); b.disabled=f.supply<COST[k]||(k==='tank'&&!t.factory); });
+  tp.querySelectorAll('[data-act^="build:"]').forEach(b=>{ const k=b.dataset.act.slice(6); b.disabled=k==='trench'?(t.trench>=3||f.supply<TRENCH_COST[t.trench]):(t[k]||f.supply<COST[k]); });
+  tp.querySelectorAll('[data-frac]').forEach(b=>b.classList.toggle('on',+b.dataset.frac===G.sendFrac));
+  tp.querySelectorAll('[data-act^="atk:"]').forEach(b=>{ const n=terrs[+b.dataset.act.slice(4)]; set('atk'+n.id,`${total(n.units)} units`); b.disabled=!!n.battle||total(n.units)<2; });
+  set('fracl',G.sendFrac===1?'all but one':`${G.sendFrac*100}%`);
+}
+function updatePowers(){
+  const rows=factions.map(f=>{ const n=terrs.filter(t=>t.owner===f.id); const u=n.reduce((s,t)=>s+total(t.units),0)+armies.filter(a=>a.owner===f.id).reduce((s,a)=>s+total(a.units),0)+battles.reduce((s,b)=>s+(b.ended?0:b.agents.filter(a=>!a.dead&&a.f===f.id).length),0);
+    return `<tr class="${f.id===G.player?'me':''} ${f.alive?'':'dead'}"><td><i class="chip" style="--c:${f.color}"></i> ${f.short}</td><td class="n">${n.length}</td><td class="n">${u}</td><td class="n">${f.alive?'+'+income(f.id):'—'}</td></tr>`; }).join('');
+  const conts=Object.entries(CONT).map(([k,c])=>{ const h=factions.find(f=>ownsCont(f.id,k)); return `<tr><td>${c.name}</td><td class="n">+${c.bonus}</td><td class="n" colspan="2">${h?`<i class="chip" style="--c:${h.color}"></i>`:'<span style="color:var(--muted)">split</span>'}</td></tr>`; }).join('');
+  powersEl.innerHTML=`<div class="lbl">Powers</div><table><tr class="hd"><td></td><td class="n">REG</td><td class="n">UNITS</td><td class="n">INCOME</td></tr>${rows}</table><div class="lbl">Continents</div><table>${conts}</table>`;
+}
+function renderLog(){ $('#log-list').innerHTML=logs.slice(0,5).map(l=>`<li class="${l.cls}"><time>${l.d}</time>${l.text}</li>`).join(''); }
+function updateTop(){
+  const f=factions[G.player];
+  $('#tb-sup').textContent=f.supply; $('#tb-inc').textContent='+'+income(f.id)+' per convoy';
+  $('#tb-sec').textContent=Math.ceil(TICK-G.supplyT)+'s'; $('#tb-bar').style.width=(G.supplyT/TICK*100)+'%'; $('#tb-date').textContent=dateStr();
+}
+function updateBattleCard(){
+  const el=$('#bcard'); if(cam.dist>26){ el.hidden=true; return; }
+  let b=null,bd=12; for(const x of battles){ const d=Math.hypot(x.cx-cam.tx,x.cz-cam.tz); if(d<bd){bd=d;b=x;} }
+  if(!b){ el.hidden=true; return; }
+  el.hidden=false;
+  const by={}; for(const a of b.agents){ by[a.f]=by[a.f]||{alive:0,all:0}; by[a.f].all++; if(!a.dead) by[a.f].alive++; }
+  const st=b.ended?'Over':`${Math.floor(b.age)}s of fighting`;
+  el.innerHTML=`<div class="lbl">Battle of <b>${b.t.name}</b><span>${st}</span></div>`+Object.entries(by).map(([f,v])=>`<div class="side" style="--c:${FACTIONS[f].color}"><span><i class="chip" style="--c:${FACTIONS[f].color}"></i> ${FACTIONS[f].short}${+f===b.t.owner?' (defending)':''}</span><span class="sb"><i style="width:${v.all?v.alive/v.all*100:0}%"></i></span><span>${v.alive}/${v.all}</span></div>`).join('');
+}
+
+/* =========================================================
+   modals & game flow
+   ========================================================= */
+const modal=$('#modal'), sheet=$('#sheet');
+function openModal(html){ sheet.innerHTML=html; modal.hidden=false; const b=sheet.querySelector('button'); b&&b.focus({preventScroll:true}); }
+function closeModal(){ modal.hidden=true; }
+function showStart(){
+  G.running=false;
+  openModal(`<div class="kicker">The world map · August 1914</div><h1>Fronts of 1914</h1>
+  <p class="lede">Six great powers split the world between them. Supply convoys arrive for every power at the same moment, every ${TICK} seconds. Spend it on troops and works, then march on your neighbours. Battles fight themselves. Scroll in on one to watch it.</p>
+  <div class="lbl">Choose your power</div>
+  <div class="picks">${FACTIONS.map((f,i)=>`<button class="pick" data-pick="${i}" style="--c:${f.color}"><i></i><b>${f.name}</b><span>Capital: ${f.capital}</span></button>`).join('')}</div>`);
+  sheet.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>{ newGame(+b.dataset.pick); showOrders(true); }));
+}
+function progressHtml(f){
+  const m=f.mission, mine=terrs.filter(t=>t.owner===f.id);
+  const cp=k=>{ const all=terrs.filter(t=>t.cont===k); return `<span>${CONT[k].name} <b>${all.filter(t=>t.owner===f.id).length}/${all.length}</b></span>`; };
+  if(m.type==='conts'||m.type==='conts1') return m.conts.map(cp).join('')+(m.type==='conts1'?'<span>plus one more continent</span>':'');
+  if(m.type==='count') return `<span>Regions held <b>${mine.length}/${m.n}</b></span>`;
+  if(m.type==='count2') return `<span>Regions with 2+ units <b>${mine.filter(t=>total(t.units)>=2).length}/${m.n}</b></span>`;
+  if(m.type==='destroy'){ const n=terrs.filter(t=>t.owner===m.target).length; return `<span>${factions[m.target].name} regions left <b>${n}</b></span>`; }
+}
+function showOrders(first){
+  const f=factions[G.player]; if(!f.mission) return;
+  const [title,text]=missionText(f.mission);
+  const prevSpeed=G.speed; if(!first) G.running=false;
+  openModal(`<div class="kicker">${f.name} · War Office</div>
+   <div class="orders"><span class="stamp">SECRET</span><h2>${title}</h2><p>${text}</p><div class="prog">${progressHtml(f)}</div></div>
+   <p class="hint">Every other power has its own sealed orders. The first to complete theirs wins the war.</p>
+   <div class="row"><button class="btn" id="m-go">${first?'Open hostilities':'Back to the map'}</button>${first?'<button class="btn" id="m-help">How to play</button>':''}</div>`);
+  $('#m-go').addEventListener('click',()=>{ closeModal(); G.running=true; G.started=true; if(first){ setSpeed(1); log('War is declared. Sealed orders received.','me'); } });
+  $('#m-help')?.addEventListener('click',showHelp);
+}
+function showHelp(){
+  const was=G.running; G.running=false;
+  openModal(`<div class="kicker">Field manual</div><h2>How to play</h2>
+  <dl class="keys">
+   <dt>Click</dt><dd>Select a region to open its file: garrison, works, recruiting.</dd>
+   <dt>Right-click</dt><dd>With your region selected, march its troops into a bordering region. Dashed sea lanes count as borders.</dd>
+   <dt>Drag · wheel</dt><dd>Pan and zoom. Zoom close to a battle to see the troops fight. Double-click a region to fly to it.</dd>
+   <dt>1 2 3 4</dt><dd>Recruit infantry, machine gun, field gun or tank in the selected region.</dd>
+   <dt>Space</dt><dd>Pause or resume. WASD or arrow keys also pan.</dd>
+  </dl>
+  <p>Every ${TICK} seconds a convoy arrives: 1 supply per 3 regions (at least 3), plus continent bonuses and +2 per factory. Field guns outrange everything; machine guns pin attackers; tanks shrug off rifle fire. Trenches cut the damage defenders take.</p>
+  <div class="row"><button class="btn" id="m-close">${G.started?'Back to the map':'Back'}</button></div>`);
+  $('#m-close').addEventListener('click',()=>{ if(G.started){ closeModal(); G.running=was||G.started; } else showOrders(true); });
+}
+function endGame(winner,why){
+  if(G.over) return; G.over=true; G.running=false;
+  const won=winner===G.player, W=winner!==null?factions[winner]:null;
+  const text=why||(won?`Your sealed orders are fulfilled: ${missionText(factions[G.player].mission)[0].toLowerCase()}.`:`${cap(W.the)} has fulfilled its sealed orders: ${missionText(W.mission)[0].toLowerCase()}.`);
+  openModal(`<div class="kicker">${dateStr()}</div><h1>${won?'Victory':'Defeat'}</h1><p class="lede">${text}</p><div class="row"><button class="btn" id="m-new">Start a new war</button><button class="btn" id="m-look">Look at the map</button></div>`);
+  $('#m-new').addEventListener('click',showStart);
+  $('#m-look').addEventListener('click',closeModal);
+}
+function newGame(pid){
+  battles.forEach(disposeBattle); battles.length=0; armies.forEach(a=>a.el.remove()); armies.length=0; parts.length=0; tracers.length=0; logs.length=0;
+  Object.assign(G,{time:0,day:0,supplyT:0,over:false,player:pid,sel:-1,hover:-1,orderMode:false,started:false});
+  factions.forEach(f=>{ f.supply=5; f.alive=true; f.aiT=1.5+rand()*2; });
+  terrs.forEach(t=>{ t.owner=-1; t.units=emptyU(); t.trench=0; t.factory=false; t.barracks=false; t.capitalOf=-1; t.battle=null; });
+  factions.forEach(f=>{ const t=byName[f.capital]; t.owner=f.id; t.capitalOf=f.id; t.units={inf:6,mg:2,art:1,tank:0}; t.trench=2; t.factory=true; });
+  const rest=shuffle(terrs.filter(t=>t.owner<0)), off=Math.floor(rand()*6);
+  rest.forEach((t,k)=>{ t.owner=(k+off)%6; t.units.inf=2+(rand()<.5?1:0); });
+  const pool=shuffle(buildMissions());
+  factions.forEach(f=>{ const i=pool.findIndex(m=>!(m.type==='destroy'&&m.target===f.id)); f.mission=pool.splice(i,1)[0]; });
+  paintAll(); renderLog(); panelKey=''; panelDirty=true;
+  flyTo(byName[factions[pid].capital],48);
+  $('#crest').style.setProperty('--c',FACTIONS[pid].color); $('#crest').textContent=FACTIONS[pid].key; $('#tb-name').textContent=FACTIONS[pid].name;
+}
+
+/* =========================================================
+   boot
+   ========================================================= */
+resize();
+// demo board behind the title screen
+factions.forEach(f=>f.mission={type:'count',n:30});
+newGame(0);
+cam.tx=cam.gx=15; cam.tz=cam.gz=-18; cam.dist=cam.gdist=80;
+showStart();
+let last=performance.now(), uiT=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const rdt=Math.min(.05,(now-last)/1000); last=now;
+  if(G.running&&!G.over&&G.speed>0){ let g=rdt*G.speed; while(g>1e-6){ const s=Math.min(g,.05); step(s); g-=s; } }
+  updateCamera(rdt); draw(); renderer.render(scene,camera); updateLabels();
+  uiT+=rdt; if(uiT>.2||panelDirty){ uiT=0; panelDirty=false; updateTop(); updatePanel(); updatePowers(); updateBattleCard(); }
+}
+requestAnimationFrame(frame);
+window.__G={G,terrs,factions,battles,armies,cam,step,sendArmy,flyTo,select};
+</script>

@@ -65,7 +65,7 @@ function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boole
 }
 
 export function MenuSheet({ onHelp }: { onHelp: () => void }) {
-  const sim = useSim(); const { quality, sound, tips, log, look } = useUi();
+  const sim = useSim(); const { quality, sound, radio, tips, log, look } = useUi();
   if (!sim) return null;
   const { session, g } = sim; const ui = useUi.getState;
   const close = () => { click(); ui().setOverlay(null); };
@@ -88,6 +88,7 @@ export function MenuSheet({ onHelp }: { onHelp: () => void }) {
             {['Tiberian', 'Red Alert'].map((l, i) => <button key={l} aria-pressed={look === i} onClick={() => { click(); ui().setLook(i as 0 | 1); }}>{l}</button>)}
           </div></div>
         <Toggle label="Sound" on={sound} set={v => ui().setSound(v)} />
+        <Toggle label="Radio voice" on={radio} set={v => ui().setRadio(v)} />
         <Toggle label="Tips" on={tips} set={v => ui().setTips(v)} />
         <button className="btn wide" onClick={() => { click(); quitToTitle(); }}>{session.kind === 'local' ? 'Save and quit to title' : session.kind === 'host' ? 'End game for everyone and quit' : 'Leave the game'}</button>
         <small>Recent events</small>

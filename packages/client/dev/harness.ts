@@ -4,6 +4,7 @@ import { HostSession } from '../src/game/session';
 import { useUi } from '../src/game/store';
 import { createWorldRenderer } from '../src/render/WorldRenderer';
 import { facCol } from '../src/render/palette';
+import { Sfx } from '../src/audio/sfx';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const labels = document.getElementById('labels') as HTMLElement;
@@ -34,7 +35,7 @@ function loop(now: number) {
 requestAnimationFrame(loop);
 
 const h = {
-  r, session, ui, errors,
+  r, session, ui, errors, sfx: Sfx,
   get frames() { return frames; },
   set auto(v: boolean) { auto = v; last = performance.now(); },
   /** Simulate `sec` seconds of game time without rendering. */

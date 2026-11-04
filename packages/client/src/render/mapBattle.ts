@@ -165,7 +165,7 @@ export class MapBattles {
       fx.spawn(x, y + .03, z, Math.cos(an) * sp * .4, (.6 + Math.random() * .7) * Math.min(k, 1.6), Math.sin(an) * sp * .4, 3.2, .9, .03 * k, .02 * k, Math.random() < .6 ? K.dirt : K.boot, 0, y);
     }
     for (let i = 0; i < 3; i++) fx.spawn(x + (Math.random() - .5) * .1 * k, y + .1, z + (Math.random() - .5) * .1 * k, .03, .16 + Math.random() * .12, .01, 0, 2 + Math.random() * 2, .05 * s * k, .17 * s * k, i ? K.smoke : K.smoke2);
-    if (dist > 0 && Math.random() < .25) Sfx.rumble(Math.max(.15, 1 - dist / 160));
+    if (dist > 0 && Math.random() < .25) Sfx.rumble(Math.max(.15, 1 - dist / 160), x, z);
     if (scar) this.addScar(x, z, y, s);
   }
 

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { describeEvent, type BuildKind, type Command, type DefKind, type GameEvent, type UnitType } from '@riskrts/shared';
 import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
+import { Radio } from '../audio/radio';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
 export type Tab = 'rec' | 'build' | 'fort' | 'march';
@@ -22,6 +23,8 @@ interface Ui {
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
   tut: number; tips: boolean; quality: 0 | 1 | 2; sound: boolean;
+  /** Spoken radio dispatches (signal cues still play when off). */
+  radio: boolean;
   /** Visual style: 0 = Tiberian (muddy brown/grey), 1 = Red Alert (industrial chrome). */
   look: 0 | 1;
   fatal: string | null;
@@ -44,6 +47,7 @@ interface Ui {
   setQuality(q: 0 | 1 | 2): void;
   setLook(l: 0 | 1): void;
   setSound(on: boolean): void;
+  setRadio(on: boolean): void;
   setTips(on: boolean): void;
   advanceTut(n: number): void;
   /** Convenience actions that send a command and surface errors as toasts. */
@@ -62,17 +66,19 @@ const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { r
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
 let feedId = 1;
 
+Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
+
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
-  sound: lsGet('f14snd') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
+  sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
   startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false });
     session.onError = (m) => get().say(m); },
-  leaveGame: () => { get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
+  leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
   select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
   setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
@@ -86,7 +92,8 @@ export const useUi = create<Ui>((set, get) => ({
   setSpeed: (n) => { const s = get().session; if (s?.canControlTime) { s.speed = n; get().bump(); } },
   setQuality: (quality) => { lsSet('f14q', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
-  setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; set({ sound }); },
+  setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; if (!sound) Radio.reset(); set({ sound }); },
+  setRadio: (radio) => { lsSet('f14radio', radio ? '1' : '0'); Radio.voice = radio; if (!radio) Radio.reset(); set({ radio }); },
   setTips: (tips) => { lsSet('f14tips', tips ? '1' : '0'); set({ tips }); },
   advanceTut: (n) => { if (n > get().tut) set({ tut: n }); },
 
@@ -98,23 +105,23 @@ export const useUi = create<Ui>((set, get) => ({
   fortify: (region, kind, sector) => { const s = get().session; if (!s) return; const err = s.send({ t: 'fortify', region, kind, sector }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },
   air: (from, to) => {
     const s = get().session; if (!s) return; const err = s.send({ t: 'air', from, to, frac: get().sendFrac });
-    if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); set({ orderMode: false, orderKind: 'march' }); get().bump();
+    if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); set({ orderMode: false, orderKind: 'march' }); get().bump();
   },
-  assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },
+  assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); },
   march: (from, to) => {
     const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac });
-    if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(3); Sfx.click(); } set({ orderMode: false }); get().bump();
+    if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(3); Sfx.order(); } set({ orderMode: false }); get().bump();
   },
 
   pump: () => {
     const s = get().session; if (!s) return;
     const evs: GameEvent[] = s.drainEvents(); const items: FeedItem[] = [];
     for (const e of evs) {
-      if (e.k === 'supply') { Sfx.chime(); continue; }
+      if (e.k === 'supply') { Sfx.supply(); continue; }
+      Radio.event(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
       items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region });
-      if (d.cls === 'bad') Sfx.horn();
     }
     set(st => ({ rev: st.rev + 1, feed: items.length ? [...st.feed, ...items].slice(-4) : st.feed, log: items.length ? [...items.reverse(), ...st.log].slice(0, 60) : st.log }));
     if (items.length) for (const it of items) setTimeout(() => set(st => ({ feed: st.feed.filter(f => f.id !== it.id) })), 10000);

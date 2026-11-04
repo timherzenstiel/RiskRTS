@@ -1,5 +1,5 @@
 // Lobby logic on top of Channels. Host owns the truth; guests only claim seats and wait for the start message.
-import { FACTIONS, PROTOCOL_VERSION, type ClientMsg, type LobbyState, type ServerMsg, type Seat } from '@riskrts/shared';
+import { DEFAULT_SETTINGS, FACTIONS, PROTOCOL_VERSION, type ClientMsg, type GameSettings, type LobbyState, type ServerMsg, type Seat } from '@riskrts/shared';
 import type { Channel } from './channel';
 import { openRoom, type RoomHost } from './peer';
 import { HostSession } from '../game/session';
@@ -15,7 +15,7 @@ export class LobbyHost {
   onStarted?: (s: HostSession) => void;
 
   private constructor(private hostName: string) {
-    this.state = { room: '', hostId: 'host', difficulty: 1, started: false, seats: newSeats(), players: [{ id: 'host', name: hostName }] };
+    this.state = { room: '', hostId: 'host', difficulty: 1, started: false, settings: { ...DEFAULT_SETTINGS }, seats: newSeats(), players: [{ id: 'host', name: hostName }] };
     this.claim('host', hostName, 3); // default seat: Germany, so the host does not start on the same side as most guests
   }
   static async open(name: string): Promise<LobbyHost> {
@@ -45,6 +45,7 @@ export class LobbyHost {
     seat.player = playerId; seat.name = name ?? p?.name ?? 'Player'; seat.ai = false; this.broadcast(); return true;
   }
   setDifficulty(d: number) { this.state.difficulty = d; this.broadcast(); }
+  setSettings(p: Partial<GameSettings>) { this.state.settings = { ...this.state.settings, ...p }; this.broadcast(); }
   private leave(id: string) {
     this.chans.delete(id); this.state.players = this.state.players.filter(p => p.id !== id);
     for (const s of this.state.seats) if (s.player === id) { s.player = null; s.name = null; s.ai = true; }
@@ -58,10 +59,10 @@ export class LobbyHost {
     const humans = this.state.seats.filter(s => s.player).map(s => s.faction);
     const mine = this.state.seats.find(s => s.player === 'host')!.faction;
     const seed = Math.floor(Math.random() * 2 ** 31);
-    const session = new HostSession(mine, { seed, humans, difficulty: this.state.difficulty, network: true });
+    const session = new HostSession(mine, { seed, humans, difficulty: this.state.difficulty, settings: this.state.settings, network: true });
     for (const [id, ch] of this.chans) {
       const seat = this.state.seats.find(s => s.player === id); if (!seat) { ch.close(); continue; }
-      ch.send({ t: 'start', seed, humans, difficulty: this.state.difficulty, you: seat.faction } satisfies ServerMsg);
+      ch.send({ t: 'start', seed, humans, difficulty: this.state.difficulty, you: seat.faction, settings: this.state.settings } satisfies ServerMsg);
       session.addPeer(id, seat.faction, ch);
     }
     this.onStarted?.(session);

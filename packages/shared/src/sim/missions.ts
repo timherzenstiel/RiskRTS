@@ -2,7 +2,7 @@
 import { CONT, CONT_KEYS, type ContKey } from '../data/regions';
 import { FACTIONS } from '../data/factions';
 import { totalUnits } from '../data/units';
-import { emit, world } from './core';
+import { controls, emit, updateContested, world } from './core';
 import type { FactionState, GameState, Mission } from './types';
 
 export function buildMissions(): Mission[] {
@@ -25,10 +25,10 @@ export function missionText(m: Mission): [string, string] {
   }
 }
 
-export const ownsCont = (g: GameState, fid: number, k: ContKey) => g.regions.every((r, i) => world().regions[i].cont !== k || r.owner === fid);
+export const ownsCont = (g: GameState, fid: number, k: ContKey) => g.regions.every((r, i) => world().regions[i].cont !== k || controls(r, fid));
 
 export function missionDone(g: GameState, f: FactionState): boolean {
-  const m = f.mission; if (!m) return false; const mine = g.regions.filter(r => r.owner === f.id);
+  const m = f.mission; if (!m) return false; const mine = g.regions.filter(r => controls(r, f.id));
   if (m.type === 'conts') return m.conts.every(k => ownsCont(g, f.id, k));
   if (m.type === 'conts1') return m.conts.every(k => ownsCont(g, f.id, k)) && CONT_KEYS.some(k => !m.conts.includes(k) && ownsCont(g, f.id, k));
   if (m.type === 'count') return mine.length >= m.n;
@@ -66,6 +66,8 @@ export function checkElim(g: GameState, fid: number, by: number | null) {
   if (g.regions.some(r => r.owner === fid) || g.armies.some(a => a.owner === fid)) return;
   for (const b of g.battles) if (!b.ended && b.agents.some(a => !a.dead && a.f === fid)) return;
   f.alive = false; emit(g, { k: 'eliminated', faction: fid });
+  // a destroyed power's holdouts surrender
+  for (const r of g.regions) if (r.defs.some(d => d.f === fid)) { r.defs = r.defs.filter(d => d.f !== fid); updateContested(r); }
   for (const o of g.factions) {
     if (!o.alive || !o.mission || o.mission.type !== 'destroy' || o.mission.target !== fid) continue;
     if (by === o.id) { endGame(g, o.id); return; }

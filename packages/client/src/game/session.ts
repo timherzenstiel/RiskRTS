@@ -2,7 +2,7 @@
 // so single player, hosting and joining all look the same to them.
 import {
   applyCommand, applySnapshot, createGame, createMirror, drainEvents, initMirrorCapitals, makeSnapshot, step, TICK_DT,
-  type Command, type Fx, type GameEvent, type GameState, type ServerMsg, type ClientMsg,
+  type Command, type Fx, type GameEvent, type GameSettings, type GameState, type ServerMsg, type ClientMsg,
 } from '@riskrts/shared';
 import type { Channel } from '../net/channel';
 
@@ -44,8 +44,8 @@ export class HostSession implements Session {
   private peers = new Map<string, PeerSlot>();
   private myWatch = new Set<number>();
 
-  constructor(public readonly me: number, opts: { seed?: number; humans: number[]; difficulty: number; network?: boolean; restore?: GameState }) {
-    this.state = opts.restore ?? createGame({ seed: opts.seed, humans: opts.humans, difficulty: opts.difficulty, fx: true });
+  constructor(public readonly me: number, opts: { seed?: number; humans: number[]; difficulty: number; settings?: GameSettings; network?: boolean; restore?: GameState }) {
+    this.state = opts.restore ?? createGame({ seed: opts.seed, humans: opts.humans, difficulty: opts.difficulty, settings: opts.settings, fx: true });
     if (opts.restore) { opts.restore.fx = []; opts.restore.events = []; }
     this.kind = opts.network ? 'host' : 'local';
     this.collect();
@@ -55,7 +55,7 @@ export class HostSession implements Session {
   serialize(): string { const { events: _e, fx: _f, ...rest } = this.state; return JSON.stringify({ me: this.me, state: rest }); }
   /** Rebuild a single-player session from serialize(). Returns null if the data is unusable. */
   static restore(json: string): HostSession | null {
-    try { const d = JSON.parse(json) as { me: number; state: GameState }; if (!d.state || d.state.v !== 1) return null; return new HostSession(d.me, { humans: [d.me], difficulty: d.state.diff, restore: { ...d.state, events: [], fx: [] } }); }
+    try { const d = JSON.parse(json) as { me: number; state: GameState }; if (!d.state || d.state.v !== 2) return null; return new HostSession(d.me, { humans: [d.me], difficulty: d.state.diff, restore: { ...d.state, events: [], fx: [] } }); }
     catch { return null; }
   }
 

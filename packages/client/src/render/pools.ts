@@ -2,6 +2,23 @@ import * as THREE from 'three';
 
 export const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
+/** Strength of the steel sheen on units and buildings (Tiberian: dull, Red Alert: industrial chrome). */
+export const uChrome = { value: .3 };
+
+/** Phong material for models: only unsaturated, mid-to-light colours (steel, concrete, gunmetal) get a specular highlight,
+ *  so painted hulls and uniforms stay matte while metal glints. */
+export function litMaterial(): THREE.MeshPhongMaterial {
+  const m = new THREE.MeshPhongMaterial({ shininess: 46, specular: 0xffffff });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uChrome = uChrome;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uChrome;')
+      .replace('#include <specularmap_fragment>', `float specularStrength;
+  { vec3 _d=diffuseColor.rgb; float _mx=max(_d.r,max(_d.g,_d.b)), _mn=min(_d.r,min(_d.g,_d.b)), _sat=_mx>.001?(_mx-_mn)/_mx:0.;
+    specularStrength=(1.-smoothstep(.12,.38,_sat))*smoothstep(.02,.25,_mx)*uChrome; }`);
+  };
+  return m;
+}
+
 /** A dynamic InstancedMesh of unit boxes refilled every frame. All writes go straight into typed arrays. */
 export class Pool {
   readonly mesh: THREE.InstancedMesh;

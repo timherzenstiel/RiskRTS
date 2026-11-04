@@ -8,23 +8,30 @@ import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
 
+/** Tiles per side of a close-up detail chunk (see detail.ts). */
+export const DETAIL_CH = 12;
+export const DCC = Math.ceil(COLS / DETAIL_CH), DCR = Math.ceil(ROWS / DETAIL_CH);
+/** Tile flags in the info texture. */
+export const FL_FIELD = 1, FL_ROAD = 2, FL_CITY = 4, FL_RIVER = 8, FL_COAST = 16, FL_FURROW = 32;
+
 export interface CityInfo { name: string; size: number; x: number; z: number; tile: number }
 
 const BIOME_KEYS = ['ice', 'snow', 'rock', 'tundra', 'desert', 'jungle', 'taiga', 'steppe', 'savanna', 'temperate', 'beach'] as const;
 type Biome = typeof BIOME_KEYS[number];
+// Earthy, desaturated C&C ground: olive grass, khaki steppe, dusty sand, grey rock.
 const BIOME: Record<Biome, THREE.Color> = {
-  ice: col('#d4ddda'), snow: col('#eceee8'), rock: col('#8d8576'), tundra: col('#909a7d'), desert: col('#cfb070'), jungle: col('#3f6c3b'),
-  taiga: col('#4d6a46'), steppe: col('#a9a268'), savanna: col('#a09d58'), temperate: col('#70904d'), beach: col('#d8c48e'),
+  ice: col('#bfc6c2'), snow: col('#d3d5cf'), rock: col('#7a7263'), tundra: col('#7b7d68'), desert: col('#b39563'), jungle: col('#3d5631'),
+  taiga: col('#475840'), steppe: col('#8a8156'), savanna: col('#877c4c'), temperate: col('#5e6c3b'), beach: col('#b09c72'),
 };
 const TREEC: Partial<Record<Biome, THREE.Color[]>> = {
-  taiga: ['#2c4630', '#34503a', '#284028'].map(col), temperate: ['#4c6f36', '#5a7c3c', '#45652f', '#6b8a3a'].map(col), jungle: ['#2b5628', '#336230', '#24481f'].map(col),
-  savanna: ['#626f35', '#6d7a3c'].map(col), tundra: [col('#5e6a4c')],
+  taiga: ['#26392a', '#2e4232', '#223424'].map(col), temperate: ['#3c5229', '#475d2f', '#384b26', '#55652f'].map(col), jungle: ['#26461f', '#2d5027', '#203c1b'].map(col),
+  savanna: ['#53592d', '#5d6332'].map(col), tundra: [col('#525a42')],
 };
 const TREE_P: Partial<Record<Biome, number>> = { taiga: .38, temperate: .22, jungle: .5, savanna: .07, tundra: .03 };
-const FIELDC = ['#b9ac5c', '#7f9f4b', '#8d7050', '#a5b45c', '#6e9046', '#c2b66a'].map(col);
-const WALLS = ['#d2c8ac', '#c4b796', '#b8a988', '#d9d4bf'].map(col);
-const ROOFS = ['#8e3b2b', '#9c4a33', '#4b4f55', '#6a4436', '#7a3a2c'].map(col);
-const WHITE = col('#ffffff'), RED = col('#ff6b4a'), RIVERC = col('#3f7590'), CITYC = col('#a39a86'), ROADC = col('#8a7a58'), TRUNK = col('#4a3424');
+const FIELDC = ['#958646', '#66743a', '#735a3e', '#848446', '#5a6a35', '#9c8c52'].map(col);
+const WALLS = ['#b4aa92', '#a69b80', '#9c9078', '#bdb7a4'].map(col);
+const ROOFS = ['#74392b', '#7d4a35', '#45474a', '#5a4434', '#66382b'].map(col);
+const WHITE = col('#ffffff'), RED = col('#ff6b4a'), RIVERC = col('#38535a'), CITYC = col('#878272'), ROADC = col('#7a6a4c'), TRUNK = col('#3e2c1e');
 
 function biomeKey(lon: number, lat: number, h: number): Biome {
   const al = Math.abs(lat);
@@ -57,6 +64,7 @@ export function computeHeights(w: World): Float32Array {
   return h;
 }
 
+const enc = (v: number) => Math.round(Math.pow(clamp(v, 0, 1), 1 / 2.2) * 255);
 const nb4 = (i: number, out: number[]) => { const c = i % COLS; out[0] = c > 0 ? i - 1 : -1; out[1] = c < COLS - 1 ? i + 1 : -1; out[2] = i >= COLS ? i - COLS : -1; out[3] = i + COLS < N ? i + COLS : -1; return out; };
 
 /** Shared uniform: 0 = full faction colouring (strategic view), 1 = natural terrain with coloured borders only (close-up). */
@@ -73,7 +81,8 @@ function detailMaterial(tex: THREE.DataTexture, strength: number) {
   diffuseColor.rgb = mix(diffuseColor.rgb, vNat, uNear);
   vec3 _an=abs(vWN); float _n;
   if(_an.y>.5){ _n=texture2D(uDetail,vWP.xz*.5).r; diffuseColor.rgb*=${(1 - strength).toFixed(2)}+${(2 * strength).toFixed(2)}*_n; }
-  else { vec2 _uv=_an.x>.5?vWP.zy:vWP.xy; _n=texture2D(uDetail,_uv*.5+.37).r; float _st=step(.5,fract(vWP.y*10.)); diffuseColor.rgb*=(.74+.2*_n)*(.95+.05*_st)*mix(.7,1.,clamp(vWP.y*2.,0.,1.)); }`);
+  else { vec2 _uv=_an.x>.5?vWP.zy:vWP.xy; _n=texture2D(uDetail,_uv*.5+.37).r; float _st=step(.5,fract(vWP.y*24.+_n*.6));
+    diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.3,.21,.13),.6)*(.8+.35*_n)*(.85+.25*_st)*mix(.75,1.15,clamp(vWP.y*2.,0.,1.)); }`);
   };
   return m;
 }
@@ -95,10 +104,21 @@ export class Terrain {
   /** Highest terrain around each region's anchor; battlefields are laid at this height. */
   readonly groundY: number[];
   readonly railMat: THREE.LineBasicMaterial;
+  private readonly laneMat: THREE.LineDashedMaterial;
   private readonly bag = new DisposeBag();
   readonly instOf = new Int32Array(N).fill(-1);
   readonly biome = new Uint8Array(N);
   readonly baseCol: Float32Array;
+  /** Close-up ground data, one texel per tile. nat: natural colour (sRGB, with hover/selection) + owner + 1 in alpha (0 = none). */
+  readonly natTex: THREE.DataTexture;
+  /** info: r = (biome + 1) * 20 (0 = sea), g = tile flags, b/a = region id low/high byte. */
+  readonly infoTex: THREE.DataTexture;
+  /** One byte per detail chunk: 1 while the close-up layer draws that chunk (voxel trees there are hidden). */
+  readonly coverData = new Uint8Array(DCC * DCR);
+  readonly coverTex: THREE.DataTexture;
+  /** Every tree on the map: x, z, y, scale, biome, colour index, region (stride 7). */
+  readonly treeRec: number[] = [];
+  private readonly natData: Uint8Array<ArrayBuffer>;
   readonly cityT = new Uint8Array(N);
   readonly roadT = new Uint8Array(N);
   readonly fieldT = new Uint8Array(N);
@@ -145,11 +165,24 @@ export class Terrain {
       let done = false;
       if ((key === 'temperate' || key === 'steppe') && tileH[i] < .55 && !river[i]) {
         const fv = vnoise(c * .06 + 11, r * .06 + 5);
-        if (fv > .5) { const id = Math.floor(vnoise(c * .19 + 3, r * .19) * 6), st = ((id & 1 ? r : c) % 2) ? 1 : .92; fieldT[i] = 1; tmp.copy(FIELDC[id % 6]).multiplyScalar(st * (.96 + hash2(i, 9) * .07)); done = true; }
+        if (fv > .68) { const id = Math.floor(vnoise(c * .19 + 3, r * .19) * 6), st = ((id & 1 ? r : c) % 2) ? 1 : .92; fieldT[i] = 1; tmp.copy(FIELDC[id % 6]).multiplyScalar(st * (.96 + hash2(i, 9) * .07)); done = true; }
       }
       if (!done) tmp.multiplyScalar(j);
       this.baseCol[k * 3] = tmp.r; this.baseCol[k * 3 + 1] = tmp.g; this.baseCol[k * 3 + 2] = tmp.b;
     });
+
+    // close-up ground textures
+    this.natData = new Uint8Array(N * 4);
+    this.natTex = this.bag.add(new THREE.DataTexture(this.natData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    const info = new Uint8Array(N * 4);
+    for (const i of landIdx) {
+      const c = i % COLS, r = (i / COLS) | 0;
+      info[i * 4] = (this.biome[i] + 1) * 20;
+      info[i * 4 + 1] = (fieldT[i] ? FL_FIELD : 0) | (river[i] ? FL_RIVER : 0) | (coastLand[i] ? FL_COAST : 0) | (Math.floor(vnoise(c * .19 + 3, r * .19) * 6) & 1 ? FL_FURROW : 0);
+      info[i * 4 + 2] = terrOf[i] & 255; info[i * 4 + 3] = terrOf[i] >> 8;
+    }
+    this.infoTex = this.bag.add(new THREE.DataTexture(info, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    for (const t of [this.natTex, this.infoTex]) { t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; }
 
     // trees
     const treeData: number[] = [], treeBaseL: number[] = [], treeRegion: number[] = [];
@@ -161,7 +194,8 @@ export class Terrain {
       for (let n = 0; n < 2; n++) {
         if (rng.next() > p) continue;
         const x = tx(i % COLS) + (rng.next() - .5) * TS * .8, z = tz((i / COLS) | 0) + (rng.next() - .5) * TS * .8, y = tileH[i], t = terrOf[i];
-        const cc = TREEC[k]!, c = cc[Math.floor(rng.next() * cc.length)], s = .8 + rng.next() * .5;
+        const cc = TREEC[k]!, ci = Math.floor(rng.next() * cc.length), c = cc[ci], s = .8 + rng.next() * .5;
+        this.treeRec.push(x, z, y, s, this.biome[i], ci, t);
         if (k === 'taiga') { addPart(t, x, y + .025 * s, z, .02, .05 * s, .02, TRUNK); addPart(t, x, y + .08 * s, z, .11 * s, .06 * s, .11 * s, c); addPart(t, x, y + .135 * s, z, .075 * s, .05 * s, .075 * s, c); addPart(t, x, y + .18 * s, z, .035 * s, .04 * s, .035 * s, c); }
         else if (k === 'jungle') { addPart(t, x, y + .045 * s, z, .03, .09 * s, .03, TRUNK); addPart(t, x, y + .12 * s, z, .17 * s, .07 * s, .17 * s, c); addPart(t, x, y + .17 * s, z, .1 * s, .04 * s, .1 * s, c); }
         else if (k === 'savanna') { addPart(t, x, y + .04 * s, z, .02, .08 * s, .02, TRUNK); addPart(t, x, y + .09 * s, z, .17 * s, .03 * s, .17 * s, c); }
@@ -175,7 +209,19 @@ export class Terrain {
       }
     }
     this.treeBase = new Float32Array(treeBaseL);
-    this.treeMesh = new THREE.InstancedMesh(boxGeo, this.bag.add(new THREE.MeshLambertMaterial()), Math.max(1, treeRegion.length));
+    this.coverTex = this.bag.add(new THREE.DataTexture(this.coverData, DCC, DCR, THREE.RedFormat, THREE.UnsignedByteType));
+    this.coverTex.needsUpdate = true;
+    const treeMat = this.bag.add(new THREE.MeshLambertMaterial()), coverTex = this.coverTex;
+    // voxel trees give way to the detailed close-up trees wherever the detail layer is drawn
+    treeMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uCover = { value: coverTex }; sh.uniforms.uNear = uNear;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vTW;').replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTW=(modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.)).xz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uCover; uniform float uNear; varying vec2 vTW;')
+        .replace('void main() {', `void main() {
+  vec2 _cc=floor((vTW+vec2(${HW.toFixed(4)},${HH.toFixed(4)}))/${(DETAIL_CH * TS).toFixed(5)});
+  if(texture2D(uCover,(_cc+.5)/vec2(${DCC}.,${DCR}.)).r>.5) discard;`);
+    };
+    this.treeMesh = new THREE.InstancedMesh(boxGeo, treeMat, Math.max(1, treeRegion.length));
     this.treeMesh.frustumCulled = false; this.treeMesh.castShadow = this.treeMesh.receiveShadow = true;
     const perRegion: number[][] = world.regions.map(() => []);
     for (let k = 0; k < treeRegion.length; k++) {
@@ -232,13 +278,15 @@ export class Terrain {
         pairs.add(key); const ux = (b.x - a.x) / d, uz = (b.z - a.z) / d;
         for (let s = 0; s < n; s++) {
           const x0 = lerp(a.x, b.x, s / n), z0 = lerp(a.z, b.z, s / n), x1 = lerp(a.x, b.x, (s + 1) / n), z1 = lerp(a.z, b.z, (s + 1) / n);
-          const y0 = hAt(x0, z0) + .012, y1 = hAt(x1, z1) + .012;
+          const y0 = this.surfaceAt(x0, z0) + .008, y1 = this.surfaceAt(x1, z1) + .008;
           rpts.push(x0, y0, z0, x1, y1, z1); rcols.push(RAIL.r, RAIL.g, RAIL.b, RAIL.r, RAIL.g, RAIL.b);
           if (s % 2 === 0) { rpts.push(x0 - uz * .035, y0, z0 + ux * .035, x0 + uz * .035, y0, z0 - ux * .035); rcols.push(TIE.r, TIE.g, TIE.b, TIE.r, TIE.g, TIE.b); }
           const ti = tileAtW(x0, z0); if (ti >= 0 && !river[ti]) this.roadT[ti] = 1;
         }
       }
     }
+    for (const i of landIdx) info[i * 4 + 1] |= (this.roadT[i] ? FL_ROAD : 0) | (this.cityT[i] ? FL_CITY : 0);
+    this.infoTex.needsUpdate = true;
     const rg = this.bag.add(new THREE.BufferGeometry());
     rg.setAttribute('position', new THREE.Float32BufferAttribute(rpts, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(rcols, 3));
     this.railMat = this.bag.add(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true }));
@@ -257,7 +305,8 @@ export class Terrain {
       else lp.push(A.cx, y, A.cz, B.cx, y, B.cz);
     }
     const lg = this.bag.add(new THREE.BufferGeometry()); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-    const lines = new THREE.LineSegments(lg, this.bag.add(new THREE.LineDashedMaterial({ color: 0xb8c0a4, dashSize: .6, gapSize: .5, transparent: true, opacity: .5 })));
+    this.laneMat = this.bag.add(new THREE.LineDashedMaterial({ color: 0xb8c0a4, dashSize: .6, gapSize: .5, transparent: true, opacity: .5 }));
+    const lines = new THREE.LineSegments(lg, this.laneMat);
     lines.computeLineDistances(); this.add(lines);
 
     // battlefield height per region
@@ -270,6 +319,28 @@ export class Terrain {
   }
 
   private add(o: THREE.Object3D) { this.scene.add(o); this.objects.push(o); }
+
+  /** Height of the smooth close-up surface at half-tile grid point (gx, gy) (tile c centre = 2c+1); -1 where no land touches it.
+   *  Every vertex takes the highest land tile it touches, so the surface always covers the voxel tiles beneath it. */
+  vtxH(gx: number, gy: number): number {
+    const H = this.tileH, land = this.world.land;
+    const c0 = gx & 1 ? (gx - 1) >> 1 : (gx >> 1) - 1, c1 = gx & 1 ? c0 : c0 + 1;
+    const r0 = gy & 1 ? (gy - 1) >> 1 : (gy >> 1) - 1, r1 = gy & 1 ? r0 : r0 + 1;
+    let m = -1;
+    for (let r = r0; r <= r1; r++) {
+      if (r < 0 || r >= ROWS) continue;
+      for (let c = c0; c <= c1; c++) { const i = r * COLS + ((c + COLS) % COLS); if (land[i] && H[i] > m) m = H[i]; }
+    }
+    return m < 0 ? -1 : m + .003;
+  }
+
+  /** Height of the close-up ground surface at a world position (falls back to the tile top off the surface). */
+  surfaceAt(x: number, z: number): number {
+    const gx = (x + HW) / TS * 2, gy = (z + HH) / TS * 2, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy;
+    const a = this.vtxH(ix, iy), b = this.vtxH(ix + 1, iy), c = this.vtxH(ix, iy + 1), d = this.vtxH(ix + 1, iy + 1);
+    if (a < 0 || b < 0 || c < 0 || d < 0) { const i = tileAtW(x, z); return i >= 0 && this.world.land[i] ? this.tileH[i] : Math.max(a, b, c, d, 0); }
+    return lerp(lerp(a, b, fx), lerp(c, d, fx), fy);
+  }
 
   /** Terrain height at the anchor tile of a region (used for flags, buildings and figures). */
   anchorH(rid: number) { return this.tileH[this.world.regions[rid].anchor]; }
@@ -295,8 +366,10 @@ export class Terrain {
       // close-up: natural ground with a light owner tint
       nr += (fc.r - nr) * .1; ng += (fc.g - ng) * .1; nbb += (fc.b - nbb) * .1;
       const nb = borderNb[i];
+      let pr = nr, pg = ng, pb = nbb;
       if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; if (owners[nb] !== owner) { nr = r; ng = g; nbb = b; } }
-      if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; nr += (hlC.r - nr) * hlA; ng += (hlC.g - ng) * hlA; nbb += (hlC.b - nbb) * hlA; }
+      if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; nr += (hlC.r - nr) * hlA; ng += (hlC.g - ng) * hlA; nbb += (hlC.b - nbb) * hlA; pr += (hlC.r - pr) * hlA; pg += (hlC.g - pg) * hlA; pb += (hlC.b - pb) * hlA; }
+      const o = i * 4, D = this.natData; D[o] = enc(pr); D[o + 1] = enc(pg); D[o + 2] = enc(pb); D[o + 3] = owner >= 0 ? owner + 1 : 0;
       A[k] = r; A[k + 1] = g; A[k + 2] = b; NA[k] = nr; NA[k + 1] = ng; NA[k + 2] = nbb;
     }
     const T = this.treeMesh.instanceColor?.array as Float32Array | undefined;
@@ -313,14 +386,16 @@ export class Terrain {
 
   /** Call after one or more paintRegion calls. */
   commitColors() {
-    this.tileMesh.instanceColor!.needsUpdate = true; this.natAttr.needsUpdate = true;
+    this.tileMesh.instanceColor!.needsUpdate = true; this.natAttr.needsUpdate = true; this.natTex.needsUpdate = true;
     if (this.treeMesh.instanceColor) this.treeMesh.instanceColor.needsUpdate = true;
   }
 
   setCameraDistance(dist: number) {
     uNear.value = 1 - clamp((dist - 9) / 14, 0, 1);
-    const o = 1 - clamp((dist - 22) / 18, 0, 1);
+    // line railways on the strategic map; up close the painted ground draws them (groundPaint.ts)
+    const o = (1 - clamp((dist - 22) / 18, 0, 1)) * clamp((dist - 13) / 4, 0, 1);
     this.railMat.opacity = o * o * (3 - 2 * o); this.railMat.visible = this.railMat.opacity > .02;
+    this.laneMat.opacity = .5 * clamp((dist - 8) / 6, 0, 1); this.laneMat.visible = this.laneMat.opacity > .02;
   }
 
   dispose() {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGame, run, step, applyCommand, buildWorld, makeSnapshot, createMirror, applySnapshot, initMirrorCapitals, income, FACTIONS, totalUnits, missionText } from '../src';
+import { createGame, run, step, applyCommand, buildWorld, makeSnapshot, createMirror, applySnapshot, initMirrorCapitals, income, FACTIONS, totalUnits, missionText, fogView } from '../src';
 
 describe('world', () => {
   const W = buildWorld();
@@ -20,7 +20,7 @@ describe('game', () => {
   it('is deterministic for a seed', () => {
     const a = createGame({ seed: 42, humans: [] }), b = createGame({ seed: 42, humans: [] });
     run(a, 120); run(b, 120);
-    const key = (g: typeof a) => JSON.stringify([g.regions.map(r => [r.owner, r.units, r.trench]), g.factions.map(f => f.supply), g.time]);
+    const key = (g: typeof a) => JSON.stringify([g.regions.map(r => [r.owner, r.units, r.men, r.works]), g.factions.map(f => f.supply), g.time]);
     expect(key(a)).toBe(key(b));
   });
   it('AI-only war produces battles and conquest, and finishes without errors', () => {
@@ -49,7 +49,7 @@ describe('commands', () => {
     const noFac = g.regions.find(r => r.owner === 0 && !r.factory)!;
     expect(applyCommand(g, 0, { t: 'recruit', region: noFac.id, unit: 'tank' })).toMatch(/factory/);
     g.factions[0].supply = 0;
-    expect(applyCommand(g, 0, { t: 'build', region: mine.id, kind: 'trench' })).toMatch(/Not enough/);
+    expect(applyCommand(g, 0, { t: 'fortify', region: mine.id, kind: 'trench', sector: buildWorld().regions[mine.id].adj[0] })).toMatch(/Not enough/);
   });
   it('rejects marching into non-neighbours', () => {
     const far = g.regions.find(r => !buildWorld().regions[mine.id].adj.includes(r.id) && r.id !== mine.id)!;
@@ -63,18 +63,21 @@ describe('snapshots', () => {
     const snap = JSON.parse(JSON.stringify(makeSnapshot(g, 1, g.battles.map(b => b.id))));
     expect(snap.missions[1]).toBeTruthy(); expect(snap.missions[0]).toBeNull();
     const m = createMirror(); initMirrorCapitals(m); applySnapshot(m, snap);
+    const v = fogView(g, 1);
     expect(m.regions.map(r => r.owner)).toEqual(g.regions.map(r => r.owner));
     expect(m.factions.map(f => f.supply)).toEqual(g.factions.map(f => f.supply));
-    expect(m.battles.length).toBe(g.battles.length);
+    expect(m.battles.length).toBe(v.battles.length);
     expect(m.factions[1].mission).toEqual(g.factions[1].mission);
-    expect(m.regions.map(r => r.defs.length)).toEqual(g.regions.map(r => r.defs.length));
+    expect(m.regions.map(r => r.defs.length)).toEqual(v.regions.map(r => r.defs.length));
     expect(m.regions.map(r => r.contested)).toEqual(g.regions.map(r => r.contested));
-    expect(m.regions.map(r => r.units.plane)).toEqual(g.regions.map(r => r.units.plane));
+    expect(m.regions.map(r => r.units.plane)).toEqual(v.regions.map(r => r.units.plane));
+    expect(m.regions.map(r => r.men.inf)).toEqual(v.regions.map(r => r.men.inf));
+    expect(m.regions.map(r => r.vis)).toEqual(v.regions.map(r => r.vis));
     expect(m.cfg).toEqual(g.cfg);
   });
 });
 
-import { emptyUnits, landIncome, hops, offensives, fortify, startBattle, stepBattle, DT } from '../src';
+import { emptyUnits, landIncome, hops, offensives, fortify, startBattle, stepBattle, DT, UNIT_TYPES, FORMATION } from '../src';
 import type { GameState } from '../src';
 
 /** A quiet game: AI off, every region of `a` and `b` set up by hand. */
@@ -82,11 +85,13 @@ function duel(seed = 11) {
   const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 2, pace: 0 } });
   const W = buildWorld();
   const A = W.byName['France'].id, B = W.byName['Germany'].id, C = W.byName['Poland'].id;
-  for (const r of g.regions) { r.units = emptyUnits(); r.defs = []; r.trench = 0; }
+  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; }
   g.regions[A].owner = 0; g.regions[B].owner = 1; g.regions[C].owner = 1;
   return { g, W, A, B, C };
 }
-const settle = (g: GameState, s = 400) => run(g, s);
+/** Tests set unit counts by hand: bring every formation to full strength. */
+export function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
+const settle = (g: GameState, s = 400) => { fill(g); run(g, s); };
 
 describe('rules: income and attack cap', () => {
   it('income has diminishing returns', () => {
@@ -100,6 +105,7 @@ describe('rules: income and attack cap', () => {
     g.regions[B].units.inf = 40;
     const targets = W.regions[B].adj.filter(i => g.regions[i].owner === 0);
     // attack three foreign regions from Germany: third is refused at cap 2
+    fill(g);
     const errs = targets.slice(0, 3).map(t => applyCommand(g, 1, { t: 'march', from: B, to: t, frac: .2 }));
     expect(errs[0]).toBeNull(); expect(errs[1]).toBeNull(); expect(errs[2]).toMatch(/limit 2/);
     expect(offensives(g, 1).size).toBe(2);
@@ -126,6 +132,7 @@ describe('rules: defences by sector', () => {
     const other = W.regions[B].adj.find(i => i !== A)!;
     g.regions[B].defs.push({ id: 900, k: 'pill', s: other, hp: DT.pill.hp, f: 1 });
     g.regions[A].units.inf = 12; g.regions[A].units.tank = 2; g.regions[B].units.inf = 1;
+    fill(g);
     expect(applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 })).toBeNull();
     settle(g, 200);
     expect(g.regions[B].owner).toBe(0);
@@ -144,6 +151,7 @@ describe('rules: aircraft', () => {
     expect(hops(A, C)).toBe(2);
     const far = g.regions.find(r => hops(A, r.id, 3) === 3)!;
     g.regions[A].airfield = true; g.regions[A].units.plane = 4; g.regions[C].units.inf = 1;
+    fill(g);
     expect(applyCommand(g, 0, { t: 'air', from: A, to: far.id, frac: 1 })).toMatch(/out of range/);
     expect(applyCommand(g, 0, { t: 'march', from: A, to: C, frac: 1 })).toMatch(/direct border/);
     expect(applyCommand(g, 0, { t: 'air', from: A, to: C, frac: 1 })).toBeNull();
@@ -159,7 +167,7 @@ describe('rules: aircraft', () => {
       const W = buildWorld(), A = W.byName['France'].id, B = W.byName['Germany'].id;
       g.regions[A].owner = 0; g.regions[B].owner = 1; g.regions[B].defs = [];
       g.regions[A].units = { ...emptyUnits(), inf: 14, art: 2 }; g.regions[B].units = { ...emptyUnits(), inf: 10, mg: 2 };
-      applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 });
+      fill(g); applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 });
       let t = 0; for (let i = 0; i < 20 * 900; i++) { step(g, .05); if (g.battles.some(b => b.region === B && b.ended)) break; if (g.battles.some(b => b.region === B)) t += .05; }
       return t;
     };

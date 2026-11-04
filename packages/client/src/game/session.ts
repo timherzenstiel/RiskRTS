@@ -1,7 +1,7 @@
 // A Session is the client's view of one running game. The UI and renderer only talk to this interface,
 // so single player, hosting and joining all look the same to them.
 import {
-  applyCommand, applySnapshot, createGame, createMirror, drainEvents, initMirrorCapitals, makeSnapshot, step, TICK_DT,
+  applyCommand, applySnapshot, createGame, createMirror, drainEvents, fogView, initMirrorCapitals, makeSnapshot, migrateState, step, TICK_DT,
   type Command, type Fx, type GameEvent, type GameSettings, type GameState, type ServerMsg, type ClientMsg,
 } from '@riskrts/shared';
 import type { Channel } from '../net/channel';
@@ -10,7 +10,7 @@ export interface Session {
   readonly kind: 'local' | 'host' | 'guest';
   /** My faction id. */
   readonly me: number;
-  /** Authoritative state (local/host) or mirror of the host's state (guest). Read-only for UI code. */
+  /** What this player may see: a fog-of-war view of the authoritative state (local/host) or the host's fogged mirror (guest). Read-only. */
   readonly state: GameState;
   /** Game speed multiplier; only the local player or the host can change it. 0 = paused. */
   speed: number;
@@ -34,7 +34,10 @@ interface PeerSlot { id: string; faction: number; ch: Channel; watch: Set<number
 /** Runs the simulation in this browser. With no peers it is plain single player; with peers it is the authoritative host. */
 export class HostSession implements Session {
   kind: 'local' | 'host';
-  readonly state: GameState;
+  /** The authoritative game. Never shown directly: the UI gets the fogged view. */
+  private readonly sim: GameState;
+  private view: GameState;
+  get state() { return this.view; }
   speed = 1;
   readonly canControlTime = true;
   onError?: (m: string) => void;
@@ -45,17 +48,21 @@ export class HostSession implements Session {
   private myWatch = new Set<number>();
 
   constructor(public readonly me: number, opts: { seed?: number; humans: number[]; difficulty: number; settings?: GameSettings; network?: boolean; restore?: GameState }) {
-    this.state = opts.restore ?? createGame({ seed: opts.seed, humans: opts.humans, difficulty: opts.difficulty, settings: opts.settings, fx: true });
+    this.sim = opts.restore ?? createGame({ seed: opts.seed, humans: opts.humans, difficulty: opts.difficulty, settings: opts.settings, fx: true });
     if (opts.restore) { opts.restore.fx = []; opts.restore.events = []; }
+    this.view = fogView(this.sim, me);
     this.kind = opts.network ? 'host' : 'local';
     this.collect();
   }
 
   /** Serialise the whole game (single player save). Battles in progress are included as-is. */
-  serialize(): string { const { events: _e, fx: _f, ...rest } = this.state; return JSON.stringify({ me: this.me, state: rest }); }
+  serialize(): string { const { events: _e, fx: _f, ...rest } = this.sim; return JSON.stringify({ me: this.me, state: rest }); }
   /** Rebuild a single-player session from serialize(). Returns null if the data is unusable. */
   static restore(json: string): HostSession | null {
-    try { const d = JSON.parse(json) as { me: number; state: GameState }; if (!d.state || d.state.v !== 2) return null; return new HostSession(d.me, { humans: [d.me], difficulty: d.state.diff, restore: { ...d.state, events: [], fx: [] } }); }
+    try {
+      const d = JSON.parse(json) as { me: number; state: GameState }; const st = d.state && migrateState({ ...d.state, events: [], fx: [] });
+      if (!st) return null; return new HostSession(d.me, { humans: [d.me], difficulty: st.diff, restore: st });
+    }
     catch { return null; }
   }
 
@@ -63,35 +70,36 @@ export class HostSession implements Session {
     const slot: PeerSlot = { id, faction, ch, watch: new Set() };
     this.peers.set(id, slot);
     ch.onMessage((raw) => this.fromPeer(slot, raw as ClientMsg));
-    ch.onClose(() => { this.peers.delete(id); this.state.factions[faction].ai = true; });
+    ch.onClose(() => { this.peers.delete(id); this.sim.factions[faction].ai = true; });
     this.sendSnap(slot, true);
   }
 
   private fromPeer(p: PeerSlot, m: ClientMsg) {
-    if (m.t === 'cmd') { const err = applyCommand(this.state, p.faction, m.cmd); if (err) p.ch.send({ t: 'err', message: err } satisfies ServerMsg); }
+    if (m.t === 'cmd') { const err = applyCommand(this.sim, p.faction, m.cmd); if (err) p.ch.send({ t: 'err', message: err } satisfies ServerMsg); }
     else if (m.t === 'watch') p.watch = new Set(m.battles.slice(0, 8));
     else if (m.t === 'ping') p.ch.send({ t: 'pong', at: m.at } satisfies ServerMsg);
   }
 
-  send(cmd: Command) { return applyCommand(this.state, this.me, cmd); }
+  send(cmd: Command) { const e = applyCommand(this.sim, this.me, cmd); this.view = fogView(this.sim, this.me); return e; }
   setWatch(ids: number[]) { this.myWatch = new Set(ids); }
 
   update(dt: number) {
-    if (this.state.over || this.speed <= 0) { this.collect(); return; }
+    if (this.sim.over || this.speed <= 0) { this.collect(); this.view = fogView(this.sim, this.me); return; }
     this.acc += Math.min(dt, .25) * this.speed;
-    while (this.acc >= TICK_DT) { step(this.state, TICK_DT); this.acc -= TICK_DT; this.collect(); }
+    while (this.acc >= TICK_DT) { step(this.sim, TICK_DT); this.acc -= TICK_DT; this.collect(); }
+    this.view = fogView(this.sim, this.me);
     if (this.peers.size) { this.sinceSnap += dt; if (this.sinceSnap >= SNAP_EVERY) { this.sinceSnap = 0; for (const p of this.peers.values()) this.sendSnap(p, false); this.evNet.length = 0; this.fxNet.length = 0; } }
   }
 
   private collect() {
-    const ev = drainEvents(this.state); if (ev.length) { this.evBuf.push(...ev); this.evNet.push(...ev); }
-    const fx = this.state.fx; if (fx && fx.length) { this.fxBuf.push(...fx); if (this.peers.size) this.fxNet.push(...fx); fx.length = 0; if (this.fxNet.length > 1500) this.fxNet.splice(0, this.fxNet.length - 1500); }
+    const ev = drainEvents(this.sim); if (ev.length) { this.evBuf.push(...ev); this.evNet.push(...ev); }
+    const fx = this.sim.fx; if (fx && fx.length) { this.fxBuf.push(...fx); if (this.peers.size) this.fxNet.push(...fx); fx.length = 0; if (this.fxNet.length > 1500) this.fxNet.splice(0, this.fxNet.length - 1500); }
     if (this.fxBuf.length > 1500) this.fxBuf.splice(0, this.fxBuf.length - 1500);
   }
 
   private sendSnap(p: PeerSlot, full: boolean) {
     const fx = this.fxNet.filter(f => p.watch.has(f.b));
-    const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.state, p.faction, p.watch, fx), events: full ? [] : this.evNet, speed: this.speed };
+    const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : this.evNet, speed: this.speed };
     try { p.ch.send(msg); } catch { /* peer went away; onClose will clean up */ }
   }
 

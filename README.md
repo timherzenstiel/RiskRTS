@@ -30,12 +30,17 @@ GitHub Pages is static, so there is no game server. One player hosts: their brow
 
 ## Rules at a glance
 
-- **Borders matter.** Infantry, machine guns, field guns and tanks attack only across a direct border (land or sea lane). Aircraft fly from an airfield region to targets up to **two borders** away; they bomb and strafe but cannot take ground, and return home when their fuel runs out.
-- **Fixed defences stand where you build them** (Fortify tab): pillboxes and gun emplacements on one border sector only fight attacks coming over that border; interior defences join every battle in the region; anti-air guns cover the whole region against aircraft.
-- **Contested regions.** If a region's field army is beaten while defences on another border still stand, the attacker takes the region but it stays contested: no supply, recruiting or building there until the holdouts are stormed (or run out of supplies after a few minutes).
-- **Supply** has diminishing returns on land (2 + 1.5·√regions), plus continent bonuses and +2 per factory, so the biggest power does not snowball.
-- **Lobby settings:** attacks at once per power (1 / 2 / 3 / 5 / no limit; reinforcing your own regions never counts) and battle pace (Fast / Normal / Long). Battles always last until one side has no ground troops or defences left; pace scales the rate of fire and when entrenched troops leave their trenches to charge.
+- **Formations, not counters.** One infantry unit is a battalion of 100 men; MG companies, batteries, tank platoons and squadrons likewise. Losses thin formations out (a half-strength battalion fights with half its strength), battered ones are merged, and about a third of the casualties come back as wounded with later convoys.
+- **Borders matter.** Ground troops attack only across a direct border (land or sea lane). Aircraft fly from an airfield region to targets up to **two borders** away; they bomb and strafe but cannot take ground.
+- **Battles are fought on the border** the attack comes over. Every attacked border is its own **front**: a region attacked from two sides fights two battles, splits its defenders between them (*Reserves* moves more to one front), and falls only when its last front collapses. Troops that break through one front fall on the defenders of another from behind. Fronts that get no fresh troops for a while settle into trench warfare.
+- **Fortify per border** (Fortify tab, or tap the border on the map): trench depth I–III, sandbags, barbed wire, MG nests, bunkers, gun emplacements and anti-air guns. Each border has building slots (4 on land, 2 on a sea lane, 3 in the interior; a bunker takes two). Works only help against attacks over their own border; interior defences and anti-air join the first front.
+- **Fog of war.** You see the owner of every region, but rivals' troops only across your own borders, and only as an estimate (with the defences facing you). Cavalry patrols (one border), reconnaissance flights (two borders, from an airfield) and spies (from your capital, anywhere, until caught) bring reports, which age. Computer powers play by the same fog (except on Marshal).
+- **Supply lines.** A region is supplied when a chain of your own regions (land borders, or sea lanes between two of your regions) leads to your capital, a factory or your home territory. Cut-off regions pay nothing, cannot recruit, and lose strength and morale every convoy.
+- **Morale and war weariness.** Losses shake a front's morale (shaken troops shoot worse; broken battalions surrender); rest, supply and victories restore it. Every power's casualties raise its war weariness, which cuts income (up to 30%), caps morale and, above 60%, stops volunteers from barracks.
+- **Contested regions.** If a region's field army is beaten while defences on another border still stand, the attacker takes the region but it stays contested until the holdouts are stormed (or run out of supplies).
+- **Supply** has diminishing returns on land (2 + 1.5·√regions), plus continent bonuses and +2 per factory.
+- **Lobby settings:** attacks at once per power and battle pace.
 
 ## Controls
 
-Click a region to open it · right-click a neighbour to march · `A` then click: air strike · drag / wheel / pinch to pan and zoom · `1`–`5` recruit (Shift ×5) · `Space` pause (single player / host) · `Esc` deselect, then menu.
+Click a region to open it (foreign regions: attack, patrol, recon flight, spy) · right-click a neighbour to march · `A` then click: air strike · drag / wheel / pinch to pan and zoom · `1`–`5` recruit (Shift ×5) · `Space` pause (single player / host) · `Esc` deselect, then menu.

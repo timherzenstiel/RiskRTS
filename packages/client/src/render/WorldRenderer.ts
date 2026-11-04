@@ -22,6 +22,7 @@ import { Post } from './post';
 import { LineBatch, Pool, litMaterial, uChrome } from './pools';
 import { Terrain } from './terrain';
 import { Water } from './water';
+import { battleAnchor, sectorPoint } from './sectors';
 import { clamp, smooth } from './util';
 
 type Quality = 0 | 1 | 2;
@@ -104,7 +105,7 @@ class WorldRenderer implements WorldRendererApi {
     this.curOwner = new Int16Array(R).fill(-2); this.curHl = new Int8Array(R).fill(-1); this.dirty = new Uint8Array(R);
     this.rig.snap();
 
-    this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id) => { this.flyTo(id, 6); cb.onSelect(id); });
+    this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); });
     this.labelCtx = {
       g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
@@ -113,7 +114,7 @@ class WorldRenderer implements WorldRendererApi {
 
     this.input = new Input({
       canvas, rig: this.rig, regionAt: (x, y) => this.regionAt(x, y), orderMode: () => useUi.getState().orderMode,
-      onSelect: (id) => cb.onSelect(id), onOrder: (id) => cb.onOrder(id),
+      onSelect: (id) => { if (!this.pickSector(id)) cb.onSelect(id); }, onOrder: (id) => cb.onOrder(id),
       onHover: (id) => { if (id !== this.lastHover) { this.lastHover = id; cb.onHover(id); } },
       onDoubleClick: (id) => { const b = this.session?.state.regions[id].battle ?? -1; this.flyTo(id, b >= 0 ? 6 : Math.min(this.rig.gdist, 24)); },
     });
@@ -147,7 +148,29 @@ class WorldRenderer implements WorldRendererApi {
 
   setQuality(q: Quality) { this.quality = q; this.canvas.classList.toggle('smooth', q === 0); this.resize(); }
 
-  flyTo(regionId: number, distance?: number) { const r = this.world.regions[regionId]; if (r) this.rig.flyTo(r.cx, r.cz, distance); }
+  /** Fly to a region; zoomed in close on a region at war, fly to its (first) front instead. */
+  flyTo(regionId: number, distance?: number) {
+    const r = this.world.regions[regionId]; if (!r) return;
+    const b = distance !== undefined && distance <= 8 ? this.session?.state.battles.find(x => x.region === regionId && !x.ended) : undefined;
+    if (b) { this.flyToBattle(b.id, distance); return; }
+    this.rig.flyTo(r.cx, r.cz, distance);
+  }
+  /** In the Fortify tab, a tap near one of the selected region's borders picks that border instead of selecting a region. */
+  private pickSector(id: number): boolean {
+    const ui = useUi.getState(), sel = ui.sel, g = this.session?.state;
+    if (!g || sel < 0 || ui.tab !== 'fort' || g.regions[sel]?.owner !== this.session!.me) return false;
+    if (id !== sel && !this.world.regions[sel].adj.includes(id)) return false;
+    const x = this.tmpV.x, z = this.tmpV.z; let best = -2, bd = .7 * .7;
+    for (const s of [...this.world.regions[sel].adj, -1]) { const p = sectorPoint(this.world, sel, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
+    if (best < -1) return false;
+    ui.setFortMarker([sel, best]); Sfx.click(); return true;
+  }
+
+  /** Fly to one front (battle). */
+  flyToBattle(id: number, distance = 6) {
+    const b = this.session?.state.battles.find(x => x.id === id); if (!b) return;
+    const p = battleAnchor(this.world, b); this.rig.flyTo(p.x, p.z, distance);
+  }
   panTo(x: number, z: number) { this.rig.flyTo(x, z); }
   viewPolygon() { return this.rig.viewPolygon(); }
   cameraDistance() { return this.rig.dist; }
@@ -222,7 +245,7 @@ class WorldRenderer implements WorldRendererApi {
   /** Dev tooling: build all close-up ground in view now instead of one chunk per frame. */
   warmDetail() { this.detail.buildAll(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu()); }
 
-  private distTo(b: Battle) { const r = this.world.regions[b.region]; return Math.hypot(r.cx - this.rig.tx, r.cz - this.rig.tz); }
+  private distTo(b: Battle) { const p = battleAnchor(this.world, b); return Math.hypot(p.x - this.rig.tx, p.z - this.rig.tz); }
 
   private regionAt(cx: number, cy: number): number {
     if (!this.rig.screenToWorld(cx, cy, this.canvas.getBoundingClientRect(), this.tmpV)) return -1;
@@ -260,11 +283,11 @@ class WorldRenderer implements WorldRendererApi {
     for (const b of g.battles) this.byId.set(b.id, b);
     for (const [id, v] of this.views) if (!this.byId.has(id)) { v.dispose(); this.views.delete(id); }
     for (const b of g.battles) {
-      const def = this.world.regions[b.region], d = this.distTo(b), vis = rig.dist < 30 && d < 15;
+      const at = battleAnchor(this.world, b), d = this.distTo(b), vis = rig.dist < 30 && d < 15;
       let view = this.views.get(b.id);
       if (!view && vis && created < 1) {
         created++;
-        view = new BattleView(b, def.cx, def.cz, (x, z) => this.terrain.surfaceAt(x, z)); this.views.set(b.id, view);
+        view = new BattleView(b, at.x, at.z, (x, z) => this.terrain.surfaceAt(x, z)); this.views.set(b.id, view);
       }
       if (view) {
         if (rig.dist > 40 || d > 24) { view.dispose(); this.views.delete(b.id); view = undefined; }
@@ -333,8 +356,8 @@ class WorldRenderer implements WorldRendererApi {
     } else if (f.k === 'shot') {
       const y = fy(f.x0, f.z0), y1 = fy(f.x1, f.z1), fromAir = f.type === 'plane', toAir = !!f.air && !fromAir;
       const x0 = v.cx + f.x0 * BS, z0 = v.cz + f.z0 * BS, x1 = v.cx + f.x1 * BS, z1 = v.cz + f.z1 * BS;
-      const ys = fromAir ? y + AIR_Y : y + (f.type === 'tank' ? .035 : f.type === 'mg' || f.type === 'pill' ? .025 : .05), ye = f.air ? y + AIR_Y : y1 + .04;
-      fx.tracer(x0, ys, z0, x1, ye, z1, f.type === 'mg' || f.type === 'pill' ? .025 : .035);
+      const ys = fromAir ? y + AIR_Y : y + (f.type === 'tank' ? .035 : f.type === 'mg' || f.type === 'pill' || f.type === 'bunk' ? .025 : .05), ye = f.air ? y + AIR_Y : y1 + .04;
+      fx.tracer(x0, ys, z0, x1, ye, z1, f.type === 'mg' || f.type === 'pill' || f.type === 'bunk' ? .025 : .035);
       if (toAir || fromAir) { if (Math.random() < .5) Sfx.shot(f.type, x0, z0, toAir); fx.spawn(x0, ys, z0, 0, 0, 0, 0, .05, .012, .01, K.flash, F_GLOW); return; }
       Sfx.shot(f.type, x0, z0);
       if (Math.random() < .6) fx.spawn(x0, ys, z0, 0, 0, 0, 0, .06, .015, .01, K.flash, F_GLOW);
@@ -379,7 +402,7 @@ class WorldRenderer implements WorldRendererApi {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
       for (const b of g.battles) {
         const v = this.views.get(b.id); if (!v || !v.visible) continue;
-        v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);
+        v.drawWorks(this.models, b); v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);
       }
     }
     this.ambient.drawShips(this.models, T);

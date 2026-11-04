@@ -6,7 +6,7 @@
 // The radio (radio.ts) ducks the battle and ambience buses while a dispatch is on air.
 
 type Bus = 'war' | 'amb' | 'ui' | 'radio';
-export type ShotKind = 'inf' | 'mg' | 'art' | 'tank' | 'plane' | 'pill' | 'fort' | 'flak';
+export type ShotKind = 'inf' | 'mg' | 'art' | 'tank' | 'plane' | 'pill' | 'fort' | 'flak' | 'bunk';
 export type Stinger = 'over-the-top' | 'alarm' | 'siren' | 'victory' | 'held' | 'lost' | 'capital-taken' | 'capital-lost'
   | 'toll' | 'declare' | 'orders' | 'triumph' | 'taps' | 'cleared';
 
@@ -207,7 +207,7 @@ class SfxEngine {
   shot(kind: ShotKind, x: number, z: number, air = false) {
     if (!this.live || this.full()) return;
     const c = this.ctx!, t = c.currentTime;
-    if (kind === 'mg' || kind === 'pill' || kind === 'plane') {
+    if (kind === 'mg' || kind === 'pill' || kind === 'bunk' || kind === 'plane') {
       if (!this.ok('mg', 110)) return;
       const n = 3 + Math.floor(Math.random() * 4), sp = rand(.06, .075), o = this.out(n * sp + .3, x, z, .35, 'war', kind === 'plane' ? .7 : 1);
       for (let i = 0; i < n; i++) { const ti = t + i * sp + rand(0, .006); this.hit(o, ti, .012, 4200, .7, .4, 'highpass'); this.hit(o, ti, .055, rand(650, 850), 1.3, .62); }

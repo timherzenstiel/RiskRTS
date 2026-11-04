@@ -1,5 +1,5 @@
 // Throw-away harness for the world renderer (not part of the production build). Exposes window.__h for Playwright.
-import { buildWorld } from '@riskrts/shared';
+import { applyCommand, buildWorld, type Command, type GameState } from '@riskrts/shared';
 import { HostSession } from '../src/game/session';
 import { useUi } from '../src/game/store';
 import { createWorldRenderer } from '../src/render/WorldRenderer';
@@ -73,6 +73,9 @@ const h = {
       if (ships) for (let f = 0; f < 7; f++) m.ship(ships[0] + (f % 4) * .55, ships[1] + Math.floor(f / 4) * .7, .6, facCol[f % 6], 1.1, T, f === 6);
     };
   },
+  /** The authoritative game behind the fog, and a way to give orders for any power. */
+  get game(): GameState { return (session as unknown as { sim: GameState }).sim; },
+  cmd(f: number, c: Command) { return applyCommand((session as unknown as { sim: GameState }).sim, f, c); },
   firstBattle() { return session.state.battles.find((b) => !b.ended) ?? null; },
   dbg: () => (r as unknown as { debug: { rig: { tx: number; tz: number; dist: number; gx: number; gz: number; gdist: number }; views: Map<number, unknown>; stats: { cpuMs: number } } }).debug,
 };

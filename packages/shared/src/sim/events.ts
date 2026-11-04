@@ -9,9 +9,28 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
   const R = (i: number) => world().regions[i].name, F = (i: number) => FACTIONS[i];
   switch (e.k) {
     case 'start': return { text: 'War is declared. Sealed orders received.', cls: 'me' };
-    case 'march': return e.faction === me && g.regions[e.to].owner !== me ? { text: `${e.units} units march from ${R(e.from)} on ${R(e.to)}.`, cls: 'me' } : null;
+    case 'march': return e.faction === me && g.regions[e.to].owner !== me ? { text: `${e.units} formation${e.units === 1 ? '' : 's'} march from ${R(e.from)} on ${R(e.to)}.`, cls: 'me' } : null;
+    case 'intel': {
+      if (e.faction !== me) return null;
+      const by = e.by === 'patrol' ? 'Our cavalry patrol is back from' : e.by === 'recon' ? 'Reconnaissance photographs of' : 'Our agent reports from';
+      return { text: `${by} ${R(e.region)}: the report is in the region file.`, cls: 'me', region: e.region };
+    }
+    case 'scoutLost': return e.faction === me ? { text: e.by === 'patrol' ? `Our patrol into ${R(e.region)} was caught at the border.` : `Our reconnaissance flight over ${R(e.region)} was shot down.`, cls: 'bad', region: e.region } : null;
+    case 'spyFound':
+      if (e.faction === me) return { text: `Our agent in ${R(e.region)} has been unmasked and shot.`, cls: 'bad', region: e.region };
+      if (e.owner === me) return { text: `A ${F(e.faction).short} spy was caught in ${R(e.region)}.`, cls: 'good', region: e.region };
+      return null;
+    case 'cut': return e.faction === me ? { text: `${R(e.region)} is cut off from supply. The garrison will wear down until a route home is reopened.`, cls: 'bad', region: e.region } : null;
+    case 'surrender':
+      if (e.faction === me) return { text: `Our men in ${R(e.region)} are breaking. Some battalions lay down their arms.`, cls: 'bad', region: e.region };
+      if (g.regions[e.region].owner === me || g.battles.some(b => b.region === e.region && b.sides.includes(me))) return { text: `Enemy troops in ${R(e.region)} are surrendering.`, cls: 'good', region: e.region };
+      return null;
+    case 'breakthrough':
+      if (e.faction === me) return { text: `Breakthrough at ${R(e.region)}! Our troops fall on the defenders of the other front from behind.`, cls: 'good', region: e.region };
+      if (g.regions[e.region].owner === me) return { text: `The ${e.from >= 0 ? R(e.from) + ' ' : ''}front of ${R(e.region)} has broken. The enemy is behind our lines.`, cls: 'bad', region: e.region };
+      return null;
     case 'air':
-      if (e.faction === me) return { text: `${e.units} aircraft take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };
+      if (e.faction === me) return { text: `${e.units} squadron${e.units === 1 ? '' : 's'} take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };
       if (g.regions[e.to].owner === me) return { text: `Enemy aircraft spotted heading for ${R(e.to)}!`, cls: 'bad', region: e.to };
       return null;
     case 'cleared': return e.faction === me ? { text: `The last holdouts in ${R(e.region)} are silenced. The region is fully ours.`, cls: 'good', region: e.region } : null;
@@ -28,7 +47,7 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
         if (e.prev === me) return { text: `${R(e.region)} has fallen to ${W.the}.${cp}${ho}`, cls: 'bad', region: e.region };
         return { text: `${cap(W.the)} takes ${R(e.region)} from ${P.the}.${cp}`, cls: '', region: e.region };
       }
-      if (e.winner === e.prev && e.prev === me) return { text: `${R(e.region)} holds. The attack is beaten back.`, cls: 'good', region: e.region };
+      if (e.winner === e.prev && e.prev === me) return { text: g.battles.some(b => b.region === e.region && !b.ended) ? `One front of ${R(e.region)} holds. The fight goes on elsewhere.` : `${R(e.region)} holds. The attack is beaten back.`, cls: 'good', region: e.region };
       if (e.winner === null && (e.prev === me || e.sides.includes(me))) return { text: `Battle of ${R(e.region)}: no one is left standing.`, cls: 'me', region: e.region };
       return null;
     }

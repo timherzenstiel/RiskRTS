@@ -16,7 +16,8 @@ describe('host / guest sessions', () => {
     const { host, guest, tick } = world(); tick(30);
     expect(guest.state.regions.map(r => r.owner)).toEqual(host.state.regions.map(r => r.owner));
     expect(guest.state.factions.map(f => f.supply)).toEqual(host.state.factions.map(f => f.supply));
-    expect(guest.state.factions[1].mission).toEqual(host.state.factions[1].mission);
+    expect(guest.state.factions[1].mission).toEqual(host['sim'].factions[1].mission);
+    expect(host.state.factions[1].mission).toBeNull(); // the host's screen does not see the guest's orders either
     expect(guest.state.factions[0].mission).toBeNull(); // the host's secret mission is not leaked
   });
   it("guest commands are executed by the host for the guest's faction only", () => {
@@ -35,6 +36,12 @@ describe('host / guest sessions', () => {
     tick(1); expect(guest.state.battles.find(x => x.id === b.id)!.agents.length).toBe(0);
     guest.setWatch([b.id]); tick(1);
     expect(guest.state.battles.find(x => x.id === b.id)!.agents.length).toBe(b.agents.length);
+  });
+  it('each player sees its own fog of war', () => {
+    const { host, guest, tick } = world(); tick(5);
+    const far = host['sim'].regions.find(r => r.owner !== 0 && host.state.regions[r.id].vis === 0 && r.units.inf > 0);
+    if (far) expect(host.state.regions[far.id].units.inf).toBe(0);
+    for (const r of guest.state.regions) if (r.owner === 1) expect(r.vis).toBe(3);
   });
   it('a disconnected guest hands its power to the AI', () => {
     const { host, guest, tick } = world(); tick(1); guest.destroy(); tick(.2);

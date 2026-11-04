@@ -48,7 +48,7 @@ export function HelpSheet({ onBack }: { onBack: () => void }) {
         <dt>1 2 3 4</dt><dd>Recruit infantry, machine guns, field guns or tanks in the selected region. Shift buys five.</dd>
         <dt>Space · Esc</dt><dd>Pause. Esc steps back: cancels a march, closes the scoreboard, deselects, then opens the menu.</dd>
       </dl>
-      <p className="lede small">Every {TICK_SECONDS} seconds a convoy arrives: one supply per three regions (minimum three), plus continent bonuses and +2 per factory. Field guns outrange everything, machine guns pin attackers, tanks shrug off rifle fire, and trenches cut the damage defenders take.</p>
+      <p className="lede small">Every {TICK_SECONDS} seconds a convoy arrives with supply for every region linked by your own land (or sea lanes between your regions) to your capital, a factory or your home territory, plus continent bonuses and +2 per factory. One infantry unit is a battalion of 100 men; losses thin formations out and wounded return with later convoys. Battles are fought on the border the attack comes over, against that border's trench, sandbags, wire and defences. You see rivals only across your borders, as an estimate: patrols, reconnaissance flights and spies tell you more. Heavy losses raise war weariness, which cuts income and morale; broken troops surrender.</p>
       <div className="row"><button className="btn primary" onClick={() => { click(); onBack(); }}>Back</button></div>
     </Modal>
   );

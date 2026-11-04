@@ -46,3 +46,9 @@ export function sectorPoint(w: World, region: number, sector: number): SectorPt 
   if (sector < 0) return { x: r.cx + .35, z: r.cz + .32, ux: 1, uz: 0, tile: r.anchor };
   return cache.get(region + '|' + sector) ?? { x: r.cx, z: r.cz, ux: 1, uz: 0, tile: r.anchor };
 }
+
+/** Where a battle is fought on the map: on the border it comes over (the middle of the shared border), or the region anchor. */
+export function battleAnchor(w: World, b: { region: number; from: number }): { x: number; z: number } {
+  if (b.from >= 0 && w.regions[b.region].adj.includes(b.from)) { const p = sectorPoint(w, b.region, b.from); return { x: p.x, z: p.z }; }
+  const r = w.regions[b.region]; return { x: r.cx, z: r.cz };
+}

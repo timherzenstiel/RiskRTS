@@ -6,7 +6,7 @@ const Svg = ({ children, size, className }: { children: ReactNode; size?: number
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" width={size} height={size} className={className}>{children}</svg>
 );
 
-export type IconKey = UnitType | 'trench' | 'factory' | 'barracks' | 'airfield' | 'pill' | 'fort' | 'flak';
+export type IconKey = UnitType | 'trench' | 'factory' | 'barracks' | 'airfield' | 'pill' | 'fort' | 'flak' | 'bunk' | 'sand' | 'wire' | 'patrol' | 'recon' | 'spy';
 
 export function Icon({ k, size, className }: { k: IconKey; size?: number; className?: string }) {
   let p: ReactNode;
@@ -22,6 +22,12 @@ export function Icon({ k, size, className }: { k: IconKey; size?: number; classN
     case 'airfield': p = <><path d="M2 19h20v2H2z" /><path d="M4 17V9.5C4 7 6 5 8.5 5h0C11 5 13 7 13 9.5V17z" /><path d="M15 17V11h6v6z" /></>; break;
     case 'pill': p = <><path d="M3 18v-5.5C3 9 7 6 12 6s9 3 9 6.5V18z" /><path d="M7 12h10v1.8H7z" fill="#000" fillOpacity=".55" /></>; break;
     case 'fort': p = <><path d="M2 19c0-3 2-5 4-5h12c2 0 4 2 4 5z" /><path d="M10 12l11-6 .9 1.8L11.5 14z" /></>; break;
+    case 'bunk': p = <><path d="M1 19c1-4 4-7 11-7s10 3 11 7z" /><path d="M5 15h14v4H5z" /><path d="M7.5 16h3v1.2h-3zM13.5 16h3v1.2h-3z" fill="#000" fillOpacity=".55" /></>; break;
+    case 'sand': p = <><rect x="2" y="15" width="6.4" height="4" rx="1.6" /><rect x="8.8" y="15" width="6.4" height="4" rx="1.6" /><rect x="15.6" y="15" width="6.4" height="4" rx="1.6" /><rect x="5.4" y="10.6" width="6.4" height="4" rx="1.6" /><rect x="12.2" y="10.6" width="6.4" height="4" rx="1.6" /></>; break;
+    case 'wire': p = <><path d="M4 21V7M12 21V7M20 21V7" stroke="currentColor" strokeWidth="2" /><path d="M2 10l4 3 4-3 4 3 4-3 4 3M2 16l4 3 4-3 4 3 4-3 4 3" fill="none" stroke="currentColor" strokeWidth="1.4" /></>; break;
+    case 'patrol': p = <><path d="M4 13c1-3 4-4 7-4h4l3-3 1 1-1.5 3c1.5 1 2.5 2 2.5 4v1h-2l-1-2-1 2v4h-2v-4h-5l-1 4H6l.5-4.5L4 15z" /><circle cx="11" cy="5" r="2" /></>; break;
+    case 'recon': p = <><path d="M2 10.5h20v2.2H2z" /><path d="M10 6h3v11h-3z" /><circle cx="11.5" cy="19.5" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.6" /></>; break;
+    case 'spy': p = <><path d="M5 9h14l-1.5-4.5h-11z" /><path d="M3 9.5h18v1.8H3z" /><circle cx="8" cy="15" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.8" /><circle cx="16" cy="15" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M10.5 14.6h3v1.2h-3z" /><path d="M8 20c2 1.5 6 1.5 8 0" fill="none" stroke="currentColor" strokeWidth="1.6" /></>; break;
     case 'flak': p = <><path d="M4 20h16v-2H4z" /><path d="M8 18l2-5h4l2 5z" /><path d="M11 13L17.5 3l1.7 1-6.3 10z" /></>; break;
   }
   return <Svg size={size} className={className}>{p}</Svg>;

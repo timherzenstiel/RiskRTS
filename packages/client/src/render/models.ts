@@ -467,6 +467,48 @@ export class Models {
     p(x, y, z, face, .1 * S, .11 * S, -.1 * S, .006 * S, .08 * S, .006 * S, K.pole); p(x, y, z, face, .12 * S, .135 * S, -.1 * S, .04 * S, .025 * S, .004 * S, FLAG[f] ?? K.white);
   }
 
+  /** Deep bunker: a low concrete block under an earth mound, two firing slits. `hold` = holdout (white flag). */
+  bunker(x: number, y: number, z: number, face: number, f: number, S: number, hold = false) {
+    const p = this.part.bind(this);
+    p(x, y, z, face, 0, .012 * S, 0, .32 * S, .024 * S, .26 * S, K.mud);
+    p(x, y, z, face, 0, .04 * S, -.01 * S, .26 * S, .05 * S, .2 * S, K.dirt);
+    p(x, y, z, face, 0, .05 * S, .04 * S, .24 * S, .06 * S, .12 * S, K.concrete);
+    p(x, y, z, face, 0, .085 * S, .02 * S, .25 * S, .014 * S, .16 * S, K.concrete2);
+    for (const sd of [-1, 1]) { p(x, y, z, face, sd * .06 * S, .055 * S, .102 * S, .07 * S, .01 * S, .004 * S, K.slit); p(x, y, z, face, sd * .06 * S, .056 * S, .1 * S, .01 * S, .005 * S, .035 * S, K.gun); }
+    p(x, y, z, face, -.1 * S, .13 * S, -.08 * S, .006 * S, .09 * S, .006 * S, K.pole);
+    p(x, y, z, face, -.08 * S, .16 * S, -.08 * S, .04 * S, .025 * S, .004 * S, hold ? K.white : FLAG[f] ?? K.white);
+  }
+
+  /** A row of `rows` sandbag courses, `len` long, centred on (x, z) and running across `face`. */
+  sandbags(x: number, y: number, z: number, face: number, len: number, rows: number, S: number) {
+    const p = this.part.bind(this), n = Math.max(2, Math.round(len / (.06 * S)));
+    for (let r = 0; r < rows; r++) for (let k = 0; k < n; k++) {
+      const lx = (k + .5 - n / 2) * len / n + (r % 2 ? len / n / 2 : 0); if (Math.abs(lx) > len / 2) continue;
+      p(x, y, z, face, lx, (.012 + r * .02) * S, 0, len / n * .92, .02 * S, .035 * S, (k + r) % 2 ? K.sand : K.sand2);
+    }
+  }
+
+  /** A belt of barbed wire on posts, `len` long, `dense` 0..1. */
+  wireBelt(x: number, y: number, z: number, face: number, len: number, dense: number, S: number) {
+    const p = this.part.bind(this), n = Math.max(2, Math.round(len / (.09 * S) * (.4 + .6 * dense)));
+    for (let k = 0; k < n; k++) {
+      const lx = (k + .5 - n / 2) * len / n, lz = (k % 2 ? .02 : -.02) * S;
+      p(x, y, z, face + (k % 2 ? .5 : -.5), lx, .03 * S, lz, .006 * S, .06 * S, .006 * S, K.wood);
+      p(x, y, z, face, lx, .045 * S, lz, len / n, .003 * S, .003 * S, K.gun);
+      p(x, y, z, face, lx, .02 * S, lz, len / n, .003 * S, .003 * S, K.gun);
+    }
+  }
+
+  /** A zig-zag trench line, `len` long, deeper and wider with `depth` 1..3. */
+  trenchLine(x: number, y: number, z: number, face: number, len: number, depth: number, S: number) {
+    const p = this.part.bind(this), n = Math.max(3, Math.round(len / (.08 * S))), w = (.03 + .012 * depth) * S;
+    for (let k = 0; k < n; k++) {
+      const lx = (k + .5 - n / 2) * len / n, lz = (Math.floor(k / 2) % 2 ? .025 : -.025) * S;
+      p(x, y, z, face, lx, .002 * S, lz, len / n * 1.25, .004 * S, w, K.mud);
+      p(x, y, z, face, lx, .008 * S, lz + w * .6, len / n * 1.25, (.006 + .004 * depth) * S, .012 * S, K.dirt);
+    }
+  }
+
   /** Anti-aircraft gun on a platform, barrel raised. */
   flak(x: number, y: number, z: number, face: number, f: number, S: number, recoil = 0) {
     const p = this.part.bind(this);

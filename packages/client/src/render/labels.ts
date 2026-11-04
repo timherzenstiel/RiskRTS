@@ -4,6 +4,16 @@ import { FACTIONS, armyPos, battleCounts, totalUnits, type Army, type Battle, ty
 import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
+import { battleAnchor } from './sectors';
+
+/** Formations in a region as the viewer knows them: exact, "~n" across the border, "n?" from an old report, "?" unknown. */
+function garrisonLabel(r: GameState['regions'][number]) {
+  const v = r.vis ?? 3, n = totalUnits(r.units);
+  if (v >= 3) return String(n);
+  if (r.est) return r.est[1] > 0 ? `~${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '~0';
+  if (v === 2) return `${n}?`;
+  return '?';
+}
 
 interface RegionLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string }
 interface CityLabel { el: HTMLDivElement; shown: boolean; tf: string }
@@ -24,7 +34,7 @@ export class Labels {
   private readonly battles = new Map<number, BattleLabel>();
 
   constructor(private readonly root: HTMLElement, private readonly world: World, private readonly cities: CityInfo[], private readonly cityH: (c: CityInfo) => number,
-    private readonly onBattleClick: (regionId: number) => void) {
+    private readonly onBattleClick: (regionId: number, battleId: number) => void) {
     this.regions = world.regions.map((r) => {
       const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="nm"></span>';
       const n = el.firstChild as HTMLSpanElement, nm = el.lastChild as HTMLSpanElement; nm.textContent = r.name; root.appendChild(el);
@@ -52,7 +62,7 @@ export class Labels {
       if (!rs || rs.battle >= 0) { this.hide(l); return; }
       const color = FACTIONS[rs.owner]?.color ?? '#888';
       if (color !== l.color) { l.color = color; l.el.style.setProperty('--c', color); }
-      const s = String(totalUnits(rs.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = garrisonLabel(rs); if (s !== l.count) { l.count = s; l.n.textContent = s; }
       const names = showNames || i === ctx.sel || i === ctx.hover; if (names !== l.names) { l.names = names; l.nm.style.display = names ? '' : 'none'; }
       const isSel = i === ctx.sel, tg = ctx.isTarget(i);
       if (isSel !== l.sel) { l.sel = isSel; l.el.classList.toggle('sel', isSel); }
@@ -75,7 +85,7 @@ export class Labels {
         this.root.appendChild(el); l = { el, n: el.firstChild as HTMLSpanElement, count: '', shown: true, tf: '', seen: 0 }; this.armies.set(a.id, l);
       }
       l.seen = ctx.frame;
-      const s = String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
       const [x, z] = armyPos(a), [y0, y1] = ctx.armyH(a);
       this.place(l, ctx, x, lerp(y0, y1, a.t) + Math.sin(a.t * Math.PI) * .4 + .85, z);
     }
@@ -94,8 +104,8 @@ export class Labels {
         let alive = 0; for (const [, c] of battleCounts(b)) alive += c[0];
         const t = `${rname} · ${alive}`; if (t !== l.label) { l.label = t; l.text.textContent = t; }
       }
-      const rd = this.world.regions[b.region];
-      this.place(l, ctx, rd.cx, ctx.groundY(b.region) + 1.2, rd.cz);
+      const at = battleAnchor(this.world, b);
+      this.place(l, ctx, at.x, ctx.groundY(b.region) + 1.2, at.z);
     }
     for (const [id, l] of this.battles) if (l.seen !== ctx.frame) { l.el.remove(); this.battles.delete(id); }
   }
@@ -103,7 +113,7 @@ export class Labels {
   private makeBattle(b: Battle, rname: string): BattleLabel {
     const el = document.createElement('button'); el.className = 'bm'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', `Watch the battle of ${rname}`);
     el.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 1h2v1h1v1h1v1h1v1h1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1zM13 1h-2v1h-1v1h-1v1h-1v1h-1v1h1v1h1v-1h1v-1h1v-1h1v-1h1zM2 10h2v2h-2zM10 10h2v2h-2zM4 9h1v1h-1zM9 9h1v1h-1z" fill="currentColor"/></svg><span></span>';
-    el.addEventListener('click', () => this.onBattleClick(b.region));
+    el.addEventListener('click', () => this.onBattleClick(b.region, b.id));
     this.root.appendChild(el);
     const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0 };
     this.battles.set(b.id, l); return l;

@@ -19,6 +19,8 @@ export interface WorldRendererApi {
   /** 0 Ultra (device pixels), 1 High (CSS pixels), 2 Chunky (half resolution). */
   setQuality(q: 0 | 1 | 2): void;
   flyTo(regionId: number, distance?: number): void;
+  /** Fly to one front (battle) of a region. */
+  flyToBattle(battleId: number, distance?: number): void;
   /** Move the camera focus to a world position (used by the minimap). */
   panTo(x: number, z: number): void;
   /** World-space corners of the visible map area, for drawing the minimap viewport. */

@@ -1,0 +1,116 @@
+// Content of the in-game modals: sealed orders, field manual, menu, end of war.
+import { CONT, FACTIONS, TICK_SECONDS, buildWorld, missionText, totalUnits, type GameState } from '@riskrts/shared';
+import { dateStr, useSim, useUi } from '../game/store';
+import { Sfx } from '../audio/sfx';
+import { click, quitToTitle } from './actions';
+import { writeSave } from './storage';
+import { Modal } from './Modal';
+
+function Progress({ g, me }: { g: GameState; me: number }) {
+  const m = g.factions[me].mission; if (!m) return null;
+  const mine = g.regions.filter(r => r.owner === me); const W = buildWorld();
+  const span = (label: string, v: string | number) => <span key={label}>{label}<b>{v}</b></span>;
+  if (m.type === 'conts' || m.type === 'conts1') {
+    return <>{m.conts.map(k => { const ids = W.regions.filter(r => r.cont === k); return span(CONT[k].name, `${ids.filter(r => g.regions[r.id].owner === me).length}/${ids.length}`); })}{m.type === 'conts1' && <span>plus one more continent</span>}</>;
+  }
+  if (m.type === 'count') return span('Regions held', `${mine.length}/${m.n}`);
+  if (m.type === 'count2') return span('Garrisoned regions', `${mine.filter(r => totalUnits(r.units) >= 2).length}/${m.n}`);
+  if (m.type !== 'destroy') return null;
+  return span(`${FACTIONS[m.target].name} regions left`, g.regions.filter(r => r.owner === m.target).length);
+}
+
+export function OrdersSheet({ onHelp }: { onHelp: () => void }) {
+  const sim = useSim(); if (!sim) return null;
+  const { g, me, session } = sim; const f = g.factions[me]; const first = g.time < 1;
+  const [title, text] = f.mission ? missionText(f.mission) : ['Waiting for orders…', 'The War Office is still sealing your orders.'];
+  const close = () => { click(); useUi.getState().setOverlay(null); };
+  return (
+    <Modal label="Sealed orders" narrow onClose={close}>
+      <div className="kicker">{FACTIONS[me].name} · War Office</div>
+      <div className="orders"><span className="stamp">SECRET</span><h2>{title}</h2><p className="lede">{text}</p><div className="prog"><Progress g={g} me={me} /></div></div>
+      <p className="muted">Every other power holds its own sealed orders. The first to complete them wins the war, so watch the scoreboard at the top of the screen.{session.kind === 'host' ? ' The war keeps running while you read.' : ''}</p>
+      <div className="row"><button className="btn primary" onClick={close}>{first ? 'Open hostilities' : 'Back to the map'}</button>
+        {first && <button className="btn" onClick={() => { click(); onHelp(); }}>How to play</button>}</div>
+    </Modal>
+  );
+}
+
+export function HelpSheet({ onBack }: { onBack: () => void }) {
+  return (
+    <Modal label="How to play" narrow onClose={onBack}>
+      <div className="kicker">Field manual</div><h2>How to play</h2>
+      <dl className="keys">
+        <dt>Click · tap</dt><dd>Select a region. Its file opens on the right: garrison, recruiting, building and march orders.</dd>
+        <dt>Right-click</dt><dd>With your region selected, march its troops into a bordering region. On a phone use <b>March → Pick a target on the map</b>. Dashed sea lanes count as borders; troops sail across.</dd>
+        <dt>Drag · wheel</dt><dd>Pan and zoom (pinch on a phone). Zoom close to a battle to watch it. Double-click a region to fly there. The minimap in the corner jumps anywhere.</dd>
+        <dt>1 2 3 4</dt><dd>Recruit infantry, machine guns, field guns or tanks in the selected region. Shift buys five.</dd>
+        <dt>Space · Esc</dt><dd>Pause. Esc steps back: cancels a march, closes the scoreboard, deselects, then opens the menu.</dd>
+      </dl>
+      <p className="lede small">Every {TICK_SECONDS} seconds a convoy arrives: one supply per three regions (minimum three), plus continent bonuses and +2 per factory. Field guns outrange everything, machine guns pin attackers, tanks shrug off rifle fire, and trenches cut the damage defenders take.</p>
+      <div className="row"><button className="btn primary" onClick={() => { click(); onBack(); }}>Back</button></div>
+    </Modal>
+  );
+}
+
+function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) {
+  return (
+    <div className="grp"><span>{label}</span>
+      <div className="seg" role="group" aria-label={label}>
+        <button aria-pressed={on} onClick={() => { Sfx.init(); set(true); }}>On</button>
+        <button aria-pressed={!on} onClick={() => { Sfx.init(); set(false); }}>Off</button>
+      </div></div>
+  );
+}
+
+export function MenuSheet({ onHelp }: { onHelp: () => void }) {
+  const sim = useSim(); const { quality, sound, tips, log } = useUi();
+  if (!sim) return null;
+  const { session, g } = sim; const ui = useUi.getState;
+  const close = () => { click(); ui().setOverlay(null); };
+  return (
+    <Modal label="Menu" narrow onClose={close}>
+      <div className="kicker">{session.kind === 'local' ? 'Paused' : session.kind === 'host' ? 'Hosting · the war goes on' : 'Menu · the war goes on'}</div><h2>Menu</h2>
+      <div className="menu">
+        <button className="btn primary wide" onClick={close}>Resume</button>
+        <div className="row">
+          <button className="btn" onClick={() => { click(); ui().setOverlay('orders'); }}>Sealed orders</button>
+          <button className="btn" onClick={() => { click(); onHelp(); }}>How to play</button>
+          {session.kind === 'local' && !g.over && <button className="btn" onClick={() => { click(); ui().say(writeSave(session) ? 'Game saved.' : 'Saving is not available here.'); }}>Save game</button>}
+        </div>
+        <div className="grp"><span>Graphics</span>
+          <div className="seg" role="group" aria-label="Graphics quality">
+            {['Ultra', 'High', 'Chunky'].map((l, i) => <button key={l} aria-pressed={quality === i} onClick={() => { click(); ui().setQuality(i as 0 | 1 | 2); }}>{l}</button>)}
+          </div></div>
+        <Toggle label="Sound" on={sound} set={v => ui().setSound(v)} />
+        <Toggle label="Tips" on={tips} set={v => ui().setTips(v)} />
+        <button className="btn wide" onClick={() => { click(); quitToTitle(); }}>{session.kind === 'local' ? 'Save and quit to title' : session.kind === 'host' ? 'End game for everyone and quit' : 'Leave the game'}</button>
+        <small>Recent events</small>
+        <div className="hist">{log.length ? log.slice(0, 10).map(l => <div key={l.id} className={l.cls}><time>{l.day}</time>{l.text}</div>) : <div>Nothing yet.</div>}</div>
+      </div>
+    </Modal>
+  );
+}
+
+export function EndSheet() {
+  const sim = useSim(); if (!sim) return null;
+  const { g, me } = sim; const won = g.winner === me; const winner = g.winner !== null ? g.factions[g.winner] : null;
+  const wm = winner?.mission ? missionText(winner.mission)[0].toLowerCase() : null;
+  const text = g.winner === null ? 'Every human power has been destroyed. The war is lost.'
+    : won ? `Your sealed orders are fulfilled${wm ? `: ${wm}` : ''}.` : `${FACTIONS[g.winner].the[0].toUpperCase() + FACTIONS[g.winner].the.slice(1)} has fulfilled its sealed orders${wm ? `: ${wm}` : ''}.`;
+  return (
+    <Modal label={won ? 'Victory' : 'Defeat'} narrow onClose={() => useUi.getState().setOverlay(null)}>
+      <div className="kicker">{dateStr(g.day)}</div>
+      <h1 style={{ color: won ? 'var(--accent)' : 'var(--danger)' }}>{won ? 'Victory' : 'Defeat'}</h1>
+      <p className="lede">{text}</p>
+      <div className="stats">
+        <div><small>Regions held</small><b>{g.regions.filter(r => r.owner === me).length}</b></div>
+        <div><small>Battles won / lost</small><b>{g.stats.won[me] ?? 0} / {g.stats.lost[me] ?? 0}</b></div>
+        <div><small>Days of war</small><b>{Math.round(g.day)}</b></div>
+      </div>
+      <div className="row">
+        <button className="btn primary" onClick={() => { click(); quitToTitle(sim.session.kind === 'local' ? 'solo' : undefined); }}>{sim.session.kind === 'local' ? 'Start a new war' : 'Back to title'}</button>
+        <button className="btn" onClick={() => { click(); useUi.getState().setOverlay(null); }}>Look at the map</button>
+      </div>
+    </Modal>
+  );
+}

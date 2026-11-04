@@ -22,6 +22,7 @@ interface Ui {
   fatal: string | null;
 
   setScreen(s: Screen): void;
+  clearFatal(): void;
   startSession(s: Session): void;
   leaveGame(): void;
   select(id: number): void;
@@ -58,6 +59,7 @@ export const useUi = create<Ui>((set, get) => ({
   sound: lsGet('f14snd') !== '0', fatal: null,
 
   setScreen: (screen) => set({ screen }),
+  clearFatal: () => set({ fatal: null }),
   startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, overlay: 'orders', tab: 'rec', scoreOpen: false });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },

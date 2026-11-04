@@ -168,7 +168,7 @@ export class MapBattles {
     }
     for (let i = 0; i < 6; i++) { const an = i / 6 * 6.28 + R() * .6, sp = (.12 + R() * .08) * s * k; fx.spawn(x, y + .03, z, Math.cos(an) * sp, .012 * k, Math.sin(an) * sp, 0, 1.5 + R(), .04 * s * k, .13 * s * k, K.dust, F_DUST); }
     for (let i = 0; i < 3; i++) fx.spawn(x + (R() - .5) * .08 * k, y + .1, z + (R() - .5) * .08 * k, .03, (.14 + R() * .1) * Math.min(k, 2), .01, 0, 2.4 + R() * 1.6, .06 * s * k, .2 * s * k, i ? K.smoke : K.smoke2, F_HOT);
-    if (dist > 0 && Math.random() < .25) Sfx.rumble(Math.max(.15, 1 - dist / 160));
+    if (dist > 0 && Math.random() < .25) Sfx.rumble(Math.max(.15, 1 - dist / 160), x, z);
     if (scar) this.addScar(x, z, y, s);
   }
 

@@ -63,7 +63,8 @@ export interface Battle {
 /** Visual-only effects. Collected only when GameState.fx is an array; never affects the outcome. */
 export type Fx =
   | { k: 'shot'; b: number; x0: number; z0: number; x1: number; z1: number; type: AgentType; hit: boolean; air?: boolean }
-  | { k: 'fire'; b: number; x: number; z: number; face: number }
+  /** A gun firing a shell that lands at (tx, tz) after `fl` simulated seconds (used for the incoming whistle). */
+  | { k: 'fire'; b: number; x: number; z: number; face: number; tx?: number; tz?: number; fl?: number }
   | { k: 'boom'; b: number; x: number; z: number; s: number }
   | { k: 'flak'; b: number; x: number; z: number };
 

@@ -46,7 +46,7 @@ const h = {
   snap(target: number | [number, number], dist: number, n = 2) {
     const d = (r as unknown as { debug: { rig: { gx: number; gz: number; tx: number; tz: number; dist: number; gdist: number } } }).debug.rig;
     const [x, z] = typeof target === 'number' ? [buildWorld().regions[target].cx, buildWorld().regions[target].cz] : target;
-    d.gx = d.tx = x; d.gz = d.tz = z; d.gdist = d.dist = dist; this.renderFrames(n);
+    d.gx = d.tx = x; d.gz = d.tz = z; d.gdist = d.dist = dist; this.renderFrames(1); (r as unknown as { warmDetail(): void }).warmDetail(); this.renderFrames(n);
   },
   firstBattle() { return session.state.battles.find((b) => !b.ended) ?? null; },
   dbg: () => (r as unknown as { debug: { rig: { tx: number; tz: number; dist: number; gx: number; gz: number; gdist: number }; views: Map<number, unknown>; stats: { cpuMs: number } } }).debug,

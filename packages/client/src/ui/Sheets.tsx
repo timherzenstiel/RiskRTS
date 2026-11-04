@@ -65,7 +65,7 @@ function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boole
 }
 
 export function MenuSheet({ onHelp }: { onHelp: () => void }) {
-  const sim = useSim(); const { quality, sound, tips, log } = useUi();
+  const sim = useSim(); const { quality, sound, tips, log, look } = useUi();
   if (!sim) return null;
   const { session, g } = sim; const ui = useUi.getState;
   const close = () => { click(); ui().setOverlay(null); };
@@ -82,6 +82,10 @@ export function MenuSheet({ onHelp }: { onHelp: () => void }) {
         <div className="grp"><span>Graphics</span>
           <div className="seg" role="group" aria-label="Graphics quality">
             {['Ultra', 'High', 'Chunky'].map((l, i) => <button key={l} aria-pressed={quality === i} onClick={() => { click(); ui().setQuality(i as 0 | 1 | 2); }}>{l}</button>)}
+          </div></div>
+        <div className="grp"><span>Look</span>
+          <div className="seg" role="group" aria-label="Visual style">
+            {['Tiberian', 'Red Alert'].map((l, i) => <button key={l} aria-pressed={look === i} onClick={() => { click(); ui().setLook(i as 0 | 1); }}>{l}</button>)}
           </div></div>
         <Toggle label="Sound" on={sound} set={v => ui().setSound(v)} />
         <Toggle label="Tips" on={tips} set={v => ui().setTips(v)} />

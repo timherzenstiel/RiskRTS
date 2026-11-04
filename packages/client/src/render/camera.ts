@@ -1,15 +1,22 @@
-// Orbit-less strategy camera: a ground focus point, a distance and a pitch that tilts down as you zoom out. Also drives the sun shadow frustum.
+// Command & Conquer style camera: orthographic, fixed steep pitch, no rotation. `dist` sets the zoom (visible height ~ dist * .69).
+// The sun shines from the top-left of the screen, so shadows fall down and to the right like C&C sprites. Also drives the shadow frustum.
 import * as THREE from 'three';
 import { HH, HW } from '@riskrts/shared';
-import { clamp, lerp, smooth } from './util';
+import { clamp, lerp } from './util';
 
 export const MIN_DIST = 1.1, MAX_DIST = 170;
-const SUN_DIR = new THREE.Vector3(-.45, 1, .55).normalize();
+const SUN_DIR = new THREE.Vector3(-.62, 1, -.42).normalize();
+/** Camera elevation (radians above the horizon): steep three-quarter top-down view. */
+export const PITCH = .8;
+/** Half the visible height per unit of `dist` (matches the old 38-degree perspective at the focus). */
+const HALF = .344;
+const BACK = 160;
 
 export class CameraRig {
-  readonly camera = new THREE.PerspectiveCamera(38, 1, .05, 900);
-  readonly sun = new THREE.DirectionalLight(0xfff0d2, 2.4);
-  readonly hemi = new THREE.HemisphereLight(0xe3e8da, 0x4a4a3a, 1.45);
+  readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, BACK * 2 + 60);
+  readonly sun = new THREE.DirectionalLight(0xf6e8c8, 2.9);
+  readonly hemi = new THREE.HemisphereLight(0xd2d0c2, 0x3a3226, 1.05);
+  private aspect = 1;
   /** Current (smoothed) and goal focus/distance. */
   tx = 12; tz = -16; dist = 70; gx = 12; gz = -16; gdist = 70;
   private readonly ray = new THREE.Raycaster();
@@ -24,7 +31,7 @@ export class CameraRig {
     this.sun.castShadow = true; this.sun.shadow.mapSize.set(shadowMapSize, shadowMapSize); this.sun.shadow.bias = -.0004;
   }
 
-  setAspect(aspect: number) { this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); }
+  setAspect(aspect: number) { this.aspect = aspect; }
 
   /** Advance towards the goal. `pan` is a unit-ish keyboard vector (x right, z down). */
   update(dt: number, panX: number, panZ: number) {
@@ -32,10 +39,10 @@ export class CameraRig {
     this.gx = clamp(this.gx + panX * sp, -HW, HW); this.gz = clamp(this.gz + panZ * sp, -HH, HH);
     const k = 1 - Math.exp(-dt * 7);
     this.tx = lerp(this.tx, this.gx, k); this.tz = lerp(this.tz, this.gz, k); this.dist = lerp(this.dist, this.gdist, k);
-    // steep, Command & Conquer style view up close; flatter tilt only for the world map
-    const pitch = lerp(.92, 1.12, smooth(4, 70, this.dist));
-    this.camera.position.set(this.tx, this.dist * Math.sin(pitch), this.tz + this.dist * Math.cos(pitch));
-    this.camera.lookAt(this.tx, .5, this.tz); this.camera.updateMatrixWorld();
+    const cam = this.camera, hh = this.dist * HALF, hw = hh * this.aspect;
+    cam.left = -hw; cam.right = hw; cam.top = hh; cam.bottom = -hh; cam.updateProjectionMatrix();
+    cam.position.set(this.tx, .5 + BACK * Math.sin(PITCH), this.tz + BACK * Math.cos(PITCH));
+    cam.lookAt(this.tx, .5, this.tz); cam.updateMatrixWorld();
     const S = clamp(this.dist * .8, 3, 95), sc = this.sun.shadow.camera, texel = 2 * S / this.shadowSize;
     const fx = Math.round(this.tx / texel) * texel, fz = Math.round(this.tz / texel) * texel;
     sc.left = -S; sc.right = S; sc.top = S; sc.bottom = -S; sc.near = 1; sc.far = 140; sc.updateProjectionMatrix();

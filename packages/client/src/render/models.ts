@@ -2,7 +2,7 @@
 import type { UnitType } from '@riskrts/shared';
 import type * as THREE from 'three';
 import type { Pool } from './pools';
-import { DEADC, HELM, K, TANKC, TANKD, UNI, UNI2, facCol } from './palette';
+import { DEADC, HELM, K, TANKC, TANKD, TANKL, UNI, UNI2, facCol } from './palette';
 
 const FLAG = facCol;
 
@@ -44,27 +44,70 @@ export class Models {
     }
   }
 
+  /** A track run on one side: dark links with a lighter top run, road wheels on the outer face and link stripes. */
+  private track(x: number, y: number, z: number, face: number, S: number, lx: number, len: number, h: number, w: number, lz = 0) {
+    const p = this.part.bind(this), out = lx > 0 ? 1 : -1;
+    p(x, y, z, face, lx * S, h / 2 * S, lz * S, w * S, h * S, len * S, K.track);
+    p(x, y, z, face, lx * S, (h - .004) * S, lz * S, w * 1.04 * S, .008 * S, len * .94 * S, K.trackHi);
+    const n = Math.max(3, Math.round(len / .05));
+    for (let k = 0; k < n; k++) {
+      const tz = lz + (k + .5) / n * len * .86 - len * .43;
+      p(x, y, z, face, (lx + out * w * .52) * S, h * .42 * S, tz * S, .005 * S, h * .5 * S, h * .5 * S, K.wheel);
+      p(x, y, z, face, lx * S, h * S, (tz + len / n * .43) * S, w * 1.06 * S, .004 * S, .008 * S, K.rivet);
+    }
+  }
+
+  /** WW1-era armour in Command & Conquer detail: tracks with wheels and links, lit top plates, hatches, vision slits, guns. */
   private tank(x: number, y: number, z: number, face: number, f: number, S: number) {
-    const p = this.part.bind(this), c = TANKC[f], d = TANKD[f];
-    if (f === 1) {
-      p(x, y, z, face, 0, .06 * S, 0, .12 * S, .08 * S, .22 * S, c);
-      p(x, y, z, face, .07 * S, .045 * S, 0, .04 * S, .07 * S, .26 * S, K.track); p(x, y, z, face, -.07 * S, .045 * S, 0, .04 * S, .07 * S, .26 * S, K.track);
-      p(x, y, z, face, 0, .13 * S, .02 * S, .075 * S, .06 * S, .075 * S, d); p(x, y, z, face, 0, .165 * S, .02 * S, .04 * S, .015 * S, .04 * S, d);
-      p(x, y, z, face, 0, .135 * S, .085 * S, .012 * S, .012 * S, .06 * S, K.gun); p(x, y, z, face, 0, .05 * S, -.15 * S, .08 * S, .02 * S, .07 * S, d); return;
+    const p = this.part.bind(this), c = TANKC[f], d = TANKD[f], l = TANKL[f];
+    if (f === 1) { // light tank with a rotating turret
+      this.track(x, y, z, face, S, .07, .27, .07, .04);
+      p(x, y, z, face, .07 * S, .075 * S, .14 * S, .042 * S, .05 * S, .04 * S, K.track);
+      p(x, y, z, face, -.07 * S, .075 * S, .14 * S, .042 * S, .05 * S, .04 * S, K.track);
+      this.track(x, y, z, face, S, -.07, .27, .07, .04);
+      p(x, y, z, face, 0, .065 * S, 0, .1 * S, .08 * S, .22 * S, d); p(x, y, z, face, 0, .108 * S, -.01 * S, .1 * S, .008 * S, .2 * S, l);
+      p(x, y, z, face, 0, .09 * S, .1 * S, .09 * S, .05 * S, .04 * S, c); p(x, y, z, face, 0, .1 * S, .121 * S, .05 * S, .006 * S, .002 * S, K.slit);
+      p(x, y, z, face, 0, .14 * S, .02 * S, .07 * S, .055 * S, .07 * S, c); p(x, y, z, face + .785, 0, .14 * S, 0, .06 * S, .055 * S, .06 * S, d);
+      p(x, y, z, face, 0, .17 * S, .02 * S, .05 * S, .008 * S, .05 * S, l); p(x, y, z, face, 0, .182 * S, .02 * S, .026 * S, .016 * S, .026 * S, K.hatch);
+      p(x, y, z, face, 0, .142 * S, .08 * S, .012 * S, .012 * S, .06 * S, K.gun); p(x, y, z, face, 0, .142 * S, .113 * S, .016 * S, .016 * S, .008 * S, K.gun);
+      p(x, y, z, face, 0, .05 * S, -.15 * S, .08 * S, .016 * S, .07 * S, d); p(x, y, z, face, .03 * S, .12 * S, -.08 * S, .012 * S, .03 * S, .012 * S, K.exhaust);
+      return;
     }
-    if (f === 3) {
-      p(x, y, z, face, 0, .03 * S, 0, .21 * S, .05 * S, .31 * S, K.track); p(x, y, z, face, 0, .11 * S, 0, .2 * S, .12 * S, .3 * S, c);
-      p(x, y, z, face, 0, .19 * S, .02 * S, .09 * S, .04 * S, .09 * S, d); p(x, y, z, face, 0, .1 * S, .18 * S, .022 * S, .022 * S, .07 * S, K.gun);
-      p(x, y, z, face, .105 * S, .1 * S, .04 * S, .02 * S, .015 * S, .04 * S, K.gun); p(x, y, z, face, -.105 * S, .1 * S, .04 * S, .02 * S, .015 * S, .04 * S, K.gun); return;
+    if (f === 3) { // heavy box-hulled assault tank
+      this.track(x, y, z, face, S, .085, .3, .055, .05); this.track(x, y, z, face, S, -.085, .3, .055, .05);
+      p(x, y, z, face, 0, .1 * S, 0, .21 * S, .1 * S, .32 * S, c);
+      p(x, y, z, face, 0, .151 * S, 0, .2 * S, .006 * S, .3 * S, l);
+      p(x, y, z, face, 0, .08 * S, .17 * S, .2 * S, .05 * S, .03 * S, d);
+      for (const sd of [-1, 1]) {
+        p(x, y, z, face, sd * .106 * S, .1 * S, 0, .006 * S, .088 * S, .3 * S, d);
+        for (let k = -1; k <= 1; k++) p(x, y, z, face, sd * .11 * S, .115 * S, k * .09 * S, .004 * S, .012 * S, .02 * S, K.slit);
+        p(x, y, z, face, sd * .112 * S, .1 * S, .09 * S, .012 * S, .012 * S, .03 * S, K.gun);
+        p(x, y, z, face, sd * .109 * S, .085 * S, -.06 * S, .004 * S, .05 * S, .035 * S, K.hatch);
+      }
+      p(x, y, z, face, 0, .18 * S, .04 * S, .1 * S, .05 * S, .11 * S, c); p(x, y, z, face, 0, .206 * S, .04 * S, .09 * S, .006 * S, .1 * S, l);
+      p(x, y, z, face, 0, .19 * S, .096 * S, .06 * S, .006 * S, .003 * S, K.slit); p(x, y, z, face, -.02 * S, .213 * S, .02 * S, .03 * S, .008 * S, .03 * S, K.hatch);
+      p(x, y, z, face, 0, .11 * S, .2 * S, .022 * S, .022 * S, .07 * S, K.gun); p(x, y, z, face, 0, .11 * S, .18 * S, .05 * S, .05 * S, .015 * S, d);
+      for (const sd of [-1, 1]) p(x, y, z, face, sd * .06 * S, .16 * S, -.15 * S, .016 * S, .03 * S, .016 * S, K.exhaust);
+      return;
     }
-    p(x, y, z, face, 0, .075 * S, 0, .16 * S, .11 * S, .26 * S, c);
+    // rhomboid tank: tracks wrap around a tall hull, gun sponsons on both sides
     for (const sd of [-1, 1]) {
-      const lx = sd * .1 * S;
-      p(x, y, z, face, lx, .03 * S, 0, .05 * S, .05 * S, .34 * S, K.track); p(x, y, z, face, lx, .085 * S, .01 * S, .05 * S, .07 * S, .38 * S, d);
-      p(x, y, z, face, lx, .14 * S, .02 * S, .05 * S, .04 * S, .3 * S, d); p(x, y, z, face, lx, .115 * S, .19 * S, .05 * S, .05 * S, .05 * S, K.track);
-      p(x, y, z, face, sd * .14 * S, .08 * S, .02 * S, .04 * S, .05 * S, .09 * S, c); p(x, y, z, face, sd * .165 * S, .08 * S, .08 * S, .012 * S, .012 * S, .07 * S, K.gun);
+      const lx = sd * .1;
+      this.track(x, y, z, face, S, lx, .34, .055, .05);
+      p(x, y, z, face, lx * S, .1 * S, .01 * S, .05 * S, .08 * S, .36 * S, d);
+      p(x, y, z, face, lx * S, .145 * S, .02 * S, .052 * S, .012 * S, .3 * S, K.trackHi);
+      p(x, y, z, face, lx * S, .12 * S, .185 * S, .05 * S, .05 * S, .05 * S, K.track); p(x, y, z, face, lx * S, .07 * S, .2 * S, .05 * S, .05 * S, .04 * S, K.track);
+      for (let k = 0; k < 6; k++) p(x, y, z, face, (lx + sd * .026) * S, .1 * S, (-.13 + k * .055) * S, .004 * S, .006 * S, .006 * S, K.rivet);
+      p(x, y, z, face, sd * .14 * S, .09 * S, .03 * S, .04 * S, .055 * S, .1 * S, c); p(x, y, z, face, sd * .14 * S, .118 * S, .03 * S, .04 * S, .006 * S, .1 * S, l);
+      p(x, y, z, face, sd * .14 * S, .095 * S, .082 * S, .02 * S, .02 * S, .01 * S, K.hatch);
+      p(x, y, z, face, sd * .165 * S, .095 * S, .085 * S, .012 * S, .012 * S, .07 * S, K.gun);
     }
-    p(x, y, z, face, 0, .15 * S, .1 * S, .08 * S, .04 * S, .07 * S, c); p(x, y, z, face, .03 * S, .17 * S, -.09 * S, .015 * S, .04 * S, .015 * S, K.gun);
+    p(x, y, z, face, 0, .085 * S, 0, .15 * S, .11 * S, .27 * S, c); p(x, y, z, face, 0, .141 * S, -.01 * S, .14 * S, .006 * S, .25 * S, l);
+    p(x, y, z, face, 0, .16 * S, .1 * S, .08 * S, .04 * S, .07 * S, c); p(x, y, z, face, 0, .181 * S, .1 * S, .07 * S, .006 * S, .06 * S, l);
+    p(x, y, z, face, 0, .165 * S, .136 * S, .05 * S, .005 * S, .003 * S, K.slit);
+    p(x, y, z, face, 0, .155 * S, -.08 * S, .06 * S, .02 * S, .05 * S, K.hatch);
+    p(x, y, z, face, 0, .16 * S, -.16 * S, .26 * S, .022 * S, .022 * S, K.wood);
+    p(x, y, z, face, .03 * S, .17 * S, -.09 * S, .015 * S, .04 * S, .015 * S, K.exhaust); p(x, y, z, face, -.03 * S, .17 * S, -.09 * S, .015 * S, .04 * S, .015 * S, K.exhaust);
   }
 
   /** Draw any unit type. `recoil` (0..1) pulls an artillery barrel back after a shot. */

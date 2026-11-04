@@ -1,4 +1,4 @@
-// Three.js world renderer: miniature tilt-shift operations map that zooms into pixel-art battlefields.
+// Three.js world renderer: a Command & Conquer style top-down war map that zooms into painted, pixel-art ground and battlefields.
 // Implements the contract in api.ts. It never mutates game state; it only reads session.state and drains visual effects.
 import * as THREE from 'three';
 import { AIR_RANGE, buildWorld, hops, tileAtW, type Battle, type Fx, type GameState, type World } from '@riskrts/shared';
@@ -17,7 +17,7 @@ import { Labels } from './labels';
 import { Models } from './models';
 import { K } from './palette';
 import { Post } from './post';
-import { LineBatch, Pool } from './pools';
+import { LineBatch, Pool, litMaterial, uChrome } from './pools';
 import { Terrain } from './terrain';
 import { Water } from './water';
 import { clamp, smooth } from './util';
@@ -76,14 +76,14 @@ class WorldRenderer implements WorldRendererApi {
     renderer.setPixelRatio(1);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
     const SM = renderer.capabilities.maxTextureSize >= 4096 ? 4096 : 2048;
-    this.scene.background = new THREE.Color('#0b0f0d');
+    this.scene.background = new THREE.Color('#050505');
 
     try {
       this.world = buildWorld();
       this.rig = new CameraRig(this.scene, SM);
       this.terrain = new Terrain(this.scene, this.world);
       this.water = new Water(this.scene, this.world);
-      this.lit = new Pool(this.scene, 90000, new THREE.MeshLambertMaterial(), true);
+      this.lit = new Pool(this.scene, 120000, litMaterial(), true);
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);
       this.detail = new GroundDetail(this.scene, this.world, this.terrain);
       this.lines = new LineBatch(this.scene, 8000);
@@ -169,7 +169,7 @@ class WorldRenderer implements WorldRendererApi {
     const [px, pz] = this.input.pan();
     this.rig.update(dt, px, pz);
     this.terrain.setCameraDistance(this.rig.dist);
-    this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist);
+    this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
     this.dyn.marker = ui.fortMarker;
 
     this.syncPaint(g, ui.sel, ui.hover);
@@ -181,7 +181,7 @@ class WorldRenderer implements WorldRendererApi {
 
     this.drawScene(g, this.now);
     this.water.setTime(this.now);
-    this.post.tune(this.rig.dist);
+    this.post.tune(this.rig.dist, ui.look, this.now); uChrome.value = ui.look ? .75 : .3;
     for (const v of this.views.values()) v.flush();
     this.post.render();
 
@@ -206,6 +206,12 @@ class WorldRenderer implements WorldRendererApi {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  /** Render-buffer pixels per world unit at the current zoom. */
+  private ppu() { return this.canvas.height / (2 * .344 * this.rig.dist); }
+
+  /** Dev tooling: build all close-up ground in view now instead of one chunk per frame. */
+  warmDetail() { this.detail.buildAll(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu()); }
 
   private distTo(b: Battle) { const r = this.world.regions[b.region]; return Math.hypot(r.cx - this.rig.tx, r.cz - this.rig.tz); }
 

@@ -11,6 +11,7 @@ export const K = {
   stump: col('#3a2c20'), crate: col('#7a6040'), cloud: col('#eef1ec'), cloud2: col('#d7dcd6'), wing: col('#cfc6a4'), khaki: col('#b09a6a'),
   canvas: col('#cfc6a2'), canvas2: col('#a99f7e'), red: col('#8c2f26'), beam: col('#6b5236'), bush: col('#3d5530'), hay: col('#c9b45f'),
   white: col('#ffffff'), spark: col('#ffd9a0'),
+  wheel: col('#6e6b62'), trackHi: col('#4b4842'), rivet: col('#26251f'), hatch: col('#3a3b36'), exhaust: col('#2a2724'),
   concrete: col('#a29e92'), concrete2: col('#7f7b70'), slit: col('#171612'), runway: col('#8f8b7c'), runway2: col('#d8d3c0'), hangar: col('#6d6a5c'), flakpuff: col('#2b2a28'),
 };
 
@@ -20,8 +21,10 @@ export const facCol = FACTIONS.map((f) => col(f.color));
 export const UNI = facCol.map((c) => c.clone().lerp(col('#7d7454'), 0.18));
 export const UNI2 = UNI.map((c) => c.clone().multiplyScalar(0.82));
 export const HELM = facCol.map((c) => c.clone().multiplyScalar(0.55));
-export const TANKC = facCol.map((c) => c.clone().lerp(col('#6b6a52'), 0.45));
-export const TANKD = TANKC.map((c) => c.clone().multiplyScalar(0.7));
+/** Vehicle paint: faction colour weathered toward drab, with a lit top panel (TANKL) and shaded sides (TANKD), C&C style. */
+export const TANKC = facCol.map((c) => c.clone().lerp(col('#6b6a52'), 0.3));
+export const TANKD = TANKC.map((c) => c.clone().multiplyScalar(0.66));
+export const TANKL = TANKC.map((c) => c.clone().lerp(col('#e8e2cc'), 0.22));
 export const DEADC = facCol.map((c) => c.clone().multiplyScalar(0.35));
 export const FLAGD = facCol.map((c) => c.clone().multiplyScalar(0.85));
 export { mix };

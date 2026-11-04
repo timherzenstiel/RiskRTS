@@ -22,6 +22,8 @@ interface Ui {
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
   tut: number; tips: boolean; quality: 0 | 1 | 2; sound: boolean;
+  /** Visual style: 0 = Tiberian (muddy brown/grey), 1 = Red Alert (industrial chrome). */
+  look: 0 | 1;
   fatal: string | null;
 
   setScreen(s: Screen): void;
@@ -40,6 +42,7 @@ interface Ui {
   say(text: string): void;
   setSpeed(s: number): void;
   setQuality(q: 0 | 1 | 2): void;
+  setLook(l: 0 | 1): void;
   setSound(on: boolean): void;
   setTips(on: boolean): void;
   advanceTut(n: number): void;
@@ -63,7 +66,7 @@ export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
-  sound: lsGet('f14snd') !== '0', fatal: null,
+  sound: lsGet('f14snd') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
@@ -82,6 +85,7 @@ export const useUi = create<Ui>((set, get) => ({
   say: (text) => set({ toast: { text, id: ++feedId } }),
   setSpeed: (n) => { const s = get().session; if (s?.canControlTime) { s.speed = n; get().bump(); } },
   setQuality: (quality) => { lsSet('f14q', String(quality)); set({ quality }); },
+  setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
   setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; set({ sound }); },
   setTips: (tips) => { lsSet('f14tips', tips ? '1' : '0'); set({ tips }); },
   advanceTut: (n) => { if (n > get().tut) set({ tut: n }); },

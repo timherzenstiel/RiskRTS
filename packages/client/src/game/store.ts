@@ -1,0 +1,112 @@
+// UI state (zustand). Game state itself lives in the Session; components read it through useSim() and re-render on `rev`.
+import { create } from 'zustand';
+import { describeEvent, type Command, type GameEvent, type UnitType } from '@riskrts/shared';
+import type { Session } from './session';
+import { Sfx } from '../audio/sfx';
+
+export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
+export type Tab = 'rec' | 'build' | 'march';
+export type Overlay = null | 'menu' | 'orders' | 'help' | 'end';
+export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number }
+
+interface Ui {
+  screen: Screen;
+  session: Session | null;
+  /** Bumped ~5×/s and after every command so components re-read session.state. */
+  rev: number;
+  sel: number; hover: number; tab: Tab; sendFrac: number; orderMode: boolean;
+  overlay: Overlay; scoreOpen: boolean;
+  toast: { text: string; id: number } | null;
+  feed: FeedItem[]; log: FeedItem[];
+  tut: number; tips: boolean; quality: 0 | 1 | 2; sound: boolean;
+  fatal: string | null;
+
+  setScreen(s: Screen): void;
+  startSession(s: Session): void;
+  leaveGame(): void;
+  select(id: number): void;
+  setHover(id: number): void;
+  setTab(t: Tab): void;
+  setSendFrac(f: number): void;
+  beginOrder(): void;
+  cancelOrder(): void;
+  setOverlay(o: Overlay): void;
+  toggleScore(): void;
+  say(text: string): void;
+  setSpeed(s: number): void;
+  setQuality(q: 0 | 1 | 2): void;
+  setSound(on: boolean): void;
+  setTips(on: boolean): void;
+  advanceTut(n: number): void;
+  /** Convenience actions that send a command and surface errors as toasts. */
+  recruit(region: number, unit: UnitType, n?: number): void;
+  build(region: number, kind: 'trench' | 'factory' | 'barracks'): void;
+  march(from: number, to: number): void;
+  /** Called by the game loop ~5×/s: pulls events from the session into the feed and bumps rev. */
+  pump(): void;
+  bump(): void;
+}
+
+const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
+let feedId = 1;
+
+export const useUi = create<Ui>((set, get) => ({
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, overlay: null, scoreOpen: false,
+  toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
+  quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
+  sound: lsGet('f14snd') !== '0', fatal: null,
+
+  setScreen: (screen) => set({ screen }),
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, overlay: 'orders', tab: 'rec', scoreOpen: false });
+    session.onError = (m) => get().say(m); },
+  leaveGame: () => { get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
+  select: (id) => { const s = get().session; set({ sel: id, orderMode: false }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
+  setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
+  setTab: (tab) => set({ tab }),
+  setSendFrac: (sendFrac) => set({ sendFrac }),
+  beginOrder: () => set({ orderMode: true }),
+  cancelOrder: () => set({ orderMode: false }),
+  setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
+  toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
+  say: (text) => set({ toast: { text, id: ++feedId } }),
+  setSpeed: (n) => { const s = get().session; if (s?.canControlTime) { s.speed = n; get().bump(); } },
+  setQuality: (quality) => { lsSet('f14q', String(quality)); set({ quality }); },
+  setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; set({ sound }); },
+  setTips: (tips) => { lsSet('f14tips', tips ? '1' : '0'); set({ tips }); },
+  advanceTut: (n) => { if (n > get().tut) set({ tut: n }); },
+
+  recruit: (region, unit, n = 1) => {
+    const s = get().session; if (!s) return; const err = s.send({ t: 'recruit', region, unit, n } as Command);
+    if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(2); Sfx.click(); } get().bump();
+  },
+  build: (region, kind) => { const s = get().session; if (!s) return; const err = s.send({ t: 'build', region, kind }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },
+  march: (from, to) => {
+    const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac });
+    if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(3); Sfx.click(); } set({ orderMode: false }); get().bump();
+  },
+
+  pump: () => {
+    const s = get().session; if (!s) return;
+    const evs: GameEvent[] = s.drainEvents(); const items: FeedItem[] = [];
+    for (const e of evs) {
+      if (e.k === 'supply') { Sfx.chime(); continue; }
+      if (e.k === 'over') { set({ overlay: 'end' }); continue; }
+      const d = describeEvent(s.state, e, s.me); if (!d) continue;
+      items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region });
+      if (d.cls === 'bad') Sfx.horn();
+    }
+    set(st => ({ rev: st.rev + 1, feed: items.length ? [...st.feed, ...items].slice(-4) : st.feed, log: items.length ? [...items.reverse(), ...st.log].slice(0, 60) : st.log }));
+    if (items.length) for (const it of items) setTimeout(() => set(st => ({ feed: st.feed.filter(f => f.id !== it.id) })), 10000);
+  },
+  bump: () => set(st => ({ rev: st.rev + 1 })),
+}));
+
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function dateStr(day: number) { const d = new Date(Date.UTC(1914, 7, 1) + day * 864e5); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+
+/** Read the live session. Re-renders whenever the store's rev changes. */
+export function useSim() {
+  const session = useUi(s => s.session); useUi(s => s.rev);
+  return session ? { g: session.state, me: session.me, session } : null;
+}

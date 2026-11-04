@@ -1,2 +1,7 @@
 node_modules/
+dist/
 *.png
+!packages/client/public/*.png
+*.log
+.DS_Store
+.env

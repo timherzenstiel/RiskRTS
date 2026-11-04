@@ -1,0 +1,107 @@
+// Rasterises the lon/lat outlines into a tile grid and grows the 54 regions from their seeds.
+// Deterministic and DOM-free, so server and client build the identical world.
+import { LAND, WATER, RIVERS } from './geometry';
+import { SEEDS, SEA, type ContKey } from '../data/regions';
+
+export const RES = .5;                    // degrees per tile
+export const COLS = 720, ROWS = 282, LAT_TOP = 84, N = COLS * ROWS;
+export const TS = 1 / 3;                  // world units per tile
+export const HW = COLS * TS / 2, HH = ROWS * TS / 2;
+
+export const lonOf = (c: number) => -180 + (c + .5) * RES;
+export const latOf = (r: number) => LAT_TOP - (r + .5) * RES;
+export const tileAtLL = (lon: number, lat: number) => { const c = Math.floor((lon + 180) / RES), r = Math.floor((LAT_TOP - lat) / RES); return (c < 0 || c >= COLS || r < 0 || r >= ROWS) ? -1 : r * COLS + c; };
+export const tileAtW = (x: number, z: number) => { const c = Math.floor((x + HW) / TS), r = Math.floor((z + HH) / TS); return (c < 0 || c >= COLS || r < 0 || r >= ROWS) ? -1 : r * COLS + c; };
+export const tx = (c: number) => (c + .5) * TS - HW;
+export const tz = (r: number) => (r + .5) * TS - HH;
+export const wxLon = (lon: number) => (lon + 180) / RES * TS - HW;
+export const wzLat = (lat: number) => (LAT_TOP - lat) / RES * TS - HH;
+
+export interface RegionDef {
+  id: number; name: string; cont: ContKey; lon: number; lat: number;
+  tiles: number[]; adj: number[]; seaAdj: number[];
+  anchor: number; cx: number; cz: number;
+}
+export interface World {
+  land: Uint8Array; river: Uint8Array; terrOf: Int16Array; borderNb: Int16Array;
+  regions: RegionDef[]; byName: Record<string, RegionDef>;
+  /** "a|b" keys of region pairs connected by a sea lane. */
+  seaLane: Set<string>;
+}
+
+interface Poly { p: number[]; a: number; b: number; c: number; d: number }
+function prep(p: number[]): Poly { let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (let i = 0; i < p.length; i += 2) { a = Math.min(a, p[i]); b = Math.max(b, p[i]); c = Math.min(c, p[i + 1]); d = Math.max(d, p[i + 1]); } return { p, a, b, c, d }; }
+function inPoly(P: Poly, x: number, y: number) {
+  if (x < P.a || x > P.b || y < P.c || y > P.d) return false; const p = P.p; let ins = false;
+  for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+    const xi = p[i], yi = p[i + 1], xj = p[j], yj = p[j + 1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins;
+  }
+  return ins;
+}
+const nb4 = (i: number, out: number[]) => { const c = i % COLS; out[0] = c > 0 ? i - 1 : -1; out[1] = c < COLS - 1 ? i + 1 : -1; out[2] = i >= COLS ? i - COLS : -1; out[3] = i + COLS < N ? i + COLS : -1; return out; };
+
+let cache: World | null = null;
+export function buildWorld(): World {
+  if (cache) return cache;
+  const land = new Uint8Array(N), river = new Uint8Array(N), terrOf = new Int16Array(N).fill(-1);
+  const LP = LAND.map(prep), WP = WATER.map(prep);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const lon = lonOf(c), lat = latOf(r); let L = false;
+    for (const P of LP) if (inPoly(P, lon, lat)) { L = true; break; }
+    if (L) for (const P of WP) if (inPoly(P, lon, lat)) { L = false; break; }
+    land[r * COLS + c] = L ? 1 : 0;
+  }
+  for (const R of RIVERS) for (let k = 0; k < R.length - 2; k += 2) {
+    const x0 = R[k], y0 = R[k + 1], x1 = R[k + 2], y1 = R[k + 3], n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / .1);
+    for (let s = 0; s <= n; s++) { const i = tileAtLL(x0 + (x1 - x0) * s / n, y0 + (y1 - y0) * s / n); if (i >= 0 && land[i]) river[i] = 1; }
+  }
+
+  const regions: RegionDef[] = SEEDS.map(([name, cont, lon, lat], id) => ({ id, name, cont, lon, lat, tiles: [], adj: [], seaAdj: [], anchor: 0, cx: 0, cz: 0 }));
+  const byName: Record<string, RegionDef> = {}; regions.forEach(t => byName[t.name] = t);
+  const NB = [0, 0, 0, 0], q: number[] = [];
+  for (const t of regions) {
+    const c = Math.floor((t.lon + 180) / RES), r = Math.floor((LAT_TOP - t.lat) / RES); let best = -1, bd = 1e9;
+    for (let dr = -18; dr <= 18; dr++) for (let dc = -18; dc <= 18; dc++) {
+      const rr = r + dr, cc = c + dc; if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) continue;
+      const i = rr * COLS + cc; if (land[i] && terrOf[i] < 0) { const d = dr * dr + dc * dc; if (d < bd) { bd = d; best = i; } }
+    }
+    terrOf[best] = t.id; q.push(best);
+  }
+  for (let h = 0; h < q.length; h++) { const i = q[h], id = terrOf[i]; nb4(i, NB); for (const j of NB) if (j >= 0 && land[j] && terrOf[j] < 0) { terrOf[j] = id; q.push(j); } }
+  // islands that no seed reached join the nearest seed
+  for (let i = 0; i < N; i++) {
+    if (!land[i] || terrOf[i] >= 0) continue;
+    const comp = [i]; terrOf[i] = -2; let sx = 0, sy = 0;
+    for (let h = 0; h < comp.length; h++) { const k = comp[h]; sx += k % COLS; sy += (k / COLS) | 0; nb4(k, NB); for (const j of NB) if (j >= 0 && land[j] && terrOf[j] === -1) { terrOf[j] = -2; comp.push(j); } }
+    const mc = sx / comp.length, mr = sy / comp.length; let best = 0, bd = 1e9;
+    for (const t of regions) { const c = (t.lon + 180) / RES, r = (LAT_TOP - t.lat) / RES, d = (c - mc) ** 2 + (r - mr) ** 2; if (d < bd) { bd = d; best = t.id; } }
+    for (const k of comp) terrOf[k] = best;
+  }
+  for (let i = 0; i < N; i++) if (land[i]) regions[terrOf[i]].tiles.push(i);
+  const adj = regions.map(() => new Set<number>());
+  for (let i = 0; i < N; i++) {
+    if (!land[i]) continue; const c = i % COLS;
+    for (const j of [c < COLS - 1 ? i + 1 : -1, i + COLS < N ? i + COLS : -1]) if (j >= 0 && land[j] && terrOf[j] !== terrOf[i]) { adj[terrOf[i]].add(terrOf[j]); adj[terrOf[j]].add(terrOf[i]); }
+  }
+  const seaLane = new Set<string>();
+  for (const [a, b] of SEA) { const A = byName[a], B = byName[b]; adj[A.id].add(B.id); adj[B.id].add(A.id); seaLane.add(A.id + '|' + B.id); seaLane.add(B.id + '|' + A.id); A.seaAdj.push(B.id); B.seaAdj.push(A.id); }
+  for (const t of regions) {
+    t.adj = [...adj[t.id]].sort((a, b) => a - b);
+    let mx = 0, mz = 0; for (const i of t.tiles) { mx += i % COLS; mz += (i / COLS) | 0; } mx /= t.tiles.length; mz /= t.tiles.length;
+    let best = t.tiles[0], bd = 1e9;
+    for (const i of t.tiles) {
+      const c = i % COLS, r = (i / COLS) | 0; let inner = 0;
+      for (let dr = -3; dr <= 3; dr++) for (let dc = -3; dc <= 3; dc++) { const j = i + dr * COLS + dc; if (j >= 0 && j < N && land[j] && terrOf[j] === t.id) inner++; }
+      const d = (c - mx) ** 2 + (r - mz) ** 2 + (49 - inner) * 9 + (river[i] ? 90 : 0); if (d < bd) { bd = d; best = i; }
+    }
+    t.anchor = best; t.cx = tx(best % COLS); t.cz = tz((best / COLS) | 0);
+  }
+  const borderNb = new Int16Array(N).fill(-1);
+  for (let i = 0; i < N; i++) { if (!land[i]) continue; nb4(i, NB); for (const j of NB) if (j >= 0 && land[j] && terrOf[j] !== terrOf[i]) { borderNb[i] = terrOf[j]; break; } }
+  cache = { land, river, terrOf, borderNb, regions, byName, seaLane };
+  return cache;
+}
+
+/** Shortest world-space x difference across the date line. */
+export function wrapDx(ax: number, bx: number) { let dx = bx - ax; if (dx > HW) dx -= 2 * HW; if (dx < -HW) dx += 2 * HW; return dx; }

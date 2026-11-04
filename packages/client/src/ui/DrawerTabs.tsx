@@ -77,7 +77,7 @@ export function NeighbourRow({ from, to, list, label }: { from: number; to: numb
   const { g, me } = sim; const W = buildWorld(); const src = g.regions[from]; const shown = g.regions[list]; const F = FACTIONS[shown.owner];
   const units = totalUnits(garrisonOf(g, shown)); const sea = W.seaLane.has(from + '|' + to);
   const disabled = src.battle >= 0 || totalUnits(src.units) < 2;
-  const info = list === to ? `${shown.owner === me ? 'Yours' : F.short} · ${units} units` : `${units} available`;
+  const info = list === to ? `${shown.owner === me ? 'Yours' : F.short} · ${units} ${units === 1 ? 'unit' : 'units'}` : `${units} available`;
   return (
     <div className="it nb">
       <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />

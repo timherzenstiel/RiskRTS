@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FACTIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
 import { click } from './actions';
+import { Scoreboard } from './Scoreboard';
 import { MenuIcon, PauseIcon } from './icons';
 
 const SPEEDS = [1, 2, 4];
@@ -37,10 +38,11 @@ export function TopBar() {
           {FACTIONS.map((x, i) => (
             <button key={i} className={'pill' + (i === me ? ' me' : '') + (g.factions[i].alive ? '' : ' dead')} style={{ '--c': x.color } as React.CSSProperties}
               title={x.name} aria-label={`${x.name}: ${counts[i]} regions. Open scoreboard`} aria-expanded={scoreOpen} onClick={() => { click(); ui().toggleScore(); }}>
-              <i />{x.key} {counts[i]}
+              <i /><span className="k">{x.key}</span> <span className="c">{counts[i]}</span>
             </button>
           ))}
         </div>
+        <Scoreboard />
       </div>
 
       <div className="right">

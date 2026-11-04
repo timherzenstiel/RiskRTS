@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Renderer harness (dev only)</title>
+<style>
+:root{--danger:#f0705c;--f-head:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;--f-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif}
+html,body{margin:0;height:100%;background:#0a0d0f;overflow:hidden;font-family:var(--f-body)}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none;cursor:grab}
+#view.smooth{image-rendering:auto}
+#view.order{cursor:crosshair}
+#labels{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+#hud{position:fixed;left:8px;top:8px;color:#efeadc;font:12px/1.3 monospace;background:rgba(0,0,0,.5);padding:4px 8px;border-radius:6px;pointer-events:none}
+.tl{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:3px;white-space:nowrap;will-change:transform}
+.tl .n{background:var(--c);color:#0b0e10;border-radius:999px;padding:3px 8px 2px;min-width:26px;text-align:center;font:700 15px/1.05 var(--f-head);letter-spacing:.02em;box-shadow:0 0 0 2px rgba(8,10,12,.7),0 3px 8px rgba(0,0,0,.45)}
+.tl .nm{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 2px #000,0 0 8px rgba(0,0,0,.6);font:600 11px/1 var(--f-body);letter-spacing:.09em;text-transform:uppercase}
+.tl.sel .n{box-shadow:0 0 0 2px #fff,0 0 16px 3px var(--c)}
+.tl.tg .n{box-shadow:0 0 0 2px var(--danger),0 0 14px 2px rgba(240,112,92,.7)}
+.tl.ar .n{border-radius:7px;font-size:14px}
+.tl.sm .n{font-size:11px;padding:2px 5px 1px;min-width:0;box-shadow:0 0 0 1.5px rgba(8,10,12,.7)}
+.cl{position:absolute;left:0;top:0;font:500 11px/1 var(--f-body);letter-spacing:.04em;color:#f6f0dc;text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 2px #000;white-space:nowrap;will-change:transform}
+.cl.c3{font-size:13px;font-weight:600}
+.bm{position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;background:rgba(32,10,6,.88);border:1px solid var(--danger);color:#ffb3a5;padding:4px 10px 4px 8px;border-radius:999px;display:flex;align-items:center;gap:6px;font:600 12px var(--f-body);will-change:transform}
+.bm svg{display:block}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="labels"></div>
+<div id="hud"></div>
+<script type="module" src="./harness.ts"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ import type { Pool } from './pools';
 import { DEADC, HELM, K, TANKC, TANKD, UNI, UNI2 } from './palette';
 
 export class Models {
-  constructor(private readonly lit: Pool, private readonly glow: Pool) {}
+  constructor(private readonly lit: Pool, readonly glowPool: Pool) {}
 
   /** Push a box at local offset (lx,ly,lz) from (x,y,z), rotated by `face` about Y. */
   part(x: number, y: number, z: number, face: number, lx: number, ly: number, lz: number, sx: number, sy: number, sz: number, c: THREE.Color, pool: Pool = this.lit) {
@@ -99,7 +99,7 @@ export class Models {
   plane(x: number, y: number, z: number, face: number, c: THREE.Color, S: number) {
     const p = this.part.bind(this);
     p(x, y, z, face, 0, 0, 0, .04 * S, .04 * S, .24 * S, c); p(x, y, z, face, 0, .035 * S, .03 * S, .34 * S, .008 * S, .06 * S, K.wing); p(x, y, z, face, 0, -.015 * S, .03 * S, .3 * S, .008 * S, .055 * S, K.wing);
-    p(x, y, z, face, 0, .012 * S, -.11 * S, .12 * S, .006 * S, .04 * S, K.wing); p(x, y, z, face, 0, .03 * S, -.11 * S, .006 * S, .05 * S, .04 * S, c); p(x, y, z, face, 0, 0, .125 * S, .06 * S, .006 * S, .006 * S, K.gun, this.glow);
+    p(x, y, z, face, 0, .012 * S, -.11 * S, .12 * S, .006 * S, .04 * S, K.wing); p(x, y, z, face, 0, .03 * S, -.11 * S, .006 * S, .05 * S, .04 * S, c); p(x, y, z, face, 0, 0, .125 * S, .06 * S, .006 * S, .006 * S, K.gun, this.glowPool);
   }
 
   corpse(x: number, y: number, z: number, face: number, f: number) {

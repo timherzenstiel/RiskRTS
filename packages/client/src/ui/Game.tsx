@@ -8,7 +8,6 @@ import { Feed } from './Feed';
 import { Hint } from './Hint';
 import { Minimap } from './Minimap';
 import { Overlays } from './Overlays';
-import { Scoreboard } from './Scoreboard';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -72,7 +71,6 @@ export function Game() {
     <div id="app" className={hasDrawer ? 'has-drawer' : ''}>
       <Stage />
       <TopBar />
-      <Scoreboard />
       <Drawer />
       <div id="leftcol"><Feed /><Minimap /></div>
       <div id="bottom"><BattleCard /><Hint /></div>

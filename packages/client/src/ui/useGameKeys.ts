@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import type { UnitType } from '@riskrts/shared';
 import { useUi } from '../game/store';
+import { useNet } from './netStore';
 
 const KEY_UNITS: UnitType[] = ['inf', 'mg', 'art', 'tank'];
 let lastSpeed = 1;
@@ -12,7 +13,7 @@ export function useGameKeys() {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const ui = useUi.getState(); const s = ui.session; if (!s) return;
+      const ui = useUi.getState(); const s = ui.session; if (!s || useNet.getState().hostLost) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         if (ui.overlay) ui.setOverlay(null);

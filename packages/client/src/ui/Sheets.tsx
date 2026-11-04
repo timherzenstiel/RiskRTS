@@ -6,6 +6,8 @@ import { click, quitToTitle } from './actions';
 import { writeSave } from './storage';
 import { Modal } from './Modal';
 
+const lc = (t: string) => t[0].toLowerCase() + t.slice(1);
+
 function Progress({ g, me }: { g: GameState; me: number }) {
   const m = g.factions[me].mission; if (!m) return null;
   const mine = g.regions.filter(r => r.owner === me); const W = buildWorld();
@@ -94,7 +96,7 @@ export function MenuSheet({ onHelp }: { onHelp: () => void }) {
 export function EndSheet() {
   const sim = useSim(); if (!sim) return null;
   const { g, me } = sim; const won = g.winner === me; const winner = g.winner !== null ? g.factions[g.winner] : null;
-  const wm = winner?.mission ? missionText(winner.mission)[0].toLowerCase() : null;
+  const wm = winner?.mission ? lc(missionText(winner.mission)[0]) : null;
   const text = g.winner === null ? 'Every human power has been destroyed. The war is lost.'
     : won ? `Your sealed orders are fulfilled${wm ? `: ${wm}` : ''}.` : `${FACTIONS[g.winner].the[0].toUpperCase() + FACTIONS[g.winner].the.slice(1)} has fulfilled its sealed orders${wm ? `: ${wm}` : ''}.`;
   return (

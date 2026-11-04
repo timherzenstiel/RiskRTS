@@ -11,7 +11,6 @@ export function Stage() {
   const labelsRef = useRef<HTMLDivElement>(null);
   const session = useUi(s => s.session);
   const quality = useUi(s => s.quality);
-  const orderMode = useUi(s => s.orderMode);
   const qualityRef = useRef(quality); qualityRef.current = quality;
 
   useEffect(() => {
@@ -56,6 +55,13 @@ export function Stage() {
       }
     };
     raf = requestAnimationFrame(loop);
+    // Browsers pause requestAnimationFrame in hidden tabs. A host must keep simulating so guests are not frozen.
+    const bg = setInterval(() => {
+      if (!document.hidden || session.kind === 'guest') return;
+      const now = performance.now(); let left = Math.min(5, (now - last) / 1000); last = now;
+      while (left > 1e-3) { const d = Math.min(.25, left); session.update(d); left -= d; }
+      ui().pump();
+    }, 500);
 
     const onResize = () => renderer.resize();
     window.addEventListener('resize', onResize);
@@ -63,7 +69,7 @@ export function Stage() {
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
     ro?.observe(canvas);
     return () => {
-      cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf); clearInterval(bg);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
       ro?.disconnect();
@@ -76,7 +82,8 @@ export function Stage() {
 
   return (
     <div className="stage">
-      <canvas ref={canvasRef} id="view" className={(quality === 0 ? 'smooth ' : '') + (orderMode ? 'order' : '')} aria-label="World map of 1914" />
+      {/* The renderer toggles its own classes on the canvas (smooth / order / drag), so React must not manage className. */}
+      <canvas ref={canvasRef} id="view" aria-label="World map of 1914" />
       <div ref={labelsRef} id="labels" aria-hidden="true" />
     </div>
   );

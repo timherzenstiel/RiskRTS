@@ -19,8 +19,12 @@ export function Title() {
     <main className="screen title">
       <div className="bgfx" aria-hidden="true" />
       <div className="sheet glass">
+        <div className="tgrid">
+          <div className="tcol">
         <div><div className="kicker">The world at war · August 1914</div><h1>Fronts<br />of 1914</h1></div>
         <p className="lede">Six empires, one map. Supply convoys reach every power at the same instant, so everybody builds and marches at once. Claim regions, dig in, and finish your sealed orders before anyone else finishes theirs. Battles fight themselves. Zoom in and watch.</p>
+          </div>
+          <div className="tcol">
         <label className="field"><span className="lbl">Your name</span>
           <input value={name} maxLength={20} placeholder="Commander" autoComplete="nickname" onChange={e => { setName(e.target.value); lsSet(NAME_KEY, e.target.value); }} /></label>
         <div className="menu-btns">
@@ -34,6 +38,9 @@ export function Title() {
         </div>
         {!caps.webgl && <p className="notice" role="alert">This browser does not seem to support WebGL, so the 3D map may not start. Try a current Chrome, Edge, Firefox or Safari.</p>}
         {!caps.webrtc && <p className="notice" role="alert">WebRTC is not available here, so online multiplayer is switched off. Single player still works.</p>}
+
+          </div>
+        </div>
         <footer className="foot"><span>v{VERSION}</span><a href={REPO_URL} target="_blank" rel="noreferrer noopener">github.com/timherzenstiel/RiskRTS</a></footer>
       </div>
     </main>

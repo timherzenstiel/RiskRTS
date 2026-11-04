@@ -67,6 +67,10 @@ describe('snapshots', () => {
     expect(m.factions.map(f => f.supply)).toEqual(g.factions.map(f => f.supply));
     expect(m.battles.length).toBe(g.battles.length);
     expect(m.factions[1].mission).toEqual(g.factions[1].mission);
+    expect(m.regions.map(r => r.defs.length)).toEqual(g.regions.map(r => r.defs.length));
+    expect(m.regions.map(r => r.contested)).toEqual(g.regions.map(r => r.contested));
+    expect(m.regions.map(r => r.units.plane)).toEqual(g.regions.map(r => r.units.plane));
+    expect(m.cfg).toEqual(g.cfg);
   });
 });
 

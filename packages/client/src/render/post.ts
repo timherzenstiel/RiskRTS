@@ -46,7 +46,8 @@ export class Post {
 
   /** Per-frame tuning based on camera distance. */
   tune(dist: number) {
-    this.grade.uniforms.uAmt.value = lerp(2.2, 1.0, smooth(8, 90, dist));
+    // crisp up close (no miniature blur over the battlefield), gentle tilt-shift on the world map
+    this.grade.uniforms.uAmt.value = lerp(.15, 1.0, smooth(10, 70, dist));
     this.bloom.strength = lerp(.55, .3, smooth(10, 60, dist));
   }
 

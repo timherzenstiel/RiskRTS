@@ -1,14 +1,12 @@
-// Decorative life: merchant ships on sea routes and drifting clouds. Seeded, so every client sees the same traffic at start.
-import { HH, HW, ROUTES, Rng, wxLon, wzLat } from '@riskrts/shared';
+// Decorative life: merchant ships on sea routes. Seeded, so every client sees the same traffic at start.
+import { ROUTES, Rng, wxLon, wzLat } from '@riskrts/shared';
 import type { FxSystem } from './fxSystem';
 import type { Models } from './models';
-import type { Pool } from './pools';
 import { K } from './palette';
 import { lerp } from './util';
 
 interface Route { p: [number, number][]; seg: number[]; L: number }
 interface Ship { r: number; s: number; dir: 1 | -1; smoke: number }
-interface Cloud { x: number; z: number; y: number; sp: number; bx: [number, number, number, number, number, number][] }
 
 const out: [number, number, number] = [0, 0, 0];
 function routePos(r: Route, s: number) {
@@ -23,7 +21,6 @@ function routePos(r: Route, s: number) {
 export class Ambient {
   private readonly routes: Route[];
   private readonly ships: Ship[] = [];
-  private readonly clouds: Cloud[] = [];
 
   constructor() {
     const rng = new Rng(77);
@@ -34,11 +31,6 @@ export class Ambient {
       return { p, seg, L };
     });
     this.routes.forEach((r, ri) => { for (let k = 0; k < 2; k++) this.ships.push({ r: ri, s: rng.next() * r.L, dir: k ? 1 : -1, smoke: rng.next() }); });
-    for (let k = 0; k < 34; k++) {
-      const n = 5 + Math.floor(rng.next() * 8), bx: Cloud['bx'] = [];
-      for (let j = 0; j < n; j++) bx.push([(rng.next() - .5) * 3.2, rng.next() * .35, (rng.next() - .5) * 1.6, .8 + rng.next() * 1.4, .35 + rng.next() * .35, .6 + rng.next() * 1]);
-      this.clouds.push({ x: (rng.next() - .5) * 2 * HW, z: (rng.next() - .5) * 1.7 * HH, y: 7 + rng.next() * 2.5, bx, sp: .4 + rng.next() * .4 });
-    }
   }
 
   update(dt: number, fx: FxSystem) {
@@ -49,14 +41,9 @@ export class Ambient {
         fx.spawn(p[0] - Math.sin(fc) * .03, .3, p[1] - Math.cos(fc) * .03, -Math.sin(fc) * .1, .12, -Math.cos(fc) * .1, 0, 1.8, .04, .12, K.smoke2);
       }
     }
-    for (const c of this.clouds) { c.x += c.sp * dt; if (c.x > HW + 4) c.x = -HW - 4; }
   }
 
   drawShips(m: Models, t: number) {
-    for (const s of this.ships) { const p = routePos(this.routes[s.r], s.s); m.ship(p[0], p[1], s.dir > 0 ? p[2] : p[2] + Math.PI, K.funnel, 1.6, t); }
-  }
-
-  drawClouds(pool: Pool) {
-    for (const c of this.clouds) for (const [ox, oy, oz, sx, sy, sz] of c.bx) pool.push(c.x + ox, c.y + oy, c.z + oz, sx, sy, sz, 0, oy > .2 ? K.cloud : K.cloud2);
+    for (const s of this.ships) { const p = routePos(this.routes[s.r], s.s); m.ship(p[0], p[1], s.dir > 0 ? p[2] : p[2] + Math.PI, K.funnel, 1, t); }
   }
 }

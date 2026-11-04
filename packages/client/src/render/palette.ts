@@ -11,6 +11,7 @@ export const K = {
   stump: col('#3a2c20'), crate: col('#7a6040'), cloud: col('#eef1ec'), cloud2: col('#d7dcd6'), wing: col('#cfc6a4'), khaki: col('#b09a6a'),
   canvas: col('#cfc6a2'), canvas2: col('#a99f7e'), red: col('#8c2f26'), beam: col('#6b5236'), bush: col('#3d5530'), hay: col('#c9b45f'),
   white: col('#ffffff'), spark: col('#ffd9a0'),
+  concrete: col('#a29e92'), concrete2: col('#7f7b70'), slit: col('#171612'), runway: col('#8f8b7c'), runway2: col('#d8d3c0'), hangar: col('#6d6a5c'), flakpuff: col('#2b2a28'),
 };
 
 const mix = (a: string, b: string, t: number) => col(a).lerp(col(b), t);

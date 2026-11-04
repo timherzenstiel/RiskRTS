@@ -2,7 +2,9 @@
 import type { UnitType } from '@riskrts/shared';
 import type * as THREE from 'three';
 import type { Pool } from './pools';
-import { DEADC, HELM, K, TANKC, TANKD, UNI, UNI2 } from './palette';
+import { DEADC, HELM, K, TANKC, TANKD, UNI, UNI2, facCol } from './palette';
+
+const FLAG = facCol;
 
 export class Models {
   constructor(private readonly lit: Pool, readonly glowPool: Pool) {}
@@ -68,6 +70,7 @@ export class Models {
   /** Draw any unit type. `recoil` (0..1) pulls an artillery barrel back after a shot. */
   unit(type: UnitType, x: number, y: number, z: number, face: number, f: number, S: number, walk: number, recoil: number) {
     if (type === 'inf') { this.soldier(x, y, z, face, f, S, false, walk); return; }
+    if (type === 'plane') { this.plane(x, y, z, face, FLAG[f] ?? K.wing, S * .9); return; }
     const p = this.part.bind(this), s = Math.sin(face), c = Math.cos(face);
     if (type === 'mg') {
       p(x, y, z, face, 0, .045 * S, .05 * S, .03 * S, .03 * S, .12 * S, K.jacket); p(x, y, z, face, 0, .045 * S, .12 * S, .01 * S, .01 * S, .03 * S, K.gun);
@@ -102,8 +105,57 @@ export class Models {
     p(x, y, z, face, 0, .012 * S, -.11 * S, .12 * S, .006 * S, .04 * S, K.wing); p(x, y, z, face, 0, .03 * S, -.11 * S, .006 * S, .05 * S, .04 * S, c); p(x, y, z, face, 0, 0, .125 * S, .06 * S, .006 * S, .006 * S, K.gun, this.glowPool);
   }
 
-  corpse(x: number, y: number, z: number, face: number, f: number) {
-    this.part(x, y, z, face + .4, 0, .014, 0, .07, .028, .15, DEADC[f]);
-    this.part(x, y, z, face + .4, 0, .02, .09, .04, .035, .04, K.skin);
+  /** Concrete pillbox with a firing slit facing `face`. `hold` = holdout (cut off, shown with a white flag). */
+  pillbox(x: number, y: number, z: number, face: number, f: number, S: number, hold = false) {
+    const p = this.part.bind(this);
+    p(x, y, z, face, 0, .03 * S, 0, .15 * S, .06 * S, .15 * S, K.concrete);
+    p(x, y, z, face, 0, .015 * S, 0, .18 * S, .03 * S, .18 * S, K.sand2);
+    p(x, y, z, face, 0, .068 * S, 0, .17 * S, .018 * S, .17 * S, K.concrete2);
+    p(x, y, z, face, 0, .042 * S, .076 * S, .1 * S, .012 * S, .006 * S, K.slit);
+    p(x, y, z, face, .05 * S, .045 * S, .07 * S, .012 * S, .006 * S, .04 * S, K.gun);
+    p(x, y, z, face, -.06 * S, .11 * S, -.06 * S, .006 * S, .08 * S, .006 * S, K.pole);
+    p(x, y, z, face, -.04 * S, .135 * S, -.06 * S, .04 * S, .025 * S, .004 * S, hold ? K.white : FLAG[f] ?? K.white);
+  }
+
+  /** Sandbagged heavy gun pit. `recoil` 0..1 after a shot. */
+  emplacement(x: number, y: number, z: number, face: number, f: number, S: number, recoil = 0) {
+    const p = this.part.bind(this);
+    for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; if (Math.abs(Math.cos(a)) > .9 && Math.cos(a) > 0) continue; p(x, y, z, face + a, 0, .018 * S, .12 * S, .07 * S, .036 * S, .035 * S, k % 2 ? K.sand : K.sand2); }
+    p(x, y, z, face, 0, .02 * S, 0, .12 * S, .03 * S, .12 * S, K.olive);
+    p(x, y, z, face, 0, .07 * S, (.09 - recoil * .05) * S, .03 * S, .03 * S, .26 * S, K.gun);
+    p(x, y, z, face, 0, .07 * S, .0, .1 * S, .07 * S, .014 * S, K.olive);
+    p(x, y, z, face, 0, .045 * S, -.06 * S, .06 * S, .05 * S, .07 * S, K.jacket);
+    p(x, y, z, face, -.14 * S, .012 * S, -.06 * S, .03 * S, .024 * S, .03 * S, K.crate); p(x, y, z, face, -.15 * S, .012 * S, -.02 * S, .03 * S, .024 * S, .03 * S, K.crate);
+    p(x, y, z, face, .1 * S, .11 * S, -.1 * S, .006 * S, .08 * S, .006 * S, K.pole); p(x, y, z, face, .12 * S, .135 * S, -.1 * S, .04 * S, .025 * S, .004 * S, FLAG[f] ?? K.white);
+  }
+
+  /** Anti-aircraft gun on a platform, barrel raised. */
+  flak(x: number, y: number, z: number, face: number, f: number, S: number, recoil = 0) {
+    const p = this.part.bind(this);
+    p(x, y, z, face, 0, .01 * S, 0, .16 * S, .02 * S, .16 * S, K.concrete2);
+    for (const [sx, sz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) p(x, y, z, face, sx * .08 * S, .006 * S, sz * .08 * S, .05 * S, .012 * S, .05 * S, K.wood);
+    p(x, y, z, face, 0, .04 * S, 0, .05 * S, .04 * S, .05 * S, K.olive);
+    for (let k = 0; k < 5; k++) p(x, y, z, face, 0, (.065 + k * .025) * S, (.01 + k * .018 - recoil * .01) * S, .016 * S, .03 * S, .02 * S, K.gun);
+    p(x, y, z, face, .04 * S, .05 * S, -.02 * S, .006 * S, .03 * S, .03 * S, K.olive);
+    p(x, y, z, face, -.07 * S, .03 * S, -.07 * S, .025 * S, .03 * S, .02 * S, K.crate);
+    void f;
+  }
+
+  /** Grass strip with hangar and windsock; `planes` parked aircraft. */
+  airfield(x: number, y: number, z: number, face: number, f: number, S: number, planes: number, t: number) {
+    const p = this.part.bind(this);
+    p(x, y, z, face, 0, .002 * S, 0, .16 * S, .004 * S, .9 * S, K.runway);
+    for (let k = -3; k <= 3; k++) p(x, y, z, face, 0, .0045 * S, k * .12 * S, .012 * S, .002 * S, .05 * S, K.runway2);
+    p(x, y, z, face, .2 * S, .04 * S, -.2 * S, .16 * S, .08 * S, .2 * S, K.hangar);
+    p(x, y, z, face, .2 * S, .085 * S, -.2 * S, .12 * S, .02 * S, .21 * S, K.roof); p(x, y, z, face, .2 * S, .1 * S, -.2 * S, .07 * S, .014 * S, .21 * S, K.roof);
+    p(x, y, z, face, .118 * S, .03 * S, -.2 * S, .005 * S, .05 * S, .14 * S, K.slit);
+    p(x, y, z, face, -.14 * S, .05 * S, .35 * S, .005 * S, .1 * S, .005 * S, K.pole);
+    p(x, y, z, face + Math.sin(t * 1.3) * .5, -.14 * S, .095 * S, .35 * S + .02 * S, .012 * S, .012 * S, .04 * S, K.funnel);
+    for (let k = 0; k < Math.min(3, planes); k++) this.plane(x + Math.cos(face) * (.2 + k * .14) * S, y + .02 * S, z - Math.sin(face) * (.2 + k * .14) * S + .1 * S, face + Math.PI / 2, FLAG[f] ?? K.wing, .45 * S);
+  }
+
+  corpse(x: number, y: number, z: number, face: number, f: number, S = 1) {
+    this.part(x, y, z, face + .4, 0, .014 * S, 0, .07 * S, .028 * S, .15 * S, DEADC[f]);
+    this.part(x, y, z, face + .4, 0, .02 * S, .09 * S, .04 * S, .035 * S, .04 * S, K.skin);
   }
 }

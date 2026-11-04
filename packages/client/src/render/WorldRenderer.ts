@@ -1,7 +1,7 @@
 // Three.js world renderer: a Command & Conquer style top-down war map that zooms into painted, pixel-art ground and battlefields.
 // Implements the contract in api.ts. It never mutates game state; it only reads session.state and drains visual effects.
 import * as THREE from 'three';
-import { AIR_RANGE, buildWorld, hops, tileAtW, type Battle, type Fx, type GameState, type World } from '@riskrts/shared';
+import { AIR_RANGE, HW, buildWorld, hops, tileAtW, wrapDx, type Battle, type Fx, type GameState, type World } from '@riskrts/shared';
 import type { Session } from '../game/session';
 import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
@@ -191,7 +191,10 @@ class WorldRenderer implements WorldRendererApi {
     const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now;
     this.labels.update(c);
     let active = 0; if (g) for (const b of g.battles) if (!b.ended) active++;
+    const hh = .344 * this.rig.dist;
+    Sfx.listen(this.rig.tx, this.rig.tz, this.rig.dist, hh, hh * this.vw / Math.max(1, this.vh), HW);
     Sfx.level(active, this.rig.dist);
+    this.engineSound(g, hh, hh * this.vw / Math.max(1, this.vh));
     this.debug.stats.cpuMs = performance.now() - t0; this.debug.stats.frames = this.frameNo;
   }
 
@@ -283,6 +286,28 @@ class WorldRenderer implements WorldRendererApi {
     if (Math.random() < dt * 2) fx.spawn(v.cx + (Math.random() - .5) * 36 * BS, v.y + .05, v.cz + (Math.random() - .5) * 26 * BS, .04, .05, .02, 0, 5, .1, .35, K.smoke2);
   }
 
+  /** Tanks and aircraft near the middle of the screen drive the engine beds (count and average stereo position). */
+  private engineSound(g: GameState | null, hh: number, hw: number) {
+    let tanks = 0, tp = 0, planes = 0, pp = 0;
+    if (g) {
+      const rig = this.rig, near = (x: number, z: number) => Math.abs(wrapDx(rig.tx, x)) < hw * 1.1 && Math.abs(z - rig.tz) < hh * 1.1;
+      for (const b of g.battles) {
+        const v = this.views.get(b.id); if (!v || b.ended || !this.visible.has(b.id)) continue;
+        for (const a of b.agents) {
+          if (a.dead || a.out || (a.type !== 'tank' && a.type !== 'plane')) continue;
+          const x = v.cx + a.x * BS, z = v.cz + a.z * BS; if (!near(x, z)) continue;
+          const p = wrapDx(rig.tx, x) / hw; if (a.type === 'tank') { tanks++; tp += p; } else { planes++; pp += p; }
+        }
+      }
+      // squadrons in the air between regions, heard when they cross the view
+      if (rig.dist < 60) for (const a of g.armies) {
+        if (!a.air) continue; const x = a.ax + a.dx * a.t, z = a.az + a.dz * a.t; if (!near(x, z)) continue;
+        const n = Math.min(4, a.units.plane || 1) * .6; planes += n; pp += wrapDx(rig.tx, x) / hw * n;
+      }
+    }
+    Sfx.engines(tanks, tanks ? tp / tanks : 0, planes, planes ? pp / planes : 0);
+  }
+
   /** Turn simulation effects into particles, tracers, craters and sounds. Effects of battles that are not on screen are dropped. */
   private processFx(s: Session) {
     const list = s.drainFx();
@@ -299,25 +324,26 @@ class WorldRenderer implements WorldRendererApi {
     if (f.k === 'flak') {
       const y = v.y;
       const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, wy = y + AIR_Y + (Math.random() - .3) * .08;
-      Sfx.shot(.5);
+      Sfx.flak(wx, wz);
       fx.spawn(wx, wy, wz, 0, 0, 0, 0, .1, .02, .05, K.flash, F_GLOW); fx.spawn(wx, wy, wz, (Math.random() - .5) * .02, .01, 0, 0, 1.6, .03, .07, K.flakpuff);
     } else if (f.k === 'shot') {
       const y = fy(f.x0, f.z0), y1 = fy(f.x1, f.z1), fromAir = f.type === 'plane', toAir = !!f.air && !fromAir;
       const x0 = v.cx + f.x0 * BS, z0 = v.cz + f.z0 * BS, x1 = v.cx + f.x1 * BS, z1 = v.cz + f.z1 * BS;
       const ys = fromAir ? y + AIR_Y : y + (f.type === 'tank' ? .035 : f.type === 'mg' || f.type === 'pill' ? .025 : .05), ye = f.air ? y + AIR_Y : y1 + .04;
       fx.tracer(x0, ys, z0, x1, ye, z1, f.type === 'mg' || f.type === 'pill' ? .025 : .035);
-      if (toAir || fromAir) { if (Math.random() < .5) Sfx.shot(1.1); fx.spawn(x0, ys, z0, 0, 0, 0, 0, .05, .012, .01, K.flash, F_GLOW); return; }
-      Sfx.shot(f.type === 'mg' ? 1.3 : .8);
+      if (toAir || fromAir) { if (Math.random() < .5) Sfx.shot(f.type, x0, z0, toAir); fx.spawn(x0, ys, z0, 0, 0, 0, 0, .05, .012, .01, K.flash, F_GLOW); return; }
+      Sfx.shot(f.type, x0, z0);
       if (Math.random() < .6) fx.spawn(x0, ys, z0, 0, 0, 0, 0, .06, .015, .01, K.flash, F_GLOW);
       if (Math.random() < .15) fx.spawn(x0, y + .06, z0, 0, .05, 0, 0, .9, .01, .03, K.smoke);
       if (f.hit) fx.spawn(x1, y1 + .04, z1, (Math.random() - .5) * .2, .3, (Math.random() - .5) * .2, 3, .22, .01, .006, K.dirt, 0, y1);
     } else if (f.k === 'fire') {
       const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
-      Sfx.cannon();
+      const sp = this.session ? Math.max(.25, Math.min(this.session.speed, 4)) : 1;
+      Sfx.gun(wx, wz, f.tx !== undefined ? v.cx + f.tx * BS : undefined, f.tz !== undefined ? v.cz + f.tz * BS : undefined, (f.fl ?? 0) / sp);
       fx.spawn(wx, y + .05, wz, 0, .1, 0, 0, .1, .035, .06, K.flash, F_GLOW); fx.spawn(wx, y + .05, wz, 0, .07, 0, 0, 1.2, .025, .08, K.smoke);
     } else {
       const s = f.s * .65, wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
-      Sfx.boom(s);
+      Sfx.boom(wx, wz, s);
       fx.spawn(wx, y + .05, wz, 0, 0, 0, 0, .16, .16 * s, .28 * s, K.fire, F_GLOW); fx.spawn(wx, y + .03, wz, 0, 0, 0, 0, .08, .3 * s, .34 * s, K.flash, F_GLOW);
       for (let i = 0; i < 10; i++) { const an = Math.random() * 6.28, sp = .3 + Math.random() * .6; fx.spawn(wx, y + .03, wz, Math.cos(an) * sp * s, (1 + Math.random()) * s, Math.sin(an) * sp * s, 4, .8, .03, .025, Math.random() < .5 ? K.dirt : K.boot, 0, y); }
       for (let i = 0; i < 4; i++) fx.spawn(wx + (Math.random() - .5) * .1, y + .08, wz + (Math.random() - .5) * .1, (Math.random() - .5) * .05, .18, (Math.random() - .5) * .05, 0, 1.8 + Math.random(), .08 * s, .22 * s, Math.random() < .5 ? K.smoke : K.smoke2);

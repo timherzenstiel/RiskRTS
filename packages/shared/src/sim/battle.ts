@@ -6,7 +6,7 @@ import { FACTIONS } from '../data/factions';
 import { wrapDx } from '../world/build';
 import { emit, rnd, updateContested, world } from './core';
 import { checkElim, checkMissions } from './missions';
-import { PACES, type Agent, type Army, type Battle, type Defence, type GameState, type RegionState } from './types';
+import { PACES, type Agent, type Army, type Battle, type Defence, type Shell, type GameState, type RegionState } from './types';
 
 export const trenchX = (z: number) => 1.8 + ((Math.floor((z + 40) / 3)) % 2 ? .6 : -.6);
 const FX_CAP = 900;
@@ -138,8 +138,9 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
       if (a.cd <= 0) {
         a.cd = s.rof * P.rof * (.75 + rnd(g) * .5); a.fireT = g.time;
         if (s.splash && t.type !== 'plane') {
-          b.shells.push({ x: t.x + (rnd(g) - .5) * 3.5, z: t.z + (rnd(g) - .5) * 3.5, time: .5 + d * .03, f: a.f, dmg: s.dmg, sp: s.splash, src: a.type });
-          if (fx && fx.length < FX_CAP) fx.push({ k: 'fire', b: b.id, x: a.x + Math.sin(a.face) * 2, z: a.z + Math.cos(a.face) * 2, face: a.face });
+          const sh: Shell = { x: t.x + (rnd(g) - .5) * 3.5, z: t.z + (rnd(g) - .5) * 3.5, time: .5 + d * .03, f: a.f, dmg: s.dmg, sp: s.splash, src: a.type };
+          b.shells.push(sh);
+          if (fx && fx.length < FX_CAP) fx.push({ k: 'fire', b: b.id, x: a.x + Math.sin(a.face) * 2, z: a.z + Math.cos(a.face) * 2, face: a.face, tx: sh.x, tz: sh.z, fl: sh.time });
         } else {
           const air = t.type === 'plane', acc = s.acc * (air && a.type !== 'flak' ? .6 : 1);
           const hit = rnd(g) < acc * (1 - .45 * d / s.range);

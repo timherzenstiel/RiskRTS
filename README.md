@@ -1,18 +1,33 @@
-# RiskRTS – Fronts of 1914
+# Fronts of 1914
 
-A real-time, Risiko-style World War I strategy game built with Three.js (voxel / pixel-art look), single HTML file.
+A real-time, Risiko-style World War I strategy game. Six empires, 54 regions, secret missions, simultaneous play (no turns: a supply convoy reaches every power at the same moment), and battles that fight themselves while you zoom from the operations map into a 3D pixel-art battlefield. Runs in the browser as an installable PWA, with peer-to-peer multiplayer.
 
-- 54 regions on a rasterised world map, 6 powers, secret missions
-- No turns: a supply convoy arrives for every power at the same time every 20 s
-- Recruit troops, build trenches / factories / barracks, march on neighbouring regions
-- Battles are auto-resolved agent simulations you can zoom into
+**Play:** https://timherzenstiel.github.io/RiskRTS/ (after the first deploy, see [docs/deploy.md](docs/deploy.md))
 
-## Run
-Open `index.html` in a browser (needs internet for the three.js CDN and Google Fonts), or serve the folder:
+## Quick start
 
-    python3 -m http.server 8000
+```bash
+npm install
+npm run dev          # http://localhost:5173/RiskRTS/
+npm test             # simulation + network-protocol tests
+npm run typecheck
+npm run build        # production build -> packages/client/dist
+```
+
+## Layout
+
+| Package | What it is |
+|---|---|
+| `packages/shared` | The game itself: world map, rules, economy, AI, auto-battle simulation, commands, snapshots, wire protocol. Pure TypeScript, no DOM, fully tested. Runs identically in a browser or on a server. |
+| `packages/client` | Vite + React + Three.js. React renders the interface, `render/` draws the world from the simulation state, `net/` is the WebRTC transport and lobby, `game/` holds sessions and UI state. |
+| `legacy/` | The single-file prototypes this project grew out of (kept for reference). |
+
+See [docs/architecture.md](docs/architecture.md) for how the pieces fit and [docs/multiplayer.md](docs/multiplayer.md) for the networking model.
+
+## Multiplayer in one paragraph
+
+GitHub Pages is static, so there is no game server. One player hosts: their browser runs the authoritative simulation and shares a 5-letter room code. Friends join over WebRTC (signalling through the free PeerJS cloud, game traffic is peer-to-peer). Guests send *commands*, the host validates them and streams *snapshots*. Because the simulation lives in `@riskrts/shared`, the same code can later run in a Node server behind a WebSocket `Channel` with no change to game rules or UI.
 
 ## Controls
-Click = select · right-click = march · drag/wheel = pan/zoom · 1-4 = recruit · Space = pause
 
-`tests/` contains the headless Playwright smoke tests used during development.
+Click a region to open it · right-click a neighbour to march · drag / wheel / pinch to pan and zoom · `1`–`4` recruit (Shift ×5) · `Space` pause (single player / host) · `Esc` deselect, then menu.

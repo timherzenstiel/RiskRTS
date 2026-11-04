@@ -100,16 +100,17 @@ export class DynamicDraw {
     for (const a of g.armies) {
       const [x, z] = armyPos(a), face = Math.atan2(a.dx, a.dz), c = Math.cos(face), s = Math.sin(face);
       if (a.air) {
-        const y = Math.max(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to)) + .9 + Math.sin(a.t * Math.PI) * .4, n = Math.min(3, a.units.plane);
-        for (let k = 0; k < n; k++) { const bx = k === 0 ? 0 : (k === 1 ? -.14 : .14), bz = k === 0 ? 0 : -.12; m.plane(x + bx * c + bz * s, y + Math.sin(T * 3 + k) * .01, z - bx * s + bz * c, face, facCol[a.owner], .75, a.owner); }
-      } else if (a.sea) m.ship(x, z, face, facCol[a.owner], 1.1, T);
-      else {
-        const y = lerp(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to), a.t) + Math.sin(a.t * Math.PI) * .25;
-        const tot = a.units.inf + a.units.mg + a.units.art + a.units.tank, n = Math.min(8, Math.max(2, Math.ceil(tot / 2)));
-        for (let k = 0; k < n; k++) { const row = Math.floor(k / 2), side = (k % 2 ? 1 : -1) * .03; m.soldier(x - s * row * .06 + c * side, y, z - c * row * .06 - s * side, face, a.owner, S, false, T * 9 + k * 1.3); }
-        if (a.units.tank) m.unit('tank', x + s * .1, y, z + c * .1, face, a.owner, S * .9, 0, 0);
-        if (a.units.art) m.unit('art', x - s * (n / 2 + 1) * .06, y, z - c * (n / 2 + 1) * .06, face, a.owner, S * .9, 0, 0);
-      }
+        // a V formation: the lead aircraft, then pairs stepping back and out
+        const y = Math.max(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to)) + .9 + Math.sin(a.t * Math.PI) * .4, n = Math.min(9, Math.max(1, a.units.plane));
+        for (let k = 0; k < n; k++) {
+          const row = Math.ceil(k / 2), bx = row * (k % 2 ? -.15 : .15), bz = -row * .13;
+          m.plane(x + bx * c + bz * s, y + Math.sin(T * 3 + k) * .012 - row * .015, z - bx * s + bz * c, face, facCol[a.owner], .75, a.owner);
+        }
+      } else if (a.sea) {
+        // the transport, with escorts in line astern for larger forces
+        const tot = a.units.inf + a.units.mg + a.units.art + a.units.tank, n = Math.min(4, 1 + Math.floor(tot / 10));
+        for (let k = 0; k < n; k++) { const back = k * .55, side = k === 0 ? 0 : (k % 2 ? .3 : -.3); m.ship(x - s * back + c * side, z - c * back - s * side, face, facCol[a.owner], k === 0 ? 1.1 : .8, T + k * .7); }
+      } else this.column(a, x, z, face, T);
       const fc = facCol[a.owner], rem = 1 - a.t, steps = Math.ceil(rem * Math.hypot(a.dx, a.dz) / .6), ly = a.air ? 1.2 : .62;
       for (let st = 0; st < steps; st++) {
         if (a.ret && st % 2) continue;
@@ -119,6 +120,33 @@ export class DynamicDraw {
         if (Math.abs(x1 - x0) < 5) this.lines.add(x0, ly, a.az + a.dz * t0, x1, ly, a.az + a.dz * t1, fc);
       }
     }
+  }
+
+  /**
+   * A marching column, front to back: tanks in pairs, a block of riflemen three abreast, machine-gun teams, then towed guns.
+   * Figures are roughly one per unit (capped), so a big army reads as a long column.
+   */
+  private column(a: GameState['armies'][number], x: number, z: number, face: number, T: number) {
+    const m = this.m, S = MAP_S, u = a.units, c = Math.cos(face), s = Math.sin(face), f = a.owner;
+    const y0 = lerp(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to), a.t);
+    const nT = Math.min(8, u.tank), nI = Math.min(45, u.inf), nM = Math.min(6, u.mg), nA = Math.min(5, u.art);
+    const TS = .15, IS = .055, MS = .085, AS = .14;
+    const len = Math.ceil(nT / 2) * TS + Math.ceil(nI / 3) * IS + Math.ceil(nM / 2) * MS + nA * AS;
+    let fwd = len / 2;
+    // one helper places a figure `fwd` along the march and `side` to the right, standing on the ground
+    const P = (side: number) => { const px = x + s * fwd + c * side, pz = z + c * fwd - s * side; return [px, this.hAt(px, pz, y0), pz] as const; };
+    for (let k = 0; k < nT; k += 2) {
+      for (let j = 0; j < Math.min(2, nT - k); j++) { const [px, py, pz] = P(nT - k === 1 ? 0 : (j ? .07 : -.07)); m.unit('tank', px, py, pz, face, f, S * .9, 0, 0); }
+      if (Math.random() < .02) { const [px, py, pz] = P(0); this.fx.spawn(px - s * .08, py + .05, pz - c * .08, 0, .08, 0, 0, 1.6, .02, .07, K.smoke2, F_MAP); }
+      fwd -= TS;
+    }
+    for (let k = 0; k < nI; k++) {
+      const col = k % 3, side = (col - 1) * .04 + Math.sin(k * 7.1) * .005;
+      const [px, py, pz] = P(side); m.soldier(px, py, pz, face, f, S, false, T * 9 + k * 1.3);
+      if (col === 2 || k === nI - 1) fwd -= IS;
+    }
+    for (let k = 0; k < nM; k++) { const [px, py, pz] = P(k % 2 ? .045 : -.045); m.unit('mg', px, py, pz, face, f, S * .9, T * 9 + k, 0); if (k % 2 || k === nM - 1) fwd -= MS; }
+    for (let k = 0; k < nA; k++) { const [px, py, pz] = P(0); m.unit('art', px, py, pz, face, f, S * .9, 0, 0); fwd -= AS; }
   }
 
   /** Smoke from factory chimneys (a few puffs per second across the map). */

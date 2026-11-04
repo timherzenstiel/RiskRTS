@@ -1,7 +1,7 @@
 // One zoomed-in battle: per-agent display smoothing and drawing. Troops stand on the real terrain; there is no painted battlefield.
 import { isDef, type Agent, type Battle, type UnitType } from '@riskrts/shared';
 import type { Models } from './models';
-import type { FxSystem } from './fxSystem';
+import { F_FLAME, F_HOT, type FxSystem } from './fxSystem';
 import { K, facCol } from './palette';
 import { clamp } from './util';
 
@@ -55,7 +55,12 @@ export class BattleView {
         if (a.dieT > 0 && simTime - a.dieT > 40) continue;
         if (a.type === 'plane') { const t = Math.min(1, (now - d.deadAt) / 1.2); if (t < 1) m.plane(wx, y + AIR_Y * (1 - t), wz, a.face + t * 3, K.smoke2, .45); else m.part(wx, y, wz, a.face, 0, .01, 0, .1, .02, .05, K.smoke2); if (t < 1 && Math.random() < .5) fx.spawn(wx, y + AIR_Y * (1 - t), wz, 0, .05, 0, 0, 1.2, .02, .08, K.smoke2); continue; }
         if (isDef(a.type)) { m.part(wx, y, wz, a.face, 0, .015, 0, .12, .03, .1, K.concrete2); m.part(wx, y, wz, a.face + .7, .03, .03, .02, .05, .03, .04, K.concrete); if (Math.random() < .03) fx.spawn(wx, y + .05, wz, .01, .12, 0, 0, 2, .03, .1, K.smoke2); continue; }
-        if (a.type === 'tank') { m.unit('tank', wx, y, wz, a.face, a.f, US, 0, 0); if (Math.random() < .04) fx.spawn(wx, y + .07, wz, .02, .12, 0, 0, 2, .02, .08, K.smoke2); }
+        if (a.type === 'tank') {
+          m.unit('tank', wx, y, wz, a.face, a.f, US, 0, 0);
+          const burning = now - d.deadAt < 25;
+          if (burning && Math.random() < .3) fx.spawn(wx + (Math.random() - .5) * .03, y + .04, wz + (Math.random() - .5) * .03, 0, .05, 0, 0, .45 + Math.random() * .3, .025, .045, K.fire, F_FLAME);
+          if (Math.random() < (burning ? .12 : .04)) fx.spawn(wx, y + .08, wz, .02, .12, 0, 0, 2.4, .025, .1, burning ? K.flakpuff : K.smoke2, burning ? F_HOT : 0);
+        }
         else m.corpse(wx, y, wz, a.face, a.f, US);
         continue;
       }

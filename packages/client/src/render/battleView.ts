@@ -168,14 +168,16 @@ export class BattleView {
 
   /** Draw static props into the lit pool. */
   drawProps(m: Models) {
-    const y = this.y, fy = Math.atan2(this.ax, this.az), p = m.part.bind(m);
+    // props share the troops' scale (PS); sandbags keep their length so the parapet stays closed
+    const y = this.y, fy = Math.atan2(this.ax, this.az), PS = .6;
+    const p = (x: number, yy: number, z: number, r: number, lx: number, ly: number, lz: number, sx: number, sy: number, sz: number, c: Parameters<Models['part']>[10]) => m.part(x, yy, z, r, lx * PS, ly * PS, lz * PS, sx * PS, sy * PS, sz * PS, c);
     for (const q of this.props) {
       const wx = q.wx, wz = q.wz;
       switch (q.k) {
         case 'stump': p(wx, y, wz, q.r, 0, q.h / 2, 0, .025, q.h, .025, K.stump); p(wx, y, wz, q.r, .02, q.h * .7, 0, .04, .01, .01, K.stump); break;
         case 'ruin': p(wx, y, wz, q.r, 0, .05, 0, .24, .1, .03, K.stone); p(wx, y, wz, q.r, -.08, .12, 0, .08, .06, .03, K.stone); p(wx, y, wz, q.r, .1, .025, .08, .03, .05, .16, K.stone); p(wx, y, wz, q.r, .04, .01, .06, .06, .02, .04, K.stone); break;
         case 'crate': p(wx, y, wz, q.r, 0, .02, 0, .05, .04, .04, K.crate); break;
-        case 'bag': p(wx, y, wz, fy, 0, .016, 0, .08, .03, .045, K.sand); p(wx, y, wz, fy, .02, .045, 0, .07, .028, .04, K.sand2); break;
+        case 'bag': m.part(wx, y, wz, fy, 0, .01, 0, .08, .02, .03, K.sand); m.part(wx, y, wz, fy, .012, .028, 0, .07, .018, .027, K.sand2); break;
         case 'post': p(wx, y, wz, 0, 0, .03, 0, .012, .06, .012, K.stump); p(wx, y, wz, 0, 0, .062, 0, .03, .006, .006, K.gun); break;
         case 'tent': p(wx, y, wz, q.r, 0, .022, 0, .14, .044, .2, K.canvas); p(wx, y, wz, q.r, 0, .058, 0, .1, .03, .19, K.canvas); p(wx, y, wz, q.r, 0, .082, 0, .05, .02, .18, K.canvas2); p(wx, y, wz, q.r, 0, .1, 0, .01, .016, .2, K.beam); break;
         case 'wagon':

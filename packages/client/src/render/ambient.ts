@@ -44,6 +44,6 @@ export class Ambient {
   }
 
   drawShips(m: Models, t: number) {
-    for (const s of this.ships) { const p = routePos(this.routes[s.r], s.s); m.ship(p[0], p[1], s.dir > 0 ? p[2] : p[2] + Math.PI, K.funnel, 1, t); }
+    for (const s of this.ships) { const p = routePos(this.routes[s.r], s.s); m.ship(p[0], p[1], s.dir > 0 ? p[2] : p[2] + Math.PI, K.funnel, 1, t, true); }
   }
 }

@@ -12,6 +12,10 @@ export const K = {
   canvas: col('#cfc6a2'), canvas2: col('#a99f7e'), red: col('#8c2f26'), beam: col('#6b5236'), bush: col('#3d5530'), hay: col('#c9b45f'),
   white: col('#ffffff'), spark: col('#ffd9a0'),
   wheel: col('#6e6b62'), trackHi: col('#4b4842'), rivet: col('#26251f'), hatch: col('#3a3b36'), exhaust: col('#2a2724'),
+  brass: col('#b08d3c'), leather: col('#5a3b22'), bayo: col('#d6d9dc'), eye: col('#1a1512'), stache: col('#4a3020'), mud: col('#4a3a26'),
+  tyre: col('#26241f'), tarp: col('#56583f'), prop: col('#6b4a2a'), glass: col('#33454c'), cream: col('#d8d0bc'), blk: col('#161514'),
+  rRed: col('#b8352b'), rBlue: col('#2f4f9a'), rWhite: col('#e8e6dc'), navy: col('#666b6f'), navy2: col('#474c50'), navy3: col('#848a8d'),
+  navy4: col('#a2a7a8'), merch: col('#3b3530'), plank: col('#6f6248'),
   concrete: col('#a29e92'), concrete2: col('#7f7b70'), slit: col('#171612'), runway: col('#8f8b7c'), runway2: col('#d8d3c0'), hangar: col('#6d6a5c'), flakpuff: col('#2b2a28'),
 };
 

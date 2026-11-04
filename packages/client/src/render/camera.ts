@@ -5,7 +5,7 @@ import { HH, HW } from '@riskrts/shared';
 import { clamp, lerp } from './util';
 
 export const MIN_DIST = 1.1, MAX_DIST = 170;
-const SUN_DIR = new THREE.Vector3(-.62, 1, -.42).normalize();
+export const SUN_DIR = new THREE.Vector3(-.62, 1, -.42).normalize();
 /** Camera elevation (radians above the horizon): steep three-quarter top-down view. */
 export const PITCH = .8;
 /** Half the visible height per unit of `dist` (matches the old 38-degree perspective at the focus). */

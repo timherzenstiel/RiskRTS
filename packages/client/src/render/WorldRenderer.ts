@@ -11,7 +11,8 @@ import { AIR_Y, BS, BattleView } from './battleView';
 import { CameraRig } from './camera';
 import { DynamicDraw } from './dynamic';
 import { GroundDetail } from './detail';
-import { F_GLOW, F_MAP, FxSystem } from './fxSystem';
+import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, FxSystem } from './fxSystem';
+import { Sprites } from './sprites';
 import { Input } from './input';
 import { Labels } from './labels';
 import { MapBattles } from './mapBattle';
@@ -41,6 +42,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly lit: Pool; private readonly glow: Pool;
   private readonly detail: GroundDetail;
   private readonly lines: LineBatch;
+  private readonly sprites: Sprites;
   private readonly models: Models;
   private readonly fx = new FxSystem();
   private readonly ambient = new Ambient();
@@ -89,6 +91,7 @@ class WorldRenderer implements WorldRendererApi {
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);
       this.detail = new GroundDetail(this.scene, this.world, this.terrain);
       this.lines = new LineBatch(this.scene, 8000);
+      this.sprites = new Sprites(this.scene);
       this.models = new Models(this.lit, this.glow);
       this.dyn = new DynamicDraw(this.world, this.terrain, this.models, this.lines, this.fx);
       this.war = new MapBattles(this.world, this.terrain, this.models, this.fx);
@@ -204,7 +207,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input.dispose(); this.labels.dispose();
     for (const v of this.views.values()) v.dispose();
     this.views.clear();
-    this.terrain.dispose(); this.water.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose();
+    this.terrain.dispose(); this.water.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
     this.post.dispose(); this.rig.dispose();
     this.canvas.classList.remove('order', 'drag', 'smooth');
     // The context is deliberately not force-lost: the page may mount a new renderer on the same canvas.
@@ -283,7 +286,8 @@ class WorldRenderer implements WorldRendererApi {
       v.flareT = 4 + Math.random() * 5;
       fx.spawn(v.cx + (Math.random() - .3) * 20 * BS, v.y + .1, v.cz + (Math.random() - .5) * 24 * BS, (Math.random() - .5) * .1, 1.4, (Math.random() - .5) * .1, .9, 2.6, .04, .03, K.flare, F_GLOW);
     }
-    if (Math.random() < dt * 2) fx.spawn(v.cx + (Math.random() - .5) * 36 * BS, v.y + .05, v.cz + (Math.random() - .5) * 26 * BS, .04, .05, .02, 0, 5, .1, .35, K.smoke2);
+    // battlefield haze: dust and drifting smoke hanging over the fight
+    if (Math.random() < dt * 2.5) fx.spawn(v.cx + (Math.random() - .5) * 36 * BS, v.y + .06, v.cz + (Math.random() - .5) * 26 * BS, .04, .03, .02, 0, 6, .14, .42, Math.random() < .5 ? K.smoke2 : K.dust, F_THIN);
   }
 
   /** Tanks and aircraft near the middle of the screen drive the engine beds (count and average stereo position). */
@@ -325,7 +329,7 @@ class WorldRenderer implements WorldRendererApi {
       const y = v.y;
       const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, wy = y + AIR_Y + (Math.random() - .3) * .08;
       Sfx.flak(wx, wz);
-      fx.spawn(wx, wy, wz, 0, 0, 0, 0, .1, .02, .05, K.flash, F_GLOW); fx.spawn(wx, wy, wz, (Math.random() - .5) * .02, .01, 0, 0, 1.6, .03, .07, K.flakpuff);
+      fx.spawn(wx, wy, wz, 0, 0, 0, 0, .1, .03, .06, K.flash, F_GLOW); fx.spawn(wx, wy, wz, (Math.random() - .5) * .02, .01, 0, 0, 2.2, .04, .1, K.flakpuff, F_HOT);
     } else if (f.k === 'shot') {
       const y = fy(f.x0, f.z0), y1 = fy(f.x1, f.z1), fromAir = f.type === 'plane', toAir = !!f.air && !fromAir;
       const x0 = v.cx + f.x0 * BS, z0 = v.cz + f.z0 * BS, x1 = v.cx + f.x1 * BS, z1 = v.cz + f.z1 * BS;
@@ -334,30 +338,45 @@ class WorldRenderer implements WorldRendererApi {
       if (toAir || fromAir) { if (Math.random() < .5) Sfx.shot(f.type, x0, z0, toAir); fx.spawn(x0, ys, z0, 0, 0, 0, 0, .05, .012, .01, K.flash, F_GLOW); return; }
       Sfx.shot(f.type, x0, z0);
       if (Math.random() < .6) fx.spawn(x0, ys, z0, 0, 0, 0, 0, .06, .015, .01, K.flash, F_GLOW);
-      if (Math.random() < .15) fx.spawn(x0, y + .06, z0, 0, .05, 0, 0, .9, .01, .03, K.smoke);
-      if (f.hit) fx.spawn(x1, y1 + .04, z1, (Math.random() - .5) * .2, .3, (Math.random() - .5) * .2, 3, .22, .01, .006, K.dirt, 0, y1);
+      if (Math.random() < .2) fx.spawn(x0, y + .05, z0, 0, .05, 0, 0, 1.1, .015, .045, K.smoke, F_THIN);
+      if (f.hit) {
+        fx.spawn(x1, y1 + .04, z1, (Math.random() - .5) * .2, .3, (Math.random() - .5) * .2, 3, .22, .012, .008, K.dirt, 0, y1);
+        if (Math.random() < .5) fx.spawn(x1, y1 + .02, z1, (Math.random() - .5) * .04, .04, (Math.random() - .5) * .04, 0, .9, .012, .04, K.dust, F_DUST);
+      }
     } else if (f.k === 'fire') {
       const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
       const sp = this.session ? Math.max(.25, Math.min(this.session.speed, 4)) : 1;
       Sfx.gun(wx, wz, f.tx !== undefined ? v.cx + f.tx * BS : undefined, f.tz !== undefined ? v.cz + f.tz * BS : undefined, (f.fl ?? 0) / sp);
-      fx.spawn(wx, y + .05, wz, 0, .1, 0, 0, .1, .035, .06, K.flash, F_GLOW); fx.spawn(wx, y + .05, wz, 0, .07, 0, 0, 1.2, .025, .08, K.smoke);
+      fx.spawn(wx, y + .05, wz, 0, .1, 0, 0, .1, .04, .07, K.flash, F_GLOW);
+      fx.spawn(wx, y + .06, wz, 0, .08, 0, 0, 1.6, .03, .11, K.smoke, F_HOT);
+      for (let i = 0; i < 3; i++) { const an = Math.random() * 6.28; fx.spawn(wx, y + .02, wz, Math.cos(an) * .12, .02, Math.sin(an) * .12, 0, 1.4, .03, .09, K.dust, F_DUST); }
     } else {
       const s = f.s * .65, wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
       Sfx.boom(wx, wz, s);
-      fx.spawn(wx, y + .05, wz, 0, 0, 0, 0, .16, .16 * s, .28 * s, K.fire, F_GLOW); fx.spawn(wx, y + .03, wz, 0, 0, 0, 0, .08, .3 * s, .34 * s, K.flash, F_GLOW);
-      for (let i = 0; i < 10; i++) { const an = Math.random() * 6.28, sp = .3 + Math.random() * .6; fx.spawn(wx, y + .03, wz, Math.cos(an) * sp * s, (1 + Math.random()) * s, Math.sin(an) * sp * s, 4, .8, .03, .025, Math.random() < .5 ? K.dirt : K.boot, 0, y); }
-      for (let i = 0; i < 4; i++) fx.spawn(wx + (Math.random() - .5) * .1, y + .08, wz + (Math.random() - .5) * .1, (Math.random() - .5) * .05, .18, (Math.random() - .5) * .05, 0, 1.8 + Math.random(), .08 * s, .22 * s, Math.random() < .5 ? K.smoke : K.smoke2);
+      this.blast(wx, y, wz, s, 1);
     }
   }
 
+  /** A volumetric explosion: flash, rolling fireball, flame licks, flying clods, an outward dust ring, a hot smoke column and a crater. */
+  private blast(wx: number, y: number, wz: number, s: number, k: number) {
+    const fx = this.fx, R = Math.random;
+    fx.spawn(wx, y + .04, wz, 0, 0, 0, 0, .12, .22 * s * k, .4 * s * k, K.flash, F_GLOW);
+    fx.spawn(wx, y + .06, wz, 0, .14 * k, 0, 0, .75, .12 * s * k, .28 * s * k, K.fire, F_BALL);
+    for (let i = 0; i < 3; i++) fx.spawn(wx + (R() - .5) * .06 * s * k, y + .03, wz + (R() - .5) * .06 * s * k, 0, .1 * k, 0, 0, .5 + R() * .4, .07 * s * k, .13 * s * k, K.fire, F_FLAME);
+    for (let i = 0; i < 10; i++) { const an = R() * 6.28, sp = .3 + R() * .6; fx.spawn(wx, y + .03, wz, Math.cos(an) * sp * s * Math.min(k, 1.6), (1 + R()) * s * Math.min(k, 1.6), Math.sin(an) * sp * s * Math.min(k, 1.6), 4, .8, .025 * k, .02 * k, R() < .5 ? K.dirt : K.boot, 0, y); }
+    for (let i = 0; i < 8; i++) { const an = i / 8 * 6.28 + R() * .5, sp = (.18 + R() * .1) * s * k; fx.spawn(wx, y + .03, wz, Math.cos(an) * sp, .015, Math.sin(an) * sp, 0, 1.6 + R(), .06 * s * k, .2 * s * k, K.dust, F_DUST); }
+    for (let i = 0; i < 4; i++) fx.spawn(wx + (R() - .5) * .08 * k, y + .1, wz + (R() - .5) * .08 * k, .02 * k, (.16 + R() * .1) * k, (R() - .5) * .04, 0, 2.4 + R() * 1.4, .09 * s * k, .3 * s * k, i ? K.smoke : K.smoke2, F_HOT);
+    fx.decal(wx, y, wz, (.05 + R() * .03) * s * k + .02, 60, R() < .5 ? 1 : 0);
+  }
+
   private drawScene(g: GameState | null, T: number) {
-    const { lit, glow, lines, rig } = this;
-    lit.begin(); glow.begin(); lines.begin();
+    const { lit, glow, lines, rig, sprites } = this;
+    lit.begin(); glow.begin(); lines.begin(); sprites.begin();
     const near = rig.dist < 26;
     // fine model detail (rivets, faces, spokes, markings) only where it can be seen
     this.models.hi = rig.dist < 7; this.models.t = T;
     if (g) {
-      this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose);
+      this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
       for (const b of g.battles) {
         const v = this.views.get(b.id); if (!v || !v.visible) continue;
         v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);
@@ -366,8 +385,8 @@ class WorldRenderer implements WorldRendererApi {
     this.ambient.drawShips(this.models, T);
     this.dyn.drawMarker(T);
     this.debug.extra?.(this.models, T);
-    this.fx.draw(lit, glow, near); this.fx.drawTracers(lines);
-    lit.end(); glow.end(); lines.end();
+    this.fx.draw(sprites, near); this.fx.drawTracers(lines);
+    lit.end(); glow.end(); lines.end(); sprites.end(rig.camera, T);
   }
 }
 

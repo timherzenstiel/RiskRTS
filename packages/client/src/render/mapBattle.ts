@@ -5,13 +5,14 @@ import { battleCounts, tileAtW, type Battle, type GameState, type World } from '
 import { Sfx } from '../audio/sfx';
 import type { CameraRig } from './camera';
 import { MAP_S } from './dynamic';
-import { F_GLOW, type FxSystem } from './fxSystem';
+import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, SCORCH, type FxSystem } from './fxSystem';
 import type { Models } from './models';
 import { K } from './palette';
+import { FLAME as FLAME_K, GLOW, type Sprites } from './sprites';
 import type { Terrain } from './terrain';
 import { clamp, col } from './util';
 
-const SCORCH = col('#120f0b'), SCORCH2 = col('#2a2118'), ASH = col('#4a4238'), EMBER = col('#ff5e1a'), FLAME = col('#ffa23a'), ROCKET = col('#ffe7a8'), BLACK = col('#26231f');
+const EMBER = col('#ff5e1a'), FLAME = col('#ffa23a'), ROCKET = col('#ffe7a8'), BLACK = col('#26231f');
 
 interface Scar { x: number; z: number; y: number; r: number; rot: number; fire: number; fire0: number }
 interface Rocket { x0: number; z0: number; y0: number; x1: number; z1: number; y1: number; t: number; dur: number; h: number; f: number }
@@ -156,15 +157,17 @@ export class MapBattles {
   /** A shell or rocket landing: flash, fireball, flying dirt, a smoke column and (often) a scorched crater. */
   private explode(x: number, z: number, s: number, scar: boolean, dist: number) {
     const fx = this.fx, k = this.k, y = this.gy(x, z);
-    fx.spawn(x, y + .05, z, 0, 0, 0, 0, .14, .32 * s * k, .05, K.flash, F_GLOW);
-    fx.spawn(x, y + .06, z, 0, .25, 0, 0, .5, .2 * s * k, .32 * s * k, K.fire, F_GLOW);
-    for (let i = 0; i < 4; i++) { const an = Math.random() * 6.28; fx.spawn(x, y + .05, z, Math.cos(an) * .25 * k, .2 + Math.random() * .3, Math.sin(an) * .25 * k, 0, .35 + Math.random() * .2, .1 * s * k, .03 * s * k, Math.random() < .5 ? FLAME : EMBER, F_GLOW); }
-    fx.spawn(x, y + .08, z, 0, .35, 0, 0, .6, .1 * s * k, .2 * s * k, EMBER, F_GLOW);
+    const R = Math.random;
+    fx.spawn(x, y + .05, z, 0, 0, 0, 0, .14, .2 * s * k, .38 * s * k, K.flash, F_GLOW);
+    fx.spawn(x, y + .06, z, 0, .2 * k, 0, 0, .8, .08 * s * k, .22 * s * k, K.fire, F_BALL);
+    for (let i = 0; i < 3; i++) fx.spawn(x + (R() - .5) * .05 * k, y + .03, z + (R() - .5) * .05 * k, 0, .12 * k, 0, 0, .5 + R() * .4, .05 * s * k, .1 * s * k, K.fire, F_FLAME);
+    for (let i = 0; i < 4; i++) { const an = R() * 6.28; fx.spawn(x, y + .05, z, Math.cos(an) * .25 * k, .2 + R() * .3, Math.sin(an) * .25 * k, 0, .35 + R() * .2, .02 * k, .01 * k, R() < .5 ? FLAME : EMBER, F_GLOW); }
     for (let i = 0; i < 7; i++) {
-      const an = Math.random() * 6.28, sp = (.3 + Math.random() * .5) * Math.min(k, 1.6);
-      fx.spawn(x, y + .03, z, Math.cos(an) * sp * .4, (.6 + Math.random() * .7) * Math.min(k, 1.6), Math.sin(an) * sp * .4, 3.2, .9, .03 * k, .02 * k, Math.random() < .6 ? K.dirt : K.boot, 0, y);
+      const an = R() * 6.28, sp = (.3 + R() * .5) * Math.min(k, 1.6);
+      fx.spawn(x, y + .03, z, Math.cos(an) * sp * .4, (.6 + R() * .7) * Math.min(k, 1.6), Math.sin(an) * sp * .4, 3.2, .9, .022 * k, .016 * k, R() < .6 ? K.dirt : K.boot, 0, y);
     }
-    for (let i = 0; i < 3; i++) fx.spawn(x + (Math.random() - .5) * .1 * k, y + .1, z + (Math.random() - .5) * .1 * k, .03, .16 + Math.random() * .12, .01, 0, 2 + Math.random() * 2, .05 * s * k, .17 * s * k, i ? K.smoke : K.smoke2);
+    for (let i = 0; i < 6; i++) { const an = i / 6 * 6.28 + R() * .6, sp = (.12 + R() * .08) * s * k; fx.spawn(x, y + .03, z, Math.cos(an) * sp, .012 * k, Math.sin(an) * sp, 0, 1.5 + R(), .04 * s * k, .13 * s * k, K.dust, F_DUST); }
+    for (let i = 0; i < 3; i++) fx.spawn(x + (R() - .5) * .08 * k, y + .1, z + (R() - .5) * .08 * k, .03, (.14 + R() * .1) * Math.min(k, 2), .01, 0, 2.4 + R() * 1.6, .06 * s * k, .2 * s * k, i ? K.smoke : K.smoke2, F_HOT);
     if (dist > 0 && Math.random() < .25) Sfx.rumble(Math.max(.15, 1 - dist / 160), x, z);
     if (scar) this.addScar(x, z, y, s);
   }
@@ -185,31 +188,31 @@ export class MapBattles {
     for (const c of F.scars) {
       if (c.fire <= 0) continue;
       c.fire -= dt * (F.over >= 0 ? 2 : 1);
-      if (Math.random() < dt * 9) fx.spawn(c.x + (Math.random() - .5) * c.r, c.y + .02, c.z + (Math.random() - .5) * c.r, 0, .12 + Math.random() * .1, 0, 0, .35 + Math.random() * .3, .05 * k, .01, Math.random() < .5 ? FLAME : EMBER, F_GLOW);
-      if (Math.random() < dt * 3) fx.spawn(c.x, c.y + .1, c.z, .05, .16 + Math.random() * .1, .015, 0, 3 + Math.random() * 2, .03 * k, .13 * k, Math.random() < .5 ? BLACK : K.smoke2);
+      // sparks drifting up, and a column of oily black smoke lit by the fire underneath
+      if (Math.random() < dt * 5) fx.spawn(c.x + (Math.random() - .5) * c.r, c.y + .03, c.z + (Math.random() - .5) * c.r, (Math.random() - .5) * .04, .15 + Math.random() * .12, 0, 0, .6 + Math.random() * .4, .012 * k, .006 * k, Math.random() < .5 ? FLAME : EMBER, F_GLOW);
+      if (Math.random() < dt * 3.5) fx.spawn(c.x, c.y + .06, c.z, .05, .14 + Math.random() * .1, .015, 0, 3 + Math.random() * 2, .03 * k, .16 * k, Math.random() < .5 ? BLACK : K.smoke2, F_HOT);
     }
   }
 
   /** Draw troops, rocket heads, scorched ground and flames. */
-  draw(g: GameState, T: number, close: (b: Battle) => boolean) {
-    const m = this.m, glow = m.glowPool, p = { x: 0, z: 0 };
+  draw(g: GameState, T: number, close: (b: Battle) => boolean, sp: Sprites) {
+    const m = this.m, p = { x: 0, z: 0 };
     const active = new Map<number, Battle>(); for (const b of g.battles) if (!b.ended) active.set(b.region, b);
     for (const F of this.fronts.values()) {
       const b = active.get(F.region), isClose = !!b && close(b);
       // scorched craters (they stay a while after the battle, slowly shrinking)
       const fade = F.over < 0 ? 1 : clamp(1 - (F.over - 30) / 60, 0, 1);
       if (fade > 0 && !isClose) for (const c of F.scars) {
-        const r = c.r * fade;
-        m.part(c.x, c.y, c.z, c.rot, 0, .004, 0, r * 2.2, .007, r * 1.7, SCORCH2);
-        m.part(c.x, c.y, c.z, c.rot + .8, 0, .005, 0, r * 1.9, .008, r * 1.5, SCORCH2);
-        m.part(c.x, c.y, c.z, c.rot + .4, 0, .006, 0, r * 1.2, .009, r * 1.1, SCORCH);
-        m.part(c.x, c.y, c.z, c.rot + .2, r * .9, .008, 0, r * .25, .012, r * .2, ASH);
+        const life = c.fire > 0 ? clamp(c.fire / Math.max(1, c.fire0) * 1.5, .2, 1) : 0;
+        sp.decal(c.x, c.y, c.z, c.r * 2.6, c.r * 2.1, SCORCH, fade, c.rot, c.rot * .159, life);
         if (c.fire > 0) {
-          const life = clamp(c.fire / Math.max(1, c.fire0) * 1.5, .2, 1), fl = (.7 + Math.sin(T * 17 + c.rot * 9) * .3) * life;
-          const w = Math.max(r, .035 * this.k) * fl;
-          m.part(c.x, c.y, c.z, 0, 0, w * .4, 0, w * .9, w * .8, w * .9, EMBER, glow);
-          m.part(c.x, c.y, c.z, .7, 0, w * .7, 0, w * .55, w * .9, w * .55, FLAME, glow);
-          m.part(c.x, c.y, c.z, .3, 0, w * 1.15, 0, w * .25, w * .5, w * .25, K.flash, glow);
+          // two or three flame tongues licking up out of the crater
+          const w = Math.max(c.r * 1.3, .04 * this.k) * life, sd = c.rot * .159;
+          for (let j = 0; j < 3; j++) {
+            const ox = Math.cos(c.rot + j * 2.1) * c.r * .45, oz = Math.sin(c.rot + j * 2.1) * c.r * .35, ww = w * (j ? .7 : 1);
+            sp.fire(c.x + ox, c.y + ww * 1.7 * .42, c.z + oz, ww, ww * 1.9, K.fire, .9, sd + j * .31, 0, FLAME_K);
+          }
+          sp.fire(c.x, c.y + w * .3, c.z, w * 2.6, w * 2.6, EMBER, .35 * (.8 + .2 * Math.sin(T * 9 + c.rot * 7)), sd, 0, GLOW);
         }
       }
       if (!b || isClose) continue;
@@ -228,8 +231,7 @@ export class MapBattles {
       // rocket heads
       for (const r of F.rockets) {
         const t = r.t, x = r.x0 + (r.x1 - r.x0) * t, z = r.z0 + (r.z1 - r.z0) * t, y = r.y0 + (r.y1 - r.y0) * t + r.h * 4 * t * (1 - t);
-        const face = Math.atan2(r.x1 - r.x0, r.z1 - r.z0);
-        m.part(x, y, z, face, 0, 0, 0, .018 * this.k, .018 * this.k, .07 * this.k, ROCKET, glow);
+        sp.fire(x, y, z, .045 * this.k, .045 * this.k, ROCKET, 1, 0, t, GLOW);
       }
     }
   }

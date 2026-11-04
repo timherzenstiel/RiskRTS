@@ -16,7 +16,7 @@ export const K = {
   tyre: col('#26241f'), tarp: col('#56583f'), prop: col('#6b4a2a'), glass: col('#33454c'), cream: col('#d8d0bc'), blk: col('#161514'),
   rRed: col('#b8352b'), rBlue: col('#2f4f9a'), rWhite: col('#e8e6dc'), navy: col('#666b6f'), navy2: col('#474c50'), navy3: col('#848a8d'),
   navy4: col('#a2a7a8'), merch: col('#3b3530'), plank: col('#6f6248'),
-  concrete: col('#a29e92'), concrete2: col('#7f7b70'), slit: col('#171612'), runway: col('#8f8b7c'), runway2: col('#d8d3c0'), hangar: col('#6d6a5c'), flakpuff: col('#2b2a28'),
+  concrete: col('#a29e92'), concrete2: col('#7f7b70'), slit: col('#171612'), runway: col('#8f8b7c'), runway2: col('#d8d3c0'), hangar: col('#6d6a5c'), flakpuff: col('#2b2a28'), dust: col('#9a8660'),
 };
 
 const mix = (a: string, b: string, t: number) => col(a).lerp(col(b), t);

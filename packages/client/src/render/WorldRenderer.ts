@@ -26,7 +26,6 @@ type Quality = 0 | 1 | 2;
 /** Render-buffer scale: Ultra = device pixels, High = CSS pixels, Chunky = half resolution. */
 const QUAL_DIV = [() => 1 / Math.min(window.devicePixelRatio || 1, 2), () => 1, () => 2];
 /** Battlefield ground pixels per local unit. */
-const GROUND_PPM: number[] = [12, 8, 8];
 
 class WorldRenderer implements WorldRendererApi {
   /** Not part of the API: handy for dev tooling and tests. */
@@ -183,7 +182,6 @@ class WorldRenderer implements WorldRendererApi {
     this.drawScene(g, this.now);
     this.water.setTime(this.now);
     this.post.tune(this.rig.dist, ui.look, this.now); uChrome.value = ui.look ? .75 : .3;
-    for (const v of this.views.values()) v.flush();
     this.post.render();
 
     const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now;
@@ -256,8 +254,7 @@ class WorldRenderer implements WorldRendererApi {
       let view = this.views.get(b.id);
       if (!view && vis && created < 1) {
         created++;
-        view = new BattleView(this.scene, b, def.cx, def.cz, this.terrain.groundY[b.region], GROUND_PPM[this.quality]);
-        view.scarForAge(b.age); this.views.set(b.id, view);
+        view = new BattleView(b, def.cx, def.cz, (x, z) => this.terrain.surfaceAt(x, z)); this.views.set(b.id, view);
       }
       if (view) {
         if (rig.dist > 40 || d > 24) { view.dispose(); this.views.delete(b.id); view = undefined; }
@@ -305,32 +302,33 @@ class WorldRenderer implements WorldRendererApi {
   }
 
   private spawnFx(v: BattleView, f: Fx) {
-    const fx = this.fx, y = v.y;
+    const fx = this.fx;
+    const fy = (x: number, z: number) => v.groundAt(v.cx + x * BS, v.cz + z * BS);
     if (f.k === 'flak') {
+      const y = v.y;
       const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, wy = y + AIR_Y + (Math.random() - .3) * .08;
       Sfx.shot(.5);
       fx.spawn(wx, wy, wz, 0, 0, 0, 0, .1, .02, .05, K.flash, F_GLOW); fx.spawn(wx, wy, wz, (Math.random() - .5) * .02, .01, 0, 0, 1.6, .03, .07, K.flakpuff);
     } else if (f.k === 'shot') {
-      const fromAir = f.type === 'plane', toAir = !!f.air && !fromAir;
+      const y = fy(f.x0, f.z0), y1 = fy(f.x1, f.z1), fromAir = f.type === 'plane', toAir = !!f.air && !fromAir;
       const x0 = v.cx + f.x0 * BS, z0 = v.cz + f.z0 * BS, x1 = v.cx + f.x1 * BS, z1 = v.cz + f.z1 * BS;
-      const ys = fromAir ? y + AIR_Y : y + (f.type === 'tank' ? .035 : f.type === 'mg' || f.type === 'pill' ? .025 : .05), ye = f.air ? y + AIR_Y : y + .04;
+      const ys = fromAir ? y + AIR_Y : y + (f.type === 'tank' ? .035 : f.type === 'mg' || f.type === 'pill' ? .025 : .05), ye = f.air ? y + AIR_Y : y1 + .04;
       fx.tracer(x0, ys, z0, x1, ye, z1, f.type === 'mg' || f.type === 'pill' ? .025 : .035);
       if (toAir || fromAir) { if (Math.random() < .5) Sfx.shot(1.1); fx.spawn(x0, ys, z0, 0, 0, 0, 0, .05, .012, .01, K.flash, F_GLOW); return; }
       Sfx.shot(f.type === 'mg' ? 1.3 : .8);
       if (Math.random() < .6) fx.spawn(x0, ys, z0, 0, 0, 0, 0, .06, .015, .01, K.flash, F_GLOW);
       if (Math.random() < .15) fx.spawn(x0, y + .06, z0, 0, .05, 0, 0, .9, .01, .03, K.smoke);
-      if (f.hit) fx.spawn(x1, y + .04, z1, (Math.random() - .5) * .2, .3, (Math.random() - .5) * .2, 3, .22, .01, .006, K.dirt, 0, y);
+      if (f.hit) fx.spawn(x1, y1 + .04, z1, (Math.random() - .5) * .2, .3, (Math.random() - .5) * .2, 3, .22, .01, .006, K.dirt, 0, y1);
     } else if (f.k === 'fire') {
-      const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS;
+      const wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
       Sfx.cannon();
       fx.spawn(wx, y + .05, wz, 0, .1, 0, 0, .1, .035, .06, K.flash, F_GLOW); fx.spawn(wx, y + .05, wz, 0, .07, 0, 0, 1.2, .025, .08, K.smoke);
     } else {
-      const s = f.s * .65, wx = v.cx + f.x * BS, wz = v.cz + f.z * BS;
+      const s = f.s * .65, wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
       Sfx.boom(s);
       fx.spawn(wx, y + .05, wz, 0, 0, 0, 0, .16, .16 * s, .28 * s, K.fire, F_GLOW); fx.spawn(wx, y + .03, wz, 0, 0, 0, 0, .08, .3 * s, .34 * s, K.flash, F_GLOW);
       for (let i = 0; i < 10; i++) { const an = Math.random() * 6.28, sp = .3 + Math.random() * .6; fx.spawn(wx, y + .03, wz, Math.cos(an) * sp * s, (1 + Math.random()) * s, Math.sin(an) * sp * s, 4, .8, .03, .025, Math.random() < .5 ? K.dirt : K.boot, 0, y); }
       for (let i = 0; i < 4; i++) fx.spawn(wx + (Math.random() - .5) * .1, y + .08, wz + (Math.random() - .5) * .1, (Math.random() - .5) * .05, .18, (Math.random() - .5) * .05, 0, 1.8 + Math.random(), .08 * s, .22 * s, Math.random() < .5 ? K.smoke : K.smoke2);
-      v.addCrater(f.x, f.z, s);
     }
   }
 
@@ -343,8 +341,7 @@ class WorldRenderer implements WorldRendererApi {
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T);
       for (const b of g.battles) {
-        const v = this.views.get(b.id); if (!v || !v.mesh.visible) continue;
-        v.drawProps(this.models);
+        const v = this.views.get(b.id); if (!v || !v.visible) continue;
         v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);
       }
     }

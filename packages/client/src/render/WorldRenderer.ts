@@ -14,6 +14,7 @@ import { GroundDetail } from './detail';
 import { F_GLOW, F_MAP, FxSystem } from './fxSystem';
 import { Input } from './input';
 import { Labels } from './labels';
+import { MapBattles } from './mapBattle';
 import { Models } from './models';
 import { K } from './palette';
 import { Post } from './post';
@@ -44,6 +45,9 @@ class WorldRenderer implements WorldRendererApi {
   private readonly fx = new FxSystem();
   private readonly ambient = new Ambient();
   private readonly dyn: DynamicDraw;
+  private readonly war: MapBattles;
+  /** True when a battle's close-up troops are on screen (map-scale fighting is drawn otherwise). */
+  private readonly isClose = (b: Battle) => { const v = this.views.get(b.id); return !!v && v.visible; };
   private readonly post: Post;
   private readonly labels: Labels;
   private readonly input: Input;
@@ -59,7 +63,6 @@ class WorldRenderer implements WorldRendererApi {
   private readonly views = new Map<number, BattleView>();
   private readonly byId = new Map<number, Battle>();
   private readonly visible = new Set<number>();
-  private readonly puff = new Map<number, number>();
   private readonly curOwner: Int16Array; private readonly curHl: Int8Array; private readonly dirty: Uint8Array;
   private readonly tmpV = new THREE.Vector3();
   private readonly armyTuple: [number, number] = [0, 0];
@@ -88,6 +91,7 @@ class WorldRenderer implements WorldRendererApi {
       this.lines = new LineBatch(this.scene, 8000);
       this.models = new Models(this.lit, this.glow);
       this.dyn = new DynamicDraw(this.world, this.terrain, this.models, this.lines, this.fx);
+      this.war = new MapBattles(this.world, this.terrain, this.models, this.fx);
       this.post = new Post(renderer, this.scene, this.rig.camera);
     } catch (e) {
       renderer.dispose();
@@ -127,7 +131,7 @@ class WorldRenderer implements WorldRendererApi {
   setSession(s: Session) {
     this.session = s;
     for (const v of this.views.values()) v.dispose();
-    this.views.clear(); this.puff.clear(); this.fx.clear();
+    this.views.clear(); this.war.clear(); this.fx.clear();
     this.curOwner.fill(-2); this.curHl.fill(-1);
   }
 
@@ -265,9 +269,8 @@ class WorldRenderer implements WorldRendererApi {
           if (vis && !b.ended) this.battleAmbience(view, fdt);
         }
       }
-      if (!view || !this.visible.has(b.id)) { if (!b.ended) this.distantBattle(b, fdt); }
     }
-    for (const id of this.puff.keys()) if (!this.byId.has(id)) this.puff.delete(id);
+    this.war.update(g, rig, fdt, this.isClose);
   }
 
   private battleAmbience(v: BattleView, dt: number) {
@@ -278,17 +281,6 @@ class WorldRenderer implements WorldRendererApi {
       fx.spawn(v.cx + (Math.random() - .3) * 20 * BS, v.y + .1, v.cz + (Math.random() - .5) * 24 * BS, (Math.random() - .5) * .1, 1.4, (Math.random() - .5) * .1, .9, 2.6, .04, .03, K.flare, F_GLOW);
     }
     if (Math.random() < dt * 2) fx.spawn(v.cx + (Math.random() - .5) * 36 * BS, v.y + .05, v.cz + (Math.random() - .5) * 26 * BS, .04, .05, .02, 0, 5, .1, .35, K.smoke2);
-  }
-
-  private distantBattle(b: Battle, dt: number) {
-    const t = (this.puff.get(b.id) ?? 0) - dt;
-    if (t > 0) { this.puff.set(b.id, t); return; }
-    this.puff.set(b.id, .22 + Math.random() * .2);
-    const r = this.world.regions[b.region], y = this.terrain.groundY[b.region];
-    if (Math.random() < .3) Sfx.rumble(Math.max(0, 1 - this.rig.dist / 150));
-    const an = Math.random() * 6.28, rr = Math.random() * 1.4;
-    this.fx.spawn(r.cx + Math.cos(an) * rr, y + .3, r.cz + Math.sin(an) * rr, 0, .35, 0, 0, 2, .2 + Math.random() * .12, .45, Math.random() < .5 ? K.smoke : K.smoke2, F_MAP);
-    if (Math.random() < .5) this.fx.spawn(r.cx + (Math.random() - .5) * 2, y + .4, r.cz + (Math.random() - .5) * 2, 0, 0, 0, 0, .18, .28, .4, K.fire, F_GLOW | F_MAP);
   }
 
   /** Turn simulation effects into particles, tracers, craters and sounds. Effects of battles that are not on screen are dropped. */
@@ -339,7 +331,7 @@ class WorldRenderer implements WorldRendererApi {
     // fine model detail (rivets, faces, spokes, markings) only where it can be seen
     this.models.hi = rig.dist < 7; this.models.t = T;
     if (g) {
-      this.dyn.regions(g, rig, T); this.dyn.armies(g, T);
+      this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose);
       for (const b of g.battles) {
         const v = this.views.get(b.id); if (!v || !v.visible) continue;
         v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);

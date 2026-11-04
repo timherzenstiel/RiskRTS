@@ -30,7 +30,7 @@ const GROUND_PPM: number[] = [12, 8, 8];
 
 class WorldRenderer implements WorldRendererApi {
   /** Not part of the API: handy for dev tooling and tests. */
-  readonly debug: { rig: CameraRig; views: Map<number, BattleView>; stats: { cpuMs: number; frames: number }; renderer: THREE.WebGLRenderer };
+  readonly debug: { rig: CameraRig; views: Map<number, BattleView>; stats: { cpuMs: number; frames: number }; renderer: THREE.WebGLRenderer; models?: Models; extra?: (m: Models, T: number) => void };
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -119,6 +119,7 @@ class WorldRenderer implements WorldRendererApi {
     canvas.addEventListener('webglcontextlost', lost); this.cleanup.push(() => canvas.removeEventListener('webglcontextlost', lost));
 
     this.debug = { rig: this.rig, views: this.views, stats: { cpuMs: 0, frames: 0 }, renderer };
+      this.debug.models = this.models;
     const q = useUi.getState().quality; this.lastStoreQ = q; this.setQuality(q);
   }
 
@@ -337,6 +338,8 @@ class WorldRenderer implements WorldRendererApi {
     const { lit, glow, lines, rig } = this;
     lit.begin(); glow.begin(); lines.begin();
     const near = rig.dist < 26;
+    // fine model detail (rivets, faces, spokes, markings) only where it can be seen
+    this.models.hi = rig.dist < 7; this.models.t = T;
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T);
       for (const b of g.battles) {
@@ -347,6 +350,7 @@ class WorldRenderer implements WorldRendererApi {
     }
     this.ambient.drawShips(this.models, T);
     this.dyn.drawMarker(T);
+    this.debug.extra?.(this.models, T);
     this.fx.draw(lit, glow, near); this.fx.drawTracers(lines);
     lit.end(); glow.end(); lines.end();
   }

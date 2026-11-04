@@ -215,7 +215,7 @@ export class BattleView {
         continue;
       }
       switch (a.type) {
-        case 'plane': m.plane(wx, y + AIR_Y + Math.sin(now * 2 + i) * .01, wz, a.face, facCol[a.f] ?? K.wing, .45); break;
+        case 'plane': m.plane(wx, y + AIR_Y + Math.sin(now * 2 + i) * .01, wz, a.face, facCol[a.f] ?? K.wing, .45, a.f); break;
         case 'pill': m.pillbox(wx, y, wz, a.face, a.f, .6); break;
         case 'fort': m.emplacement(wx, y, wz, a.face, a.f, .6, recoil); break;
         case 'flak': m.flak(wx, y, wz, a.face, a.f, .55, recoil); break;

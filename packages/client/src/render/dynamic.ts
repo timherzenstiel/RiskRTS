@@ -101,7 +101,7 @@ export class DynamicDraw {
       const [x, z] = armyPos(a), face = Math.atan2(a.dx, a.dz), c = Math.cos(face), s = Math.sin(face);
       if (a.air) {
         const y = Math.max(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to)) + .9 + Math.sin(a.t * Math.PI) * .4, n = Math.min(3, a.units.plane);
-        for (let k = 0; k < n; k++) { const bx = k === 0 ? 0 : (k === 1 ? -.14 : .14), bz = k === 0 ? 0 : -.12; m.plane(x + bx * c + bz * s, y + Math.sin(T * 3 + k) * .01, z - bx * s + bz * c, face, facCol[a.owner], .75); }
+        for (let k = 0; k < n; k++) { const bx = k === 0 ? 0 : (k === 1 ? -.14 : .14), bz = k === 0 ? 0 : -.12; m.plane(x + bx * c + bz * s, y + Math.sin(T * 3 + k) * .01, z - bx * s + bz * c, face, facCol[a.owner], .75, a.owner); }
       } else if (a.sea) m.ship(x, z, face, facCol[a.owner], 1.1, T);
       else {
         const y = lerp(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to), a.t) + Math.sin(a.t * Math.PI) * .25;

@@ -271,3 +271,106 @@ def bunker_hi():
     k.limb((.08, .09, -.05), (.08, .14, -.05), .005, .005, B['iron'], seg=6)
     bag_wall(k, -.06, -.14, -.035, -.115, rows=2); bag_wall(k, .035, -.115, .06, -.14, rows=2)
     return k.done()
+
+# ---------------------------------------------------------------- trees
+# Leaves are house-colour (the terrain tints each tree by biome). The renderer scales the tint by clamp(luma * 4.2, .55, 1.35), so leaf
+# values are kept between ~.13 and .32 luma: light on the sunny outside, dark inside the crown, and the clumps keep their shading.
+def leaf(k, v):
+    v = max(.36, min(.62, v)); return (v, v, v * .96)
+
+def clump(k, x, y, z, r, v, seg=5, sy=.8):
+    k.ball(x, y, z, r, leaf(k, v), house=True, sy=sy, seg=seg)
+
+def tree_broad():
+    """Oak/beech: a forked trunk and a crown of small faceted leaf clumps, lighter towards the sunlit top-left."""
+    k = Kit('tree_broad', jitter=.06); rng = random.Random(11)
+    k.limb((0, 0, 0), (.02, .34, 0), .05, .034, B['timber2'], seg=6)
+    for a, h, l in ((.6, .3, .2), (2.4, .34, .18), (4.3, .28, .2), (5.5, .4, .14)):
+        k.limb((.02, h, 0), (math.cos(a) * l, h + .22, math.sin(a) * l), .022, .012, B['timber2'], seg=4)
+    for i in range(26):
+        u = rng.random() * math.tau; t = rng.random() * .85 + .15
+        x, z = math.cos(u) * .26 * t, math.sin(u) * .24 * t; y = .48 + rng.random() * .36 - t * .1
+        lit = (-x - z) * 1.1 + (y - .5) * 1.2
+        clump(k, x, y, z, .075 + rng.random() * .045, .46 + lit * .35 + (rng.random() - .5) * .08)
+    return k.done()
+
+def tree_pine():
+    """Spruce: tiers of drooping branch spikes round a central leader, narrowing to the tip."""
+    k = Kit('tree_pine', jitter=.05); rng = random.Random(12)
+    k.limb((0, 0, 0), (0, .28, 0), .035, .028, B['timber2'], seg=5)
+    tiers = 7
+    for i in range(tiers):
+        y = .18 + i * .12; R = .3 * (1 - i / tiers) + .04; n = 12 - i
+        for j in range(n):
+            a = (j + (i % 2) * .5) / n * math.tau + rng.random() * .3
+            tip = (math.cos(a) * R, y - .07, math.sin(a) * R)
+            v = .44 + (-(tip[0] + tip[2]) * .5 + i / tiers * .12) + (rng.random() - .5) * .06
+            k.limb((0, y + .03, 0), tip, .075 * (1 - i / tiers * .5), .01, leaf(k, v), house=True, seg=3)
+        k.cyl(0, y, 0, R * .75, R * .25, .12, leaf(k, .38), True, seg=6, smooth=False)
+    k.cyl(0, .18 + tiers * .12, 0, .05, 0, .16, leaf(k, .5), True, seg=4, smooth=False)
+    return k.done()
+
+def tree_acacia():
+    k = Kit('tree_acacia', jitter=.05); rng = random.Random(13)
+    k.limb((0, 0, 0), (.03, .42, 0), .03, .022, B['timber2'], seg=5)
+    for a in (.4, 2.3, 4.2): k.limb((.03, .38, 0), (math.cos(a) * .22, .55, math.sin(a) * .22), .015, .01, B['timber2'], seg=4)
+    for i in range(12):
+        u = rng.random() * math.tau; t = math.sqrt(rng.random())
+        x, z = math.cos(u) * .34 * t, math.sin(u) * .3 * t
+        clump(k, x, .58 + rng.random() * .05, z, .1 + rng.random() * .05, .48 + (-x - z) * .4, sy=.4)
+    return k.done()
+
+def tree_palm():
+    k = Kit('tree_palm', jitter=.05)
+    pts = [(0, 0, 0), (.03, .25, .01), (.08, .5, .02), (.15, .72, .03)]
+    for a, b in zip(pts, pts[1:]): k.limb(a, b, .03, .025, B['timber'], seg=5)
+    for i in range(9):
+        a = i / 9 * math.tau; tip = (.15 + math.cos(a) * .34, .58, .03 + math.sin(a) * .34); mid = (.15 + math.cos(a) * .18, .8, .03 + math.sin(a) * .18)
+        v = .48 - (math.cos(a) + math.sin(a)) * .08
+        k.limb((.15, .74, .03), mid, .012, .035, leaf(k, v), True, seg=3); k.limb(mid, tip, .035, .004, leaf(k, v - .04), True, seg=3)
+    return k.done()
+
+def shrub():
+    k = Kit('shrub', jitter=.05); rng = random.Random(14)
+    for i in range(8):
+        u = rng.random() * math.tau; t = rng.random()
+        x, z = math.cos(u) * .16 * t, math.sin(u) * .14 * t
+        clump(k, x, .07 + rng.random() * .1, z, .07 + rng.random() * .05, .46 + (-x - z) * .5 + (rng.random() - .5) * .06)
+    return k.done()
+
+# ---------------------------------------------------------------- ruins (shown instead of a house where the ground is shelled)
+def rubble(k, x, z, r, n=14, cols=('stone', 'plaster', 'brick', 'tile2', 'timber2')):
+    rng = k.rng
+    for _ in range(n):
+        a = rng.random() * math.tau; t = math.sqrt(rng.random()) * r
+        c = B[rng.choice(cols)]; s = .05 + rng.random() * .09
+        k.box(x + math.cos(a) * t, s * .3 + rng.random() * .04, z + math.sin(a) * t, s, s * .6, s * .8, jit(rng, c, .12), rz=rng.random() * 3, rx=(rng.random() - .5) * .8, bevel=.01)
+
+def house_ruin(name='house_ruin', tall=False):
+    """A shelled house: broken wall stumps with jagged tops and empty window holes, a charred beam or two, rubble heaps, no roof."""
+    k = Kit(name, jitter=.05); rng = random.Random(name)
+    H = .98 if tall else .8
+    k.box(0, .07, 0, 1.03, .14, 1.03, B['plinth'], bevel=.01)
+    k.box(0, .145, 0, .96, .01, .96, B['earth2'])
+    # four walls, each cut into vertical strips of random height (the jagged break)
+    for side in range(4):
+        for i in range(8):
+            a = -.5 + (i + .5) / 8
+            h = H * (.25 + .75 * rng.random() ** .7) if side in (1, 2) else H * (.12 + .6 * rng.random())
+            if rng.random() < .15: continue
+            x, z, sx, sz = (a, .5 - .05, .126, .1) if side == 0 else (a, -.5 + .05, .126, .1) if side == 1 else (.5 - .05, a, .1, .126) if side == 2 else (-.5 + .05, a, .1, .126)
+            burnt = rng.random() < .35
+            k.box(x, .14 + h / 2, z, sx, h, sz, jit(rng, B['scar'], .15) if burnt else B['plaster'], house=not burnt, bevel=.006)
+            if h > .5 and rng.random() < .5:   # a window hole left in the stump
+                k.box(x * 1.02, .14 + .45, z * 1.02, sx * .55 if sx > .11 else sx * 1.1, .2, sz * 1.1 if sx > .11 else sz * .55, B['black'])
+            if rng.random() < .3: k.box(x * 1.01, .14 + h - .04, z * 1.01, sx * 1.01, .05, sz * 1.01, B['brick'])   # brick showing at the break
+    # scorch marks and a charred roof beam leaning into the shell
+    for _ in range(3): k.box((rng.random() - .5) * .8, .16, (rng.random() - .5) * .8, .3, .006, .25, B['tar'], rz=rng.random() * 3)
+    k.limb((-.35, .2, -.3), (.3, H * .9, .25), .035, .03, B['tar'], seg=5)
+    if tall: k.limb((.3, .2, -.35), (-.2, H * .7, .1), .03, .028, B['tar'], seg=5)
+    chimney(k, .3, .14 + H * .62, -.3, .9) if tall else k.box(.3, .5, -.32, .13, .7, .13, B['brick2'], bevel=.008)
+    k.ball(0, .14, 0, .34, jit(rng, B['scar'], .1), sy=.45, seg=7)   # heap of fallen masonry inside
+    rubble(k, 0, 0, .42, 34); rubble(k, .4, .55, .25, 10); rubble(k, -.5, .2, .2, 8)
+    return k.done()
+
+def house_ruin_b(): return house_ruin('house_ruin_b', tall=True)

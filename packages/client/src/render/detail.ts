@@ -207,11 +207,6 @@ export class GroundDetail {
       }
       const arid = bio === 7 || bio === 8, tufts = arid ? C.tuftS : C.tuftT;
       for (let n = 0; n < 3; n++) if (hs(n) < .6) { const x = jx(n), z = jz(n); add(x, yAt(x, z), z, .008, .01 + hs(n + 20) * .01, .008, pick(tufts, hs(n + 30)), hs(n + 31) * 3); }
-      if (hs(40) < (bio === 5 ? .45 : .2)) { // bush clump
-        const x = jx(40), z = jz(40), y = yAt(x, z), b = pick(C.bush, hs(43)), w = .03 + hs(41) * .02;
-        add(x, y, z, w, w * .6, w, shade(b, .85), hs(42) * 3); add(x - w * .2, y + w * .3, z - w * .2, w * .65, w * .45, w * .65, shade(b, 1.3), hs(44) * 3);
-        if (hs(45) < .6) add(x + w * .55, y, z + w * .2, w * .6, w * .45, w * .6, b, hs(46) * 3);
-      }
       if ((H[i] > .5 || arid) && hs(47) < (arid ? .2 : .3)) boulder(47, .02 + hs(48) * .03, arid);
       // grazing cattle on temperate pasture
       if (bio === 9 && hs(60) < .03) for (let n = 0; n < 3; n++) {

@@ -477,4 +477,4 @@ def build():
             figure('soldier_prone', 'stand', 'up', 'prone'), figure('soldier_dead', 'stand', 'ready', 'dead')]
     return figs + helmets_hi() + [vickers(), field_gun75(), tank_mk4(), tank_ft(), tank_a7v(), biplane(), propeller()] + markings() + \
         [bl.pillbox_hi(), bl.bunker_hi(), factory(), barracks(), hangar()] + \
-        [tree_broad(), tree_pine(), tree_palm(), tree_acacia(), shrub(), bl.house_a(), bl.house_b(), bl.church()]
+        [bl.tree_broad(), bl.tree_pine(), bl.tree_palm(), bl.tree_acacia(), bl.shrub(), bl.house_a(), bl.house_b(), bl.church(), bl.house_ruin(), bl.house_ruin_b()]

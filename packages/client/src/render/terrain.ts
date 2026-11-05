@@ -10,7 +10,7 @@ import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
 import { COAST_GLSL, coastTexture } from './coast';
 import { borderField, type BorderField } from './borderField';
-import type { MeshKey, MeshPools } from './meshPools';
+import { warUniforms, type MeshKey, type MeshPools } from './meshPools';
 
 /** Tiles per side of a close-up detail chunk (see detail.ts). */
 export const DETAIL_CH = 12;
@@ -33,6 +33,8 @@ const TREEC: Partial<Record<Biome, THREE.Color[]>> = {
 };
 const TREE_P: Partial<Record<Biome, number>> = { taiga: .38, temperate: .22, jungle: .5, savanna: .07, tundra: .03 };
 const FIELDC = ['#958646', '#66743a', '#735a3e', '#848446', '#5a6a35', '#9c8c52'].map(col);
+/** Smooth woodland map (0..1): above ~.47 trees grow in stands, above .55 farmland gives way to woods. */
+const forestAt = (c: number, r: number) => vnoise(c * .11 + 7, r * .11 + 3) * .7 + vnoise(c * .31, r * .31 + 9) * .3;
 const WALLS = ['#d8cfb8', '#cfc2a4', '#c9b99c', '#e2dccb'].map(col);
 const ROOFS = ['#74392b', '#7d4a35', '#45474a', '#5a4434', '#66382b'].map(col);
 const WHITE = col('#ffffff'), RED = col('#ff6b4a'), RIVERC = col('#38535a'), CITYC = col('#878272'), ROADC = col('#7a6a4c'), TRUNK = col('#3e2c1e');
@@ -76,6 +78,8 @@ export const uNear = { value: 0 };
 
 /** Tiles per side of a far-ground chunk. */
 const FAR_CH = 40;
+/** Modelled scenery is instanced per 16x16-tile chunk so the camera frustum (and the shadow camera) cull it finely. */
+const SCN_CH = 16;
 
 /** Far-ground material: region colours (linear-filtered, so borders read as painted), brush noise, rock on steep slopes,
  *  wet sand where the land runs into the sea. Fragments under a drawn close-up chunk are discarded (detail.ts paints there). */
@@ -206,7 +210,7 @@ export class Terrain {
       let done = false;
       if ((key === 'temperate' || key === 'steppe') && tileH[i] < .55 && !river[i]) {
         const fv = vnoise(c * .06 + 11, r * .06 + 5);
-        if (fv > .68) { const id = Math.floor(vnoise(c * .19 + 3, r * .19) * 6), st = ((id & 1 ? r : c) % 2) ? 1 : .92; fieldT[i] = 1; tmp.copy(FIELDC[id % 6]).multiplyScalar(st * (.96 + hash2(i, 9) * .07)); done = true; }
+        if (fv > .68 && forestAt(c, r) < .55) { const id = Math.floor(vnoise(c * .19 + 3, r * .19) * 6), st = ((id & 1 ? r : c) % 2) ? 1 : .92; fieldT[i] = 1; tmp.copy(FIELDC[id % 6]).multiplyScalar(st * (.96 + hash2(i, 9) * .07)); done = true; }
       }
       if (!done) tmp.multiplyScalar(j);
       this.baseCol[k * 3] = tmp.r; this.baseCol[k * 3 + 1] = tmp.g; this.baseCol[k * 3 + 2] = tmp.b;
@@ -232,8 +236,11 @@ export class Terrain {
       if (river[i] || fieldT[i]) continue;
       const k = BIOME_KEYS[this.biome[i]], p = (TREE_P[k] ?? 0) * .85;
       if (!p) continue;
-      for (let n = 0; n < 2; n++) {
-        if (rng.next() > p) continue;
+      // woods: a smooth forest map packs trees into stands with clearings and lone trees between them
+      const c0 = i % COLS, r0 = (i / COLS) | 0, fo = forestAt(c0, r0);
+      const wood = fo > .44, tries = wood ? 6 : 1, pp = wood ? Math.min(.95, p * 1.5 + (fo - .44) * 2.2) : p * .5;
+      for (let n = 0; n < tries; n++) {
+        if (rng.next() > pp) continue;
         const x = tx(i % COLS) + (rng.next() - .5) * TS * .8, z = tz((i / COLS) | 0) + (rng.next() - .5) * TS * .8, y = tileH[i], t = terrOf[i];
         const cc = TREEC[k]!, ci = Math.floor(rng.next() * cc.length), c = cc[ci], s = .8 + rng.next() * .5;
         this.treeRec.push(x, z, y, s, this.biome[i], ci, t);
@@ -267,6 +274,7 @@ export class Terrain {
       for (let i = 0; i < N; i++) if (!land[i] && src[i] >= 0) { let l = this.shoreOf.get(src[i]); if (!l) this.shoreOf.set(src[i], l = []); l.push(i); }
     }
     this.warTex = this.bag.add(new THREE.DataTexture(this.warData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    warUniforms.uWarTex.value = this.warTex; warUniforms.uWarGrid.value.set(COLS, ROWS, TS, 0);
     this.warTex.magFilter = this.warTex.minFilter = THREE.LinearFilter; this.warTex.needsUpdate = true;
     this.coastTex = this.bag.add(coastTexture(world));
     this.border = borderField(world);
@@ -397,7 +405,7 @@ export class Terrain {
     if (this.hasScenery) return; this.hasScenery = true;
     const groups = new Map<string, { key: MeshKey; m: number[]; c: number[] }>();
     const put = (key: MeshKey, x: number, z: number, mat: THREE.Matrix4, c: THREE.Color) => {
-      const ck = key + ':' + Math.floor((x + HW) / (FAR_CH * TS)) + ':' + Math.floor((z + HH) / (FAR_CH * TS));
+      const ck = key + ':' + Math.floor((x + HW) / (SCN_CH * TS)) + ':' + Math.floor((z + HH) / (SCN_CH * TS));
       let g = groups.get(ck); if (!g) groups.set(ck, g = { key, m: [], c: [] });
       g.m.push(...mat.elements); g.c.push(c.r, c.g, c.b);
     };
@@ -417,6 +425,7 @@ export class Terrain {
       const s0 = (w + d) / 2, sy = s0 * (big ? .95 : .78);
       q.setFromAxisAngle(up, yaw); m4.compose(v.set(x, this.surfaceAt(x, z) - .002, z), q, sc.set(yaw ? d : w, sy, yaw ? w : d));
       put(key, x, z, m4, tc.copy(wc));
+      put(big ? 'house_ruin_b' : 'house_ruin', x, z, m4, tc.copy(wc).multiplyScalar(.85));
     }
     for (const [x, y, z, size] of this.churches) {
       q.setFromAxisAngle(up, 0); const S = size === 3 ? .16 : .12; m4.compose(v.set(x, y, z), q, sc.set(S, S * 1.1, S));
@@ -424,7 +433,8 @@ export class Terrain {
     }
     for (const g of groups.values()) {
       const geo = mp.geometry(g.key); if (!geo) continue;
-      const n = g.c.length / 3, im = new THREE.InstancedMesh(geo, mp.mat, n);
+      const n = g.c.length / 3, wk = g.key === 'house_a' || g.key === 'house_b' ? mp.houseMat : g.key.startsWith('house_ruin') ? mp.ruinMat : mp.mat;
+      const im = new THREE.InstancedMesh(geo, wk, n);
       im.instanceMatrix.array.set(g.m); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(g.c), 3);
       im.castShadow = im.receiveShadow = true; im.computeBoundingSphere(); im.visible = false;
       this.sceneryMeshes.push(im); this.add(im);
@@ -567,7 +577,7 @@ export class Terrain {
 
   setCameraDistance(dist: number) {
     // modelled trees and houses up to the front band; the light box versions further out
-    const on = this.hasScenery && dist < 40;
+    const on = this.hasScenery && dist < 24;
     if (on !== this.sceneryOn) { this.sceneryOn = on; for (const m of this.sceneryMeshes) m.visible = on; this.treeMesh.visible = !on; this.houseMesh.visible = !on; }
     uNear.value = 1 - clamp((dist - 9) / 14, 0, 1);
     // line railways on the strategic map; up close the painted ground draws them (groundPaint.ts)

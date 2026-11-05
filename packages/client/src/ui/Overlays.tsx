@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useUi, type Overlay } from '../game/store';
 import { EndSheet, HelpSheet, MenuSheet, OrdersSheet } from './Sheets';
 import { ReportsSheet } from './Reports';
+import { NationSheet } from './Nation';
 
 /** Renders whichever modal the store says is open. Help remembers where it was opened from. */
 export function Overlays() {
@@ -14,6 +15,7 @@ export function Overlays() {
     case 'help': return <HelpSheet onBack={backFromHelp} />;
     case 'end': return <EndSheet />;
     case 'reports': return <ReportsSheet />;
+    case 'nation': return <NationSheet />;
     default: return null;
   }
 }

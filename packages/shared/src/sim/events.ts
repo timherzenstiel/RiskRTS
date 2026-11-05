@@ -38,6 +38,14 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (g.regions[e.region].owner === me || g.battles.some(b => b.region === e.region && b.sides.includes(me))) return { text: `The enemy pulls back from ${R(e.region)}.`, cls: 'good', region: e.region };
       return null;
     case 'report': return e.sides.includes(me) ? { text: `After-action report: battle of ${R(e.region)}.`, cls: '', region: e.region, report: e.id } : null;
+    case 'strike':
+      if (e.faction !== me) return null;
+      return e.end ? { text: `The strikes in ${R(e.region)} are over. The region works for the war again.`, cls: 'good', region: e.region }
+        : { text: `Strikes in ${R(e.region)}: the war-weary workers down tools. No supply, shells or recruits from there.`, cls: 'bad', region: e.region };
+    case 'rising':
+      if (e.faction === me) return { text: `Uprising in ${R(e.region)}! The garrison mutinies and the region goes over to ${F(e.to).the}.`, cls: 'bad', region: e.region };
+      if (e.to === me) return { text: `${R(e.region)} rises against ${F(e.faction).the} and declares for us.`, cls: 'good', region: e.region };
+      return { text: `Uprising in ${R(e.region)}: it breaks away from ${F(e.faction).the}.`, cls: '', region: e.region };
     case 'air':
       if (e.faction === me) return { text: `${e.units} squadron${e.units === 1 ? '' : 's'} take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };
       if (g.regions[e.to].owner === me) return { text: `Enemy aircraft spotted heading for ${R(e.to)}!`, cls: 'bad', region: e.to };

@@ -1,11 +1,12 @@
 // Supply income, convoys, supply lines, reinforcement of battered formations and war weariness.
 import { CONT, CONT_KEYS } from '../data/regions';
+import { nationOf } from '../data/nations';
 import { DT, FORMATION, SHELLS, TICK_SECONDS, UNIT_TYPES } from '../data/units';
-import { consolidate, controls, emit, updateContested, world } from './core';
+import { consolidate, controls, emit, rnd, updateContested, world } from './core';
 import { addUnits } from './commands';
 import { moraleCap } from './battle';
 import { spiesOnConvoy } from './fog';
-import { ownsCont, checkMissions } from './missions';
+import { ownsCont, checkElim, checkMissions } from './missions';
 import type { GameState } from './types';
 
 export const DIFFICULTIES = [
@@ -22,22 +23,79 @@ export const WW_INCOME = .3;
 export const WW_NO_VOLUNTEERS = 60;
 /** Strength a cut-off garrison loses per convoy, and morale. */
 export const CUT_WEAR = .08, CUT_MORALE = 10;
+/** War weariness that fades per convoy (none under general mobilisation). */
+export const WW_FADE = 1.5;
 
-/** Supply per convoy. Contested and cut-off regions pay nothing; war weariness eats into the rest. */
+/** Regions that pay: held, not contested, supplied and not on strike. */
+const paying = (g: GameState, fid: number) => g.regions.filter(r => controls(r, fid) && !r.cut && !r.strike);
+
+/** Supply per convoy. Contested, cut-off and striking regions pay nothing; war weariness eats into the rest. */
 export function income(g: GameState, fid: number): number {
-  const mine = g.regions.filter(r => controls(r, fid) && !r.cut);
+  const mine = paying(g, fid), W = world();
   let v = Math.max(3, landIncome(mine.length));
   for (const k of CONT_KEYS) if (ownsCont(g, fid, k)) v += CONT[k].bonus;
   v += 2 * mine.filter(r => r.factory).length;
+  if (nationOf(fid).flags.empire) v += mine.filter(r => W.regions[r.id].cont !== 'EU').length;
   const ww = g.factions[fid]?.ww ?? 0;
   return Math.max(1, Math.round(v * (1 - WW_INCOME * ww / 100)));
 }
 
 /** Shells per convoy: a base output plus every supplied factory and the capital. */
 export function shellIncome(g: GameState, fid: number): number {
-  let v = SHELLS.base;
-  for (const r of g.regions) if (controls(r, fid) && !r.cut) { if (r.factory) v += SHELLS.factory; if (r.capitalOf === fid) v += SHELLS.capital; }
-  return v;
+  const N = nationOf(fid); let v = SHELLS.base;
+  for (const r of paying(g, fid)) { if (r.factory) v += N.factoryShells; if (r.capitalOf === fid) v += SHELLS.capital; }
+  const m = N.shells * (N.shellsUntil && g.day < N.shellsUntil[0] ? N.shellsUntil[1] : 1);
+  return Math.max(1, Math.round(v * m));
+}
+
+/** Manpower: men per home region still held per convoy, the war-weariness cost of each mobilisation level, the starting pool. */
+export const MANPOWER = { growth: 20, mobGrowth: .5, mobWW: .5, startMult: 3, strikeAfter: 5, riseAbove: 15, riseChance: .15 } as const;
+
+/** Men a power's manpower pool grows by each convoy: a new age class from every home region it still holds. */
+export function poolGrowth(g: GameState, fid: number): number {
+  const N = nationOf(fid), f = g.factions[fid]; let n = 0;
+  for (const r of g.regions) if (r.home === fid && controls(r, fid) && !r.strike) n++;
+  let v = n * MANPOWER.growth * N.growth * (1 + MANPOWER.mobGrowth * (f?.mob ?? 0));
+  if (N.growthUntil && g.day < N.growthUntil[0]) v *= N.growthUntil[1];
+  return Math.round(v);
+}
+
+/** Hops from the capital (or the first held home region) over own and foreign land: how remote a region is. */
+function remoteness(g: GameState, fid: number): Map<number, number> {
+  const W = world(), d = new Map<number, number>();
+  const start = g.regions.find(r => r.capitalOf === fid && r.owner === fid) ?? g.regions.find(r => r.owner === fid && r.home === fid);
+  if (!start) return d;
+  const q = [start.id]; d.set(start.id, 0);
+  for (let h = 0; h < q.length; h++) for (const j of W.regions[q[h]].adj) if (!d.has(j)) { d.set(j, d.get(q[h])! + 1); q.push(j); }
+  return d;
+}
+
+/**
+ * Unrest: a power above its war-weariness threshold for several convoys sees strikes in its most remote home regions; far above it,
+ * a striking region may rise and go over to the strongest neighbouring rival. Strikes end one by one when the weariness eases.
+ */
+function unrest(g: GameState, fid: number) {
+  const f = g.factions[fid], thr = nationOf(fid).unrest;
+  f.unrestT = f.ww >= thr ? (f.unrestT ?? 0) + 1 : Math.max(0, (f.unrestT ?? 0) - 1);
+  const strikes = g.regions.filter(r => r.owner === fid && r.strike);
+  if (f.ww < thr - 5 && strikes.length) { strikes[0].strike = false; emit(g, { k: 'strike', faction: fid, region: strikes[0].id, end: true }); return; }
+  if (f.unrestT >= MANPOWER.strikeAfter && f.unrestT % MANPOWER.strikeAfter === 0) {
+    const d = remoteness(g, fid);
+    const c = g.regions.filter(r => r.owner === fid && r.home === fid && !r.strike && r.capitalOf !== fid && r.battle < 0).sort((a, b) => (d.get(b.id) ?? 0) - (d.get(a.id) ?? 0))[0];
+    if (c) { c.strike = true; emit(g, { k: 'strike', faction: fid, region: c.id }); }
+  }
+  if (f.ww >= thr + MANPOWER.riseAbove) for (const r of strikes) if (r.battle < 0 && rnd(g) < MANPOWER.riseChance) rise(g, r);
+}
+
+/** A striking region rises: its garrison mutinies and it goes over to the strongest neighbouring rival. */
+function rise(g: GameState, r: GameState['regions'][number]) {
+  const W = world(), prev = r.owner, pw = new Map<number, number>();
+  for (const j of W.regions[r.id].adj) { const n = g.regions[j]; if (n.owner !== prev && n.owner >= 0) pw.set(n.owner, (pw.get(n.owner) ?? 0) + 1 + n.units.inf + n.units.mg * 2 + n.units.art * 2); }
+  const to = [...pw].sort((a, b) => b[1] - a[1])[0]?.[0]; if (to === undefined) return;
+  for (const k of UNIT_TYPES) { r.units[k] = 0; r.men[k] = 0; }
+  r.owner = to; r.strike = false; r.mor = 50; r.defs = []; r.contested = -1; r.stance = 0;
+  emit(g, { k: 'rising', faction: prev, region: r.id, to });
+  updateSupplyLines(g); checkElim(g, prev, to); checkMissions(g);
 }
 
 /**
@@ -66,8 +124,15 @@ export function supplyTick(g: GameState) {
   g.day += 7;
   updateSupplyLines(g, true);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
-  for (const f of g.factions) { if (!f.alive) continue; const inc = income(g, f.id); f.supply += f.ai ? Math.round(inc * d.inc) : inc; f.shells = (f.shells ?? 0) + shellIncome(g, f.id); }
-  for (const r of g.regions) if (r.barracks && r.contested < 0 && !r.cut && g.factions[r.owner].alive && g.factions[r.owner].ww < WW_NO_VOLUNTEERS) addUnits(g, r, 'inf', 1);
+  for (const f of g.factions) {
+    if (!f.alive) continue; const inc = income(g, f.id); f.supply += f.ai ? Math.round(inc * d.inc) : inc; f.shells = (f.shells ?? 0) + shellIncome(g, f.id);
+    f.men = (f.men ?? 0) + poolGrowth(g, f.id); f.ww = Math.min(100, f.ww + MANPOWER.mobWW * (f.mob ?? 0));
+  }
+  for (const r of g.regions) {
+    const f = g.factions[r.owner];
+    if (r.barracks && r.contested < 0 && !r.cut && !r.strike && f.alive && f.ww < WW_NO_VOLUNTEERS && f.men >= FORMATION.inf.men) { f.men -= FORMATION.inf.men; addUnits(g, r, 'inf', 1); }
+  }
+  for (const f of g.factions) if (f.alive) unrest(g, f.id);
   for (const r of g.regions) {
     if (r.owner < 0 || r.battle >= 0) continue;
     if (r.cut) {
@@ -78,7 +143,8 @@ export function supplyTick(g: GameState) {
     } else r.mor = Math.min(moraleCap(g, r.owner), r.mor + 6);
   }
   reinforce(g);
-  for (const f of g.factions) f.ww = Math.max(0, f.ww - 1.5);
+  // war weariness fades in quiet times, but not while the nation stays mobilised
+  for (const f of g.factions) f.ww = Math.max(0, f.ww - WW_FADE * (1 - (f.mob ?? 0) / 2));
   // cut-off holdouts run short of ammunition and food: they wear down over about five minutes
   for (const r of g.regions) {
     if (r.contested < 0 || r.battle >= 0) continue;

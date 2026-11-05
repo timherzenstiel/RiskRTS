@@ -7,7 +7,9 @@ import {
 import { HW, wrapDx } from '../world/build';
 import { MARCH_MIN, MARCH_SPEED, addForce, approachSector, emit, frontsOf, hops, mkArmy, offensives, rnd, slotsMax, slotsUsed, takeForce, world, worksAt, worksFor } from './core';
 import { joinBattle, launch, startAssault, startBattle, transferAgents } from './battle';
-import { charge, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
+import { charge, mobilise, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
+import { buildCostOf, unitCost, unitName } from './rules';
+import { nationOf } from '../data/nations';
 import { recordIntel, MAX_SPIES } from './fog';
 import type { Army, Battle, BuildKind, Command, GameState, RegionState } from './types';
 
@@ -35,14 +37,16 @@ const contestedMsg = (r: RegionState) => `Enemy holdouts still fight in ${world(
 const cutMsg = (r: RegionState) => `${world().regions[r.id].name} is cut off from supply. Reopen a route through your own regions to your capital, a factory or your home territory first.`;
 
 export function recruit(g: GameState, fid: number, r: RegionState, type: UnitType): string | null {
-  const f = g.factions[fid], c = COST[type];
+  const f = g.factions[fid], c = unitCost(g, fid, type), men = FORMATION[type].men;
   if (r.owner !== fid) return 'You can only recruit in your own regions.';
   if (r.contested >= 0) return contestedMsg(r);
   if (r.cut) return cutMsg(r);
+  if (r.strike) return `The workers of ${world().regions[r.id].name} are on strike. No recruits until the unrest eases.`;
+  if ((f.men ?? 0) < men) return `The manpower pool is empty: a ${FORMATION[type].one} needs ${men} men and ${Math.floor(f.men ?? 0)} are left. Mobilise, or wait for the next age class.`;
   if (type === 'tank' && !r.factory) return 'Tanks need a factory in this region.';
   if (type === 'plane' && !r.airfield) return 'Aircraft need an airfield in this region.';
-  if (f.supply < c) return `Not enough supply: a ${FORMATION[type].one} costs ${c}.`;
-  f.supply -= c; addUnits(g, r, type, 1); return null;
+  if (f.supply < c) return `Not enough supply: a ${unitName(g, fid, type).toLowerCase()} costs ${c}.`;
+  f.supply -= c; f.men -= men; addUnits(g, r, type, 1); return null;
 }
 
 export function build(g: GameState, fid: number, r: RegionState, kind: BuildKind): string | null {
@@ -50,7 +54,7 @@ export function build(g: GameState, fid: number, r: RegionState, kind: BuildKind
   if (r.owner !== fid) return 'You can only build in your own regions.';
   if (r.contested >= 0) return contestedMsg(r);
   if (r[kind]) return 'Already built.';
-  const c = COST[kind];
+  const c = buildCostOf(fid, kind);
   if (f.supply < c) return `Not enough supply: this costs ${c}.`;
   f.supply -= c; r[kind] = true;
   return null;
@@ -62,6 +66,8 @@ export function fortCost(r: RegionState, kind: FortKind, sector: number): number
   if (kind === 'trench') return w.tr >= MAX_TRENCH ? null : TRENCH_COST[w.tr];
   if (kind === 'sand' && w.sand >= MAX_SAND) return null;
   if (kind === 'wire' && w.wire >= MAX_WIRE) return null;
+  // France's fortress belt: concrete is cheaper at home
+  if ((kind === 'bunk' || kind === 'fort') && r.home === r.owner && nationOf(r.owner).flags.fortress) return Math.ceil(COST[kind] * .75);
   return COST[kind];
 }
 
@@ -293,6 +299,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'reinforce': return reinforce(g, fid, c.from, c.battle, c.frac);
     case 'withdraw': return withdraw(g, fid, c.battle);
     case 'produce': return produce(g, fid, c.kind, c.n);
+    case 'mobilise': return mobilise(g, fid, c.level);
     default: return 'Unknown command.';
   }
 }

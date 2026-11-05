@@ -2,6 +2,8 @@ export * from './rng';
 export * from './data/factions';
 export * from './data/regions';
 export * from './data/units';
+export * from './data/nations';
+export * from './data/calendar';
 export * from './world/build';
 export { LAND, WATER, RIVERS, RIDGES, CITIES, ROUTES } from './world/geometry';
 export * from './sim/types';

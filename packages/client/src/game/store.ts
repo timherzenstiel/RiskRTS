@@ -8,7 +8,7 @@ import { Radio } from '../audio/radio';
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
 export type Tab = 'rec' | 'build' | 'fort' | 'march';
 export type OrderKind = 'march' | 'air';
-export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports';
+export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation';
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 interface Ui {

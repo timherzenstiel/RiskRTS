@@ -16,6 +16,12 @@ export interface FactionState {
   wounded: number;
   /** Artillery shells in the national stockpile. */
   shells: number;
+  /** Manpower pool: men available for new formations. */
+  men: number;
+  /** Mobilisation level 0..2 (faster manpower growth, more war weariness). */
+  mob: number;
+  /** Convoys in a row spent above the unrest threshold. */
+  unrestT: number;
 }
 
 /** Battle stance of a garrison or an attacking army: balanced, aggressive, defensive, hold at all costs. */
@@ -63,6 +69,8 @@ export interface RegionState {
   arrT?: number; legs?: number; foughtT?: number;
   /** Shell craters per border sector, left by past battles (visual). */
   cr?: Record<number, number>;
+  /** Strikes: the region pays no supply or shells and cannot recruit until the unrest eases. */
+  strike?: boolean;
 }
 
 export interface Army {
@@ -167,6 +175,8 @@ export type GameEvent =
   | { k: 'report'; id: number; region: number; sides: number[] }
   | { k: 'overTop'; faction: number; region: number }
   | { k: 'withdraw'; faction: number; region: number; to: number }
+  | { k: 'strike'; faction: number; region: number; end?: boolean }
+  | { k: 'rising'; faction: number; region: number; to: number }
   | { k: 'over'; winner: number | null; reason?: string };
 
 export interface GameStats { won: number[]; lost: number[] }
@@ -238,4 +248,6 @@ export type Command =
   | { t: 'reinforce'; from: number; battle: number; frac: number }
   | { t: 'withdraw'; battle: number }
   /** Turn supply into shells (1 supply buys SHELLS_PER_SUPPLY shells). */
-  | { t: 'produce'; kind: 'shells'; n: number };
+  | { t: 'produce'; kind: 'shells'; n: number }
+  /** Mobilisation level 0..2: each level +50% manpower growth and +0.5 war weariness per convoy. */
+  | { t: 'mobilise'; level: number };

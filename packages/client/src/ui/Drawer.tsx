@@ -73,6 +73,7 @@ export function Drawer() {
         <div className="alert hold"><span><b>Contested</b> · {nHold} {holdF.short} defence{nHold === 1 ? '' : 's'} still hold{nHold === 1 ? 's' : ''} out{own ? '. No supply, recruiting or building until they fall' : r.contested === me ? '. Our men fight on' : ''}.</span>
           {own && r.battle < 0 && <button className="btn sm" onClick={() => { click(); ui().assault(sel); }}>Storm holdouts</button>}</div>
       )}
+      {own && r.strike && <div className="alert hold"><span><b>On strike</b> · the war-weary workers have downed tools. No supply, shells or recruits from here until the war weariness eases.</span></div>}
       {own && r.cut && <div className="alert hold"><span><b>Cut off</b> · no route through our regions to the capital, a factory or home territory. No income or recruiting; the garrison loses strength and morale every convoy.</span></div>}
       {!own && (
         <div className={'intel v' + vis}>

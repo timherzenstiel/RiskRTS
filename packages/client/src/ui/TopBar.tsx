@@ -1,6 +1,6 @@
 // Top zone: sealed-orders chip, supply ring + powers pills, clock / speed / menu.
 import { useEffect, useRef, useState } from 'react';
-import { FACTIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText, shellIncome } from '@riskrts/shared';
+import { FACTIONS, NATIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
@@ -35,7 +35,9 @@ export function TopBar() {
           <div className="ri"><span>+{income(g, me)}</span><small>per convoy</small></div>
           <div className="ww sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab.">
             <small>Shells</small><b>{Math.floor(f.shells ?? 0)}<i>+{shellIncome(g, me)}</i></b></div>
-          <div className={'ww' + (f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
+          <button className={'ww men' + ((f.men ?? 0) < 300 ? ' hi' : '')} title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for mobilisation." onClick={() => { click(); ui().setOverlay('nation'); }}>
+            <small>Men</small><b>{(f.men ?? 0) >= 10000 ? `${Math.round((f.men ?? 0) / 1000)}k` : Math.floor(f.men ?? 0).toLocaleString('en-GB')}<i>+{poolGrowth(g, me)}</i></b></button>
+          <div className={'ww' + (f.ww >= NATIONS[me].unrest ? ' hi' : f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
             <small>Weariness</small><b>{Math.round(f.ww)}%</b></div>
         </div>
         <div className="glass pills" role="group" aria-label="Powers">

@@ -9,7 +9,8 @@ import { FACTIONS } from '../data/factions';
 import { wrapDx } from '../world/build';
 import { consolidate, emit, frontsOf, rnd, updateContested, world, worksAt, worksFor } from './core';
 import { checkElim, checkMissions } from './missions';
-import { HOLD_MORALE, STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, stanceIn, statsOf, suppSlow } from './rules';
+import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, dealtMod, holdMorale, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow } from './rules';
+import { nationOf } from '../data/nations';
 import { PACES, type Agent, type Army, type Battle, type Defence, type Shell, type GameState, type RegionState, type Stance } from './types';
 
 export const trenchX = (z: number) => 1.8 + ((Math.floor((z + 40) / 3)) % 2 ? .6 : -.6);
@@ -20,7 +21,7 @@ const LULL_FROM = 60, LULL_FULL = 180, LULL_ROF = .4;
 /** Share of the men lost in battle who are wounded and come back. */
 export const WOUNDED_SHARE = .3;
 /** Morale ceiling for a power at a given war weariness. */
-export const moraleCap = (g: GameState, f: number) => 100 - (g.factions[f]?.ww ?? 0) * .45;
+export const moraleCap = (g: GameState, f: number) => 100 + nationOf(f).morale - (g.factions[f]?.ww ?? 0) * .45;
 
 function newBattle(g: GameState, region: number, dir: { x: number; z: number }, attacker: number, def: number, from: number): Battle {
   const r = g.regions[region], w = from >= 0 ? worksAt(r, from) : { tr: 0, sand: 0, wire: 0 };
@@ -166,7 +167,7 @@ interface Tick { bunker: boolean }
 
 function damage(g: GameState, b: Battle, t: Agent, dmg: number, src: AgentType, k: Tick, mult: number, sf: number) {
   if (t.dead || t.out) return;
-  dmg *= mult * STANCE_DEALT[stanceIn(b, sf)];
+  dmg *= mult * STANCE_DEALT[stanceIn(b, sf)] * dealtMod(g, b, sf, src, t) * takenMod(g, b, t);
   const ts = stanceIn(b, t.f); dmg *= ts === 2 ? (t.trench || !t.moving ? STANCE_TAKEN[2] : 1) : STANCE_TAKEN[ts];
   if (t.type === 'plane') dmg *= ANTI_AIR[src];
   else if (isDef(t.type)) { if (SMALL_ARMS.has(src)) dmg *= .3; else if (src === 'tank') dmg *= .8; }
@@ -298,7 +299,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
     } else if (s.speed > 0 && !(a.trench && !charge) && !(a.type === 'art' && a.f === b.def && !charge) && !(attacker && !b.go && a.type !== 'art') && !a.cb) {
       let st = s.speed * dt;
       // barbed wire in front of the trench: infantry and gun teams crawl through cutting it slowly, tanks flatten it
-      if (b.wire > 0 && a.f !== b.def && inWire(b, a)) { if (a.type === 'tank') b.wire = Math.max(0, b.wire - dt * 3); else { st *= .5; b.wire = Math.max(0, b.wire - dt * .15); } }
+      if (b.wire > 0 && a.f !== b.def && inWire(b, a)) { if (a.type === 'tank') b.wire = Math.max(0, b.wire - dt * 3); else { st *= wireSlow(g, a.f, a.type); b.wire = Math.max(0, b.wire - dt * .15); } }
       a.x += dx / d * st; a.z += dz / d * st; a.moving = true; a.phase += dt * 9;
     } else a.moving = false;
   }
@@ -323,7 +324,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
       if (d < sh.sp + 1) pinned.add(o.f);
     }
     // shells landing on a side pin it down: suppressed troops fire less, MGs fall silent
-    for (const f of pinned) b.supp[f] = Math.min(100, (b.supp[f] ?? 0) + BARRAGE.supp * (sh.src === 'plane' ? .8 : 1));
+    for (const f of pinned) b.supp[f] = Math.min(100, (b.supp[f] ?? 0) + BARRAGE.supp * (sh.src === 'plane' ? .8 : 1) * suppMod(g, sh.f));
     const u = alongOf(b, sh.x, sh.z); if (u > 2 && u < 18) b.craters = (b.craters ?? 0) + 1;
     if (b.wire > 0) { if (u > 2 && u < 9) b.wire = Math.max(0, b.wire - sh.dmg * .4); }
     boom(g, b, sh.x, sh.z, sh.src === 'plane' ? 1.2 : 1);
@@ -347,7 +348,7 @@ function morale(g: GameState, b: Battle, dt: number) {
     let men = 0; for (const a of b.agents) if (a.f === f && !a.dead && !a.out && !isDef(a.type)) men += Math.max(0, a.hp) / statsOf(g, f, a.type).hp * (a.men ?? 50);
     const lost = (b.lost[f] ?? 0) - (seen[f] ?? 0); seen[f] = b.lost[f] ?? 0;
     let m = b.mor[f] ?? 70; const hold = stanceIn(b, f) === 3;
-    if (men > 0) m -= lost / (men + lost) * 55 * (hold ? HOLD_MORALE : 1);
+    if (men > 0) m -= lost / (men + lost) * 55 * (hold ? holdMorale(f) : 1);
     if (lost <= .01) m += dt * .6;
     b.mor[f] = m = Math.max(0, Math.min(moraleCap(g, f), m));
     // below 15 morale, a shaken battalion now and then lays down its arms
@@ -387,7 +388,7 @@ function tallyLosses(g: GameState, b: Battle) {
   for (const [fs, lost] of Object.entries(b.lost)) {
     const f = g.factions[+fs]; if (!f || lost <= 0) continue;
     if (f.alive) f.wounded += lost * WOUNDED_SHARE;
-    f.ww = Math.min(100, f.ww + lost / 400);
+    f.ww = Math.min(100, f.ww + lost / 400 * nationOf(+fs).wwLoss);
   }
 }
 

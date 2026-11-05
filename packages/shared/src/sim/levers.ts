@@ -76,3 +76,9 @@ export function produce(g: GameState, fid: number, kind: 'shells', n: number): s
   if (f.supply < n) return `Not enough supply: ${n * SHELLS.perSupply} shells cost ${n}.`;
   f.supply -= n; f.shells += n * SHELLS.perSupply; return null;
 }
+
+/** Mobilisation level: 0 peacetime classes, 1 partial, 2 general mobilisation. */
+export function mobilise(g: GameState, fid: number, level: number): string | null {
+  if (level !== 0 && level !== 1 && level !== 2) return 'Invalid order.';
+  g.factions[fid].mob = level; return null;
+}

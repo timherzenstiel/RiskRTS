@@ -1,11 +1,12 @@
 // Creating and advancing a game.
 import { FACTIONS, NUM_FACTIONS } from '../data/factions';
+import { nationOf } from '../data/nations';
 import { FORMATION, UNIT_TYPES, emptyUnits, type Units } from '../data/units';
 import { Rng } from '../rng';
 import { newRegion, world, rnd } from './core';
 import { aiThink } from './ai';
 import { arrive } from './commands';
-import { DIFFICULTIES, supplyTick, updateSupplyLines } from './economy';
+import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
@@ -29,19 +30,23 @@ export function createGame(opt: GameOptions): GameState {
   const g: GameState = {
     v: 4, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
-    factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start })),
+    factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start, men: 0, mob: 0, unrestT: 0 })),
     armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], over: false, winner: null, nextId: 1,
     stats: { won: Array(NUM_FACTIONS).fill(0), lost: Array(NUM_FACTIONS).fill(0) },
     events: [], fx: opt.fx === false ? null : [],
   };
   FACTIONS.forEach((f, id) => {
-    const t = g.regions[W.byName[f.capital].id]; t.owner = id; t.capitalOf = id; t.units = { inf: 6, mg: 2, art: 1, tank: 0, plane: 0 }; t.factory = true;
+    const t = g.regions[W.byName[f.capital].id]; t.owner = id; t.capitalOf = id; t.units = { inf: nationOf(id).startInf, mg: 2, art: 1, tank: 0, plane: 0 }; t.factory = true;
     for (const n of W.regions[t.id].adj) if (!W.seaLane.has(t.id + '|' + n)) t.works[n] = { tr: 2, sand: 0, wire: 0 };
     t.defs.push({ id: g.nextId++, k: 'pill', s: -1, hp: DT.pill.hp, f: id });
   });
   const rest = R.shuffle(g.regions.filter(t => t.owner < 0)), off = R.int(6);
   rest.forEach((t, k) => { t.owner = (k + off) % NUM_FACTIONS; t.units.inf = 2 + (R.next() < .5 ? 1 : 0); });
   for (const t of g.regions) { t.men = fullStrength(t.units); t.home = t.owner; }
+  // Gallipoli: Ottoman home regions start dug in on every land border
+  for (const t of g.regions) if (nationOf(t.owner).flags.gallipoli) for (const n of W.regions[t.id].adj) if (!W.seaLane.has(t.id + '|' + n)) { const w = (t.works[n] ??= { tr: 0, sand: 0, wire: 0 }); w.tr = Math.max(w.tr, 2); }
+  // manpower pool: about three times the men under arms, scaled by nation
+  for (const f of g.factions) { let m = 0; for (const t of g.regions) if (t.owner === f.id) for (const k of UNIT_TYPES) m += t.men[k]; f.men = Math.round(m * MANPOWER.startMult * nationOf(f.id).pool); }
   const pool = R.shuffle(buildMissions());
   g.factions.forEach(f => { const i = pool.findIndex(m => !(m.type === 'destroy' && m.target === f.id)); f.mission = pool.splice(i, 1)[0]; });
   g.factions.forEach(f => { if (f.mission!.type === 'destroy') (f.mission as { n0?: number }).n0 = g.regions.filter(r => r.owner === (f.mission as { target: number }).target).length; });
@@ -56,7 +61,7 @@ const fullStrength = (u: Units) => { const m = emptyUnits(); for (const k of UNI
 /** Bring a saved game from an older version up to date. Returns null if it cannot be read. */
 export function migrateState(s: GameState & { v: number }): GameState | null {
   if (!s || !Array.isArray(s.regions)) return null;
-  if (s.v === 4) return s;
+  if (s.v === 4) return fill4(s);
   if (s.v === 3) return migrate3(s);
   if (s.v !== 2) return null;
   const W = world();
@@ -87,6 +92,15 @@ function migrate3(s: GameState): GameState {
   }
   s.reports ??= [];
   s.v = 4;
+  return fill4(s);
+}
+
+/** Fields added to version 4 during the Great War update: defaults for saves made before them. */
+function fill4(s: GameState): GameState {
+  for (const f of s.factions) {
+    if (f.men === undefined) { let m = 0; for (const t of s.regions) if (t.owner === f.id) for (const k of UNIT_TYPES) m += t.men[k]; f.men = Math.round(m * MANPOWER.startMult * nationOf(f.id).pool); }
+    f.mob ??= 0; f.unrestT ??= 0;
+  }
   return s;
 }
 

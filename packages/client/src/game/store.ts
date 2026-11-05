@@ -1,6 +1,6 @@
 // UI state (zustand). Game state itself lives in the Session; components read it through useSim() and re-render on `rev`.
 import { create } from 'zustand';
-import { describeEvent, type BuildKind, type Command, type DefKind, type GameEvent, type UnitType } from '@riskrts/shared';
+import { describeEvent, type BuildKind, type Command, type FortKind, type GameEvent, type UnitType } from '@riskrts/shared';
 import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
@@ -53,7 +53,9 @@ interface Ui {
   /** Convenience actions that send a command and surface errors as toasts. */
   recruit(region: number, unit: UnitType, n?: number): void;
   build(region: number, kind: BuildKind): void;
-  fortify(region: number, kind: DefKind, sector: number): void;
+  fortify(region: number, kind: FortKind, sector: number): void;
+  /** Send any command; errors become toasts. */
+  order(cmd: Command): boolean;
   march(from: number, to: number): void;
   air(from: number, to: number): void;
   assault(region: number): void;
@@ -107,6 +109,7 @@ export const useUi = create<Ui>((set, get) => ({
     const s = get().session; if (!s) return; const err = s.send({ t: 'air', from, to, frac: get().sendFrac });
     if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); set({ orderMode: false, orderKind: 'march' }); get().bump();
   },
+  order: (cmd) => { const s = get().session; if (!s) return false; const err = s.send(cmd); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); return !err; },
   assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); },
   march: (from, to) => {
     const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac });

@@ -1,5 +1,6 @@
-// Popover with every power's regions, units and income, plus continent bonuses and who holds them.
-import { CONT, CONT_KEYS, FACTIONS, income, ownsCont, totalUnits } from '@riskrts/shared';
+// Popover with every power's regions, men and income (rivals' strength is hidden by the fog of war), plus continent bonuses.
+import { CONT, CONT_KEYS, FACTIONS, income, ownsCont } from '@riskrts/shared';
+import { menOf, menStr } from './format';
 import { useSim, useUi } from '../game/store';
 
 export function Scoreboard() {
@@ -9,16 +10,17 @@ export function Scoreboard() {
   return (
     <div id="score" className="glass" role="dialog" aria-label="Scoreboard">
       <table>
-        <thead><tr><th scope="col">Power</th><th scope="col">Regions</th><th scope="col">Units</th><th scope="col">Income</th></tr></thead>
+        <thead><tr><th scope="col">Power</th><th scope="col">Regions</th><th scope="col">Men</th><th scope="col">Income</th></tr></thead>
         <tbody>
           {FACTIONS.map((f, i) => {
             const alive = g.factions[i].alive;
             const n = g.regions.filter(r => r.owner === i).length;
-            const u = g.regions.reduce((s, r) => s + (r.owner === i ? totalUnits(r.units) : 0), 0) + g.armies.reduce((s, a) => s + (a.owner === i ? totalUnits(a.units) : 0), 0);
+            const seeAll = i === me || g.over || !g.factions[me].alive;
+            const u = g.regions.reduce((s, r) => s + (r.owner === i ? menOf(r.men) : 0), 0) + g.armies.reduce((s, a) => s + (a.owner === i ? menOf(a.men) : 0), 0);
             return (
               <tr key={i} className={(i === me ? 'me ' : '') + (alive ? '' : 'dead')}>
                 <td><i className="dot" style={{ '--c': f.color } as React.CSSProperties} />{f.name}</td>
-                <td>{n}</td><td>{u}</td><td>{alive ? `+${income(g, i)}` : '—'}</td>
+                <td>{n}</td><td>{seeAll ? menStr(u) : '?'}</td><td>{!alive ? '—' : seeAll ? `+${income(g, i)}` : '?'}</td>
               </tr>
             );
           })}

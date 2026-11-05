@@ -1,6 +1,6 @@
 // Game state. Everything here is plain JSON-able data so it can be snapshotted, sent over the wire and unit-tested.
 import type { ContKey } from '../data/regions';
-import type { AgentType, DefKind, Units, UnitType } from '../data/units';
+import type { AgentType, DefKind, FortKind, Units, UnitType } from '../data/units';
 
 export type Mission =
   | { type: 'conts' | 'conts1'; conts: ContKey[] }
@@ -8,14 +8,40 @@ export type Mission =
   | { type: 'count2'; n: number }
   | { type: 'destroy'; target: number; n0?: number };
 
-export interface FactionState { id: number; supply: number; alive: boolean; mission: Mission | null; aiT: number; ai: boolean }
+export interface FactionState {
+  id: number; supply: number; alive: boolean; mission: Mission | null; aiT: number; ai: boolean;
+  /** War weariness 0..100: grows with casualties, cuts income and morale, fades in quiet times. */
+  ww: number;
+  /** Wounded men who return to under-strength formations with the next convoys. */
+  wounded: number;
+}
+
+/** Field works on one border sector: trench depth (0..3), sandbag rows (0..2), barbed wire belts (0..2). */
+export interface Works { tr: number; sand: number; wire: number }
 
 /** A fixed defence. `s` is the border sector it covers (a neighbouring region id) or -1 for the interior. */
 export interface Defence { id: number; k: DefKind; s: number; hp: number; f: number }
 
 export interface RegionState {
-  id: number; owner: number; units: Units; trench: number; factory: boolean; barracks: boolean; airfield: boolean;
+  id: number; owner: number; units: Units;
+  /** Men actually present per unit type (full strength = units × FORMATION.men). */
+  men: Units;
+  factory: boolean; barracks: boolean; airfield: boolean;
   defs: Defence[];
+  /** Field works per border sector, keyed by neighbouring region id. Missing = none. */
+  works: Record<number, Works>;
+  /** Morale of the garrison, 0..100. */
+  mor: number;
+  /** Power that held this region when the war began (its home territory is always a source of supply for it), or -1. */
+  home: number;
+  /** No supply line back to the capital, a factory or home territory: no income, no recruiting, the garrison wears down. */
+  cut: boolean;
+  /** Fog-of-war views only: 3 full, 2 scouted (stale report), 1 observed from across the border, 0 unknown. */
+  vis?: number;
+  /** Fog-of-war views only: day of the report shown (vis 2), and the estimated men [low, high] (vis 1 or 2). */
+  seen?: number; est?: [number, number];
+  /** Fog-of-war views only: a spy of the viewer works here. */
+  spied?: boolean;
   /** Faction whose defences still hold out here after the region fell, or -1. A contested region pays no income and cannot recruit or build. */
   contested: number;
   /** Faction whose capital this is, or -1. */
@@ -25,7 +51,9 @@ export interface RegionState {
 }
 
 export interface Army {
-  id: number; owner: number; units: Units; from: number; to: number;
+  id: number; owner: number; units: Units; men: Units; mor: number; from: number; to: number;
+  /** Reconnaissance: a cavalry patrol (returns with a report on one border) or a reconnaissance flight. */
+  scout?: 'patrol' | 'recon';
   /** Progress 0..1. */
   t: number; dur: number; sea: boolean;
   /** Aircraft flight (straight line, no sea lane needed). `ret` = returning home after a sortie. */
@@ -38,6 +66,8 @@ export interface Agent {
   f: number; type: AgentType; x: number; z: number; hp: number;
   cd: number; rt: number; tgt: number; dead: boolean; dieT: number; fireT: number;
   face: number; phase: number; moving: boolean; trench: boolean;
+  /** Men in this formation at full health (hp tracks the share still fighting). */
+  men?: number;
   /** Defence agents: the Defence they came from (they return to the region when the battle ends). */
   defId?: number; sector?: number;
   /** Aircraft: remaining time over the battlefield, home region, and whether it has left. */
@@ -56,6 +86,14 @@ export interface Battle {
   def: number;
   /** Border sector the attack comes through (neighbouring region id), or -1. */
   from: number;
+  /** Field works of the defended border: trench depth, sandbag rows, barbed wire hit points (and at start). */
+  tr: number; sand: number; wire: number; wire0: number;
+  /** Morale per faction (0..100) and men lost per faction. */
+  mor: Record<number, number>; lost: Record<number, number>;
+  /** Battle age when fresh troops last arrived; long quiet spells settle into trench warfare. */
+  lastJoin: number;
+  /** Morale bookkeeping: losses already counted per faction, and factions whose men have started to surrender. */
+  seen?: Record<number, number>; broke?: Record<number, number>;
   /** Per-side [faction, alive, total] when agents are not streamed (network mirrors only). */
   counts?: [number, number, number][];
 }
@@ -78,6 +116,12 @@ export type GameEvent =
   | { k: 'cleared'; region: number; faction: number }
   | { k: 'eliminated'; faction: number }
   | { k: 'newOrders'; faction: number }
+  | { k: 'intel'; faction: number; region: number; by: 'patrol' | 'recon' | 'spy' }
+  | { k: 'scoutLost'; faction: number; region: number; by: 'patrol' | 'recon' | 'spy' }
+  | { k: 'spyFound'; faction: number; region: number; owner: number }
+  | { k: 'cut'; faction: number; region: number }
+  | { k: 'surrender'; faction: number; region: number; n: number }
+  | { k: 'breakthrough'; faction: number; region: number; from: number }
   | { k: 'over'; winner: number | null; reason?: string };
 
 export interface GameStats { won: number[]; lost: number[] }
@@ -97,12 +141,25 @@ export const PACES = [
   { name: 'Long', rof: 1.6, charge: 300, fuel: 60, desc: 'Drawn-out sieges, time to reinforce' },
 ] as const;
 
+/** What a power last learned about a region from reconnaissance. */
+export interface Intel {
+  day: number; time: number; owner: number; units: Units; men: Units; defs: Defence[]; works: Record<number, Works>;
+  factory: boolean; barracks: boolean; airfield: boolean;
+}
+/** A spy: travelling until `eta`, then reporting continuously from `region` until found. */
+export interface Spy { id: number; f: number; region: number; eta: number }
+
 export interface GameState {
-  v: 2; seed: number; rng: number;
+  v: 3; seed: number; rng: number;
   time: number; day: number; supplyT: number; diff: number;
   cfg: GameSettings;
   regions: RegionState[]; factions: FactionState[];
   armies: Army[]; battles: Battle[];
+  /** intel[faction][region]: the last reconnaissance report, or null. */
+  intel: (Intel | null)[][];
+  spies: Spy[];
+  /** Fog-of-war views only: the faction this view was made for. */
+  viewer?: number;
   over: boolean; winner: number | null;
   nextId: number;
   stats: GameStats;
@@ -110,12 +167,18 @@ export interface GameState {
   fx: Fx[] | null;
 }
 
-export type BuildKind = 'trench' | 'factory' | 'barracks' | 'airfield';
+export type BuildKind = 'factory' | 'barracks' | 'airfield';
 export type Command =
   | { t: 'recruit'; region: number; unit: UnitType; n?: number }
   | { t: 'build'; region: number; kind: BuildKind }
-  /** Place a defence on a border sector (neighbour id) or the interior (-1). */
-  | { t: 'fortify'; region: number; kind: DefKind; sector: number }
+  /** Place a defence or field work on a border sector (neighbour id) or a defence in the interior (-1). */
+  | { t: 'fortify'; region: number; kind: FortKind; sector: number }
+  /** Reconnaissance: a cavalry patrol over one border, a reconnaissance flight up to AIR_RANGE borders, a spy from the capital to anywhere. */
+  | { t: 'patrol'; from: number; to: number }
+  | { t: 'recon'; from: number; to: number }
+  | { t: 'spy'; to: number }
+  /** Move part of the defenders of a region from its other fronts to the front in battle `battle`. */
+  | { t: 'shift'; region: number; battle: number }
   | { t: 'march'; from: number; to: number; frac: number }
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */
   | { t: 'air'; from: number; to: number; frac: number }

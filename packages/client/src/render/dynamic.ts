@@ -52,7 +52,7 @@ export class DynamicDraw {
         for (let k = 0; k < 4; k++) P(bx - .11 + k * .075, .09, bz + .076, .05, .05, .01, K.flash, m.glowPool);
       }
       if (t.airfield) m.airfield(x + .05, this.hAt(x + .05, z + .62, y), z + .62, Math.PI / 2, f, .7, t.battle >= 0 ? 0 : t.units.plane, T);
-      for (let k = 0; k < t.trench * 4; k++) { const lx = -.3 + (k % 6) * .1, lz = .26 + Math.floor(k / 6) * .07; m.part(x, y, z, 0, lx, .018, lz, .085, .035, .05, (k % 2) ? K.sand : K.sand2); }
+      if (rig.dist < 45) this.works(t, def.id, y);
       if (t.battle >= 0) continue;
       this.garrison(x, y, z, f, t.units, S);
     }
@@ -80,11 +80,25 @@ export class DynamicDraw {
       const face = d.s < 0 ? 0 : Math.atan2(x - R.cx, z - R.cz), hold = d.f !== t.owner;
       const S = .72 * (.75 + .25 * Math.max(.2, d.hp / 80));
       if (d.k === 'pill') m.pillbox(x, y, z, face, d.f, S, hold);
+      else if (d.k === 'bunk') m.bunker(x, y, z, face, d.f, S * .8, hold);
       else if (d.k === 'fort') m.emplacement(x, y, z, face, d.f, S);
       else m.flak(x, y, z, face, d.f, S, 0);
       if (hold && Math.random() < .015) this.fx.spawn(x, y + .05, z, .01, .12, 0, 0, 2.5, .03, .12, K.smoke2, F_MAP);
     }
     void DEF_KINDS; void T;
+  }
+
+  /** Field works on each border: the trench line, sandbags on its parapet, wire belts in front, facing the neighbour. */
+  private works(t: GameState['regions'][number], rid: number, y0: number) {
+    const W = this.world, R = W.regions[rid], m = this.m;
+    for (const [ks, w] of Object.entries(t.works)) {
+      if (!w.tr && !w.sand && !w.wire) continue;
+      const s = +ks, p = sectorPoint(W, rid, s), face = Math.atan2(p.x - R.cx, p.z - R.cz), ox = Math.sin(face), oz = Math.cos(face);
+      const at = (d: number): [number, number, number] => { const x = p.x + ox * d, z = p.z + oz * d; return [x, this.hAt(x, z, y0), z]; };
+      if (w.tr) { const [x, y, z] = at(.2); m.trenchLine(x, y, z, face, .7, w.tr, 1.4); }
+      if (w.sand) { const [x, y, z] = at(.26); m.sandbags(x, y, z, face, .6, w.sand, 1.3); }
+      if (w.wire) for (let k = 0; k < w.wire; k++) { const [x, y, z] = at(.36 + k * .08); m.wireBelt(x, y, z, face, .75, .8, 1.3); }
+    }
   }
 
   /** Pulsing ring on the border sector picked in the fortify tab. */

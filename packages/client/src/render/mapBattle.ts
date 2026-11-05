@@ -11,6 +11,10 @@ import { K } from './palette';
 import { FLAME as FLAME_K, GLOW, type Sprites } from './sprites';
 import type { Terrain } from './terrain';
 import { clamp, col } from './util';
+import { battleAnchor } from './sectors';
+
+/** One front per region and border it is attacked over. */
+const frontKey = (b: { region: number; from: number }) => b.region * 512 + b.from + 1;
 
 const EMBER = col('#ff5e1a'), FLAME = col('#ffa23a'), ROCKET = col('#ffe7a8'), BLACK = col('#26231f');
 
@@ -18,7 +22,7 @@ interface Scar { x: number; z: number; y: number; r: number; rot: number; fire: 
 interface Rocket { x0: number; z0: number; y0: number; x1: number; z1: number; y1: number; t: number; dur: number; h: number; f: number }
 interface Fig { u: number; v: number; tank: boolean; crouch: boolean; ph: number }
 interface Front {
-  region: number; cx: number; cz: number;
+  region: number; key: number; cx: number; cz: number;
   /** Unit vector towards the attackers, and its perpendicular. */
   ax: number; az: number; px: number; pz: number;
   sides: [number, number];
@@ -47,14 +51,14 @@ export class MapBattles {
   private gy(x: number, z: number) { const i = tileAtW(x, z), t = i >= 0 && this.world.land[i] ? this.terrain.tileH[i] : 0; return Math.max(this.terrain.surfaceAt(x, z), t); }
 
   private make(b: Battle): Front {
-    const r = this.world.regions[b.region];
+    const r = battleAnchor(this.world, b);
     let ax = b.ax, az = b.az; const l = Math.hypot(ax, az);
     if (!(l > 1e-6)) { ax = 1; az = 0; } else { ax /= l; az /= l; }
     const R = rng(b.id * 9973 + b.region * 31 + 7);
     const figs = (): Fig[] => Array.from({ length: 14 }, (_, i) => ({ u: R(), v: R(), tank: i % 6 === 5, crouch: R() < .5, ph: R() * 6 }));
     const def = b.def >= 0 ? b.def : (b.sides.find(f => f !== b.attacker) ?? -1);
     return {
-      region: b.region, cx: r.cx, cz: r.cz, ax, az, px: -az, pz: ax, sides: [b.attacker, def], figs: [figs(), figs()],
+      region: b.region, key: frontKey(b), cx: r.x, cz: r.z, ax, az, px: -az, pz: ax, sides: [b.attacker, def], figs: [figs(), figs()],
       scars: [], rockets: [], gunT: 0, shellT: .5, volleyT: 2 + R() * 3, volleyLeft: 0, volleySide: 0, volleyGap: 0, smokeT: 0, over: -1, alive: [0, 0], seed: b.id,
     };
   }
@@ -71,9 +75,10 @@ export class MapBattles {
     this.k = clamp(rig.dist / 16, .8, 6);
     const seen = new Set<number>();
     for (const b of g.battles) {
-      let F = this.fronts.get(b.region);
-      if (!F || (F.over >= 0 && !b.ended)) { const old = F; F = this.make(b); if (old) F.scars = old.scars; this.fronts.set(b.region, F); }
-      seen.add(b.region);
+      const key = frontKey(b);
+      let F = this.fronts.get(key);
+      if (!F || (F.over >= 0 && !b.ended)) { const old = F; F = this.make(b); if (old) F.scars = old.scars; this.fronts.set(key, F); }
+      seen.add(key);
       if (b.ended) { if (F.over < 0) F.over = 0; continue; }
       const cnt = battleCounts(b); F.alive = [cnt.get(F.sides[0])?.[0] ?? 0, cnt.get(F.sides[1])?.[0] ?? 0];
       if (F.sides[1] < 0) for (const [f, c] of cnt) if (f !== F.sides[0]) { F.sides[1] = f; F.alive[1] = c[0]; }
@@ -197,9 +202,9 @@ export class MapBattles {
   /** Draw troops, rocket heads, scorched ground and flames. */
   draw(g: GameState, T: number, close: (b: Battle) => boolean, sp: Sprites) {
     const m = this.m, p = { x: 0, z: 0 };
-    const active = new Map<number, Battle>(); for (const b of g.battles) if (!b.ended) active.set(b.region, b);
+    const active = new Map<number, Battle>(); for (const b of g.battles) if (!b.ended) active.set(frontKey(b), b);
     for (const F of this.fronts.values()) {
-      const b = active.get(F.region), isClose = !!b && close(b);
+      const b = active.get(F.key), isClose = !!b && close(b);
       // scorched craters (they stay a while after the battle, slowly shrinking)
       const fade = F.over < 0 ? 1 : clamp(1 - (F.over - 30) / 60, 0, 1);
       if (fade > 0 && !isClose) for (const c of F.scars) {

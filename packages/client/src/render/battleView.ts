@@ -67,9 +67,26 @@ export class BattleView {
       switch (a.type) {
         case 'plane': m.plane(wx, y + AIR_Y + Math.sin(now * 2 + i) * .01, wz, a.face, facCol[a.f] ?? K.wing, .45, a.f); break;
         case 'pill': m.pillbox(wx, y, wz, a.face, a.f, .6); break;
+        case 'bunk': m.bunker(wx, y, wz, a.face, a.f, .7); break;
         case 'fort': m.emplacement(wx, y, wz, a.face, a.f, .6, recoil); break;
         case 'flak': m.flak(wx, y, wz, a.face, a.f, .55, recoil); break;
         default: m.unit(a.type as UnitType, wx, y, wz, a.face, a.f, US, a.moving ? a.phase : 0, recoil);
+      }
+    }
+  }
+
+  /** The defended border's field works: the trench line, sandbags on it, and what is left of the wire in front. */
+  drawWorks(m: Models, b: Battle) {
+    if (!b.tr && !b.sand && !(b.wire > 0)) return;
+    const ax = b.ax, az = b.az, px = -az, pz = ax, face = Math.atan2(ax, az), seg = 3;
+    for (let lat = -13; lat < 13; lat += seg) {
+      const t = 1.8 + ((Math.floor((lat + seg / 2 + 40) / 3)) % 2 ? .6 : -.6), c = lat + seg / 2;
+      const at = (along: number) => { const x = this.cx + (ax * along + px * c) * BS, z = this.cz + (az * along + pz * c) * BS; return [x, this.h(x, z), z] as const; };
+      if (b.tr) { const [x, y, z] = at(t); m.trenchLine(x, y, z, face, seg * BS, b.tr, .7); }
+      if (b.sand) { const [x, y, z] = at(t + .5); m.sandbags(x, y, z, face, seg * BS, b.sand, .7); }
+      if (b.wire > 0 && b.wire0 > 0) {
+        const left = b.wire / b.wire0, belts = Math.ceil(b.wire0 / 30);
+        for (let k = 0; k < belts; k++) if (((c * 7 + k * 13) % 10 + 10) % 10 / 10 < left) { const [x, y, z] = at(t + 3 + k * 1.6); m.wireBelt(x, y, z, face, seg * BS, left, .7); }
       }
     }
   }

@@ -33,6 +33,8 @@ export function TopBar() {
           <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next convoy in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
           <div className="rv"><small>Supply</small><b>{f.supply}</b></div>
           <div className="ri"><span>+{income(g, me)}</span><small>per convoy</small></div>
+          <div className={'ww' + (f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
+            <small>Weariness</small><b>{Math.round(f.ww)}%</b></div>
         </div>
         <div className="glass pills" role="group" aria-label="Powers">
           {FACTIONS.map((x, i) => (

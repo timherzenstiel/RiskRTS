@@ -18,6 +18,7 @@ import { Labels } from './labels';
 import { NetworkLayer } from './network';
 import { MapBattles } from './mapBattle';
 import { Models } from './models';
+import { MeshPools } from './meshPools';
 import { K } from './palette';
 import { Post } from './post';
 import { LineBatch, Pool, litMaterial, uChrome } from './pools';
@@ -45,6 +46,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly terrain: Terrain;
   private readonly water: Water;
   private readonly shroud: Shroud;
+  private readonly meshes: MeshPools;
   private readonly lit: Pool; private readonly glow: Pool;
   private readonly detail: GroundDetail;
   private readonly lines: LineBatch;
@@ -101,6 +103,7 @@ class WorldRenderer implements WorldRendererApi {
       this.lines = new LineBatch(this.scene, 8000);
       this.sprites = new Sprites(this.scene);
       this.models = new Models(this.lit, this.glow);
+      this.meshes = new MeshPools(this.scene); this.models.mesh = this.meshes;
       this.dyn = new DynamicDraw(this.world, this.terrain, this.models, this.lines, this.fx);
       this.net = new NetworkLayer(this.world, this.terrain);
       this.war = new MapBattles(this.world, this.terrain, this.models, this.fx);
@@ -241,7 +244,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input.dispose(); this.labels.dispose();
     for (const v of this.views.values()) v.dispose();
     this.views.clear();
-    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
+    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.meshes.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
     this.post.dispose(); this.rig.dispose();
     this.canvas.classList.remove('order', 'drag', 'smooth');
     // The context is deliberately not force-lost: the page may mount a new renderer on the same canvas.
@@ -405,7 +408,7 @@ class WorldRenderer implements WorldRendererApi {
 
   private drawScene(g: GameState | null, T: number) {
     const { lit, glow, lines, rig, sprites } = this;
-    lit.begin(); glow.begin(); lines.begin(); sprites.begin();
+    lit.begin(); glow.begin(); lines.begin(); sprites.begin(); this.meshes.begin();
     const near = rig.dist < 26;
     // fine model detail (rivets, faces, spokes, markings) only where it can be seen
     this.models.hi = rig.dist < 7; this.models.t = T;
@@ -421,7 +424,7 @@ class WorldRenderer implements WorldRendererApi {
     this.dyn.drawMarker(T);
     this.debug.extra?.(this.models, T);
     this.fx.draw(sprites, near); this.fx.drawTracers(lines);
-    lit.end(); glow.end(); lines.end(); sprites.end(rig.camera, T);
+    lit.end(); glow.end(); lines.end(); sprites.end(rig.camera, T); this.meshes.end();
   }
 }
 

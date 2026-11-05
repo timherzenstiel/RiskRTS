@@ -1,10 +1,13 @@
-// Voxel models (soldiers, guns, tanks, ships, planes). Everything is composed from coloured boxes pushed into Pools.
+// Unit models. When the baked low-poly meshes (meshPools.ts, tools/bake/models.py) have loaded, soldiers, guns, MGs, tanks,
+// planes, pillboxes and bunkers draw as those; everything else, and everything before the meshes load, is composed from
+// coloured boxes pushed into Pools.
 // Models are built in a local frame (+z = forward, sizes in model units scaled by S). The base boxes always draw; the fine detail
 // (faces, webbing, rivets, spokes, ammunition belts, markings) only draws while `hi` is set, i.e. when the camera is close enough to see it.
 import type { UnitType } from '@riskrts/shared';
 import type * as THREE from 'three';
 import type { Pool } from './pools';
 import { DEADC, HELM, K, TANKC, TANKD, TANKL, UNI, UNI2, facCol } from './palette';
+import { HELM_OF, type MeshPools } from './meshPools';
 
 const FLAG = facCol;
 /** Soldier arm poses. */
@@ -17,6 +20,9 @@ export class Models {
   t = 0;
   // current model frame: origin, facing (sin/cos) and scale
   private ox = 0; private oy = 0; private oz = 0; private of = 0; private os = 0; private oc = 1; private oS = 1;
+
+  /** Baked meshes (null or not ready: box models). */
+  mesh: MeshPools | null = null;
 
   constructor(private readonly lit: Pool, readonly glowPool: Pool) {}
 
@@ -77,6 +83,12 @@ export class Models {
   /** Infantryman. `pose`: POSE_RIFLE carries the rifle at the ready, GRIP reaches forward to a gun, SHELL carries a shell, HANG lets the arms hang. */
   soldier(x: number, y: number, z: number, face: number, f: number, S: number, crouch: boolean, walk: number, pose = POSE_RIFLE) {
     const sw = walk ? Math.sin(walk) * .018 : 0, bob = walk ? Math.abs(Math.cos(walk)) * .008 : 0;
+    if (this.mesh?.has('soldier')) {
+      const d = crouch ? -.045 : 0, yy = y + bob * S, roll = sw * 2.2;
+      this.mesh.push(crouch ? 'soldier_kneel' : 'soldier', x, yy, z, face, S, UNI[f] ?? K.khaki, roll);
+      this.mesh.push(HELM_OF[f] ?? 'helm_stahl', x - Math.cos(face) * roll * (.19 + d) * S, yy + (.19 + d) * S, z + Math.sin(face) * roll * (.19 + d) * S, face, S, UNI[f] ?? K.khaki);
+      void pose; return;
+    }
     this.at(x, y + bob * S, z, face, S);
     const b = this.b, hi = this.hi, U = UNI[f], U2 = UNI2[f];
     let d = 0;
@@ -158,6 +170,7 @@ export class Models {
 
   /** WW1-era armour in Command & Conquer detail: tracks with wheels and links, lit top plates, hatches, vision slits, rivets, guns. */
   private tank(x: number, y: number, z: number, face: number, f: number, S: number) {
+    if (this.mesh?.has('tank')) { this.mesh.push('tank', x, y, z, face, S, TANKC[f] ?? K.olive); return; }
     const p = this.part.bind(this), c = TANKC[f], d = TANKD[f], l = TANKL[f], hi = this.hi;
     if (f === 1) { // Renault FT: light tank with a rotating turret
       this.track(x, y, z, face, S, .07, .27, .07, .04);
@@ -253,6 +266,12 @@ export class Models {
   /** Maxim / Vickers machine gun: water-cooled barrel, belt feed from an ammunition box, its mount and a crew of two. */
   private mg(x: number, y: number, z: number, face: number, f: number, S: number) {
     this.at(x, y, z, face, S);
+    if (this.mesh?.has('mg')) {
+      this.mesh.push('mg', x, y, z, face, S * 1.1, TANKC[f] ?? K.olive);
+      this.soldier(this.wx(0, -.075), y, this.wz(0, -.075), face, f, S, true, 0, POSE_GRIP);
+      this.soldier(this.wx(.1, -.03), y, this.wz(.1, -.03), face - .7, f, S, true, 0, POSE_GRIP);
+      return;
+    }
     const b = this.b, hi = this.hi, gy = .05;
     if (f === 2) { // Sokolov wheeled mount with a gun shield
       for (let sd = -1; sd <= 1; sd += 2) this.wheel(sd * .05, .028, -.01, .024, .01, K.tyre, K.gun);
@@ -292,6 +311,14 @@ export class Models {
   /** Field gun (18-pounder / 75 mm): spoked wheels, gun shield, recoiling barrel on its cradle, box trail with spade, ammunition and crew. */
   private fieldGun(x: number, y: number, z: number, face: number, f: number, S: number, recoil: number) {
     this.at(x, y, z, face, S);
+    if (this.mesh?.has('art')) {
+      const rb = recoil * .04 * S;
+      this.mesh.push('art', x - Math.sin(face) * rb, y, z - Math.cos(face) * rb, face, S * 1.25, TANKC[f] ?? K.olive);
+      this.soldier(this.wx(.11, -.07), y, this.wz(.11, -.07), face, f, S, true, 0, POSE_GRIP);
+      this.soldier(this.wx(-.12, -.11), y, this.wz(-.12, -.11), face + .3, f, S, true, 0, POSE_SHELL);
+      if (this.hi) this.soldier(this.wx(.04, -.22), y, this.wz(.04, -.22), face + .2, f, S, false, 0, POSE_HANG);
+      return;
+    }
     const b = this.b, hi = this.hi, rb = recoil * .04;
     for (let sd = -1; sd <= 1; sd += 2) this.wheel(sd * .08, .058, 0, .056, .012, K.tyre, K.wood);
     b(0, .058, 0, .17, .012, .012, K.gun);
@@ -350,6 +377,11 @@ export class Models {
   /** Biplane: tapering fuselage, two wings with struts and markings, spinning propeller, pilot, guns, tail and fixed undercarriage. f < 0 = no markings. */
   plane(x: number, y: number, z: number, face: number, c: THREE.Color, S: number, f = -1) {
     this.at(x, y, z, face, S);
+    if (this.mesh?.has('plane')) {
+      this.mesh.push('plane', x, y, z, face, S, c);
+      this.mesh.push('prop', x, y, z, face, S, K.wood, this.t * 38 + x * 7);
+      return;
+    }
     const b = this.b, hi = this.hi;
     // fuselage
     b(0, 0, .105, .054, .054, .02, K.hatch); b(0, 0, .06, .048, .048, .07, c); b(0, 0, -.01, .042, .042, .07, c);
@@ -450,6 +482,12 @@ export class Models {
   /** Concrete pillbox with a firing slit facing `face`. `hold` = holdout (cut off, shown with a white flag). */
   pillbox(x: number, y: number, z: number, face: number, f: number, S: number, hold = false) {
     const p = this.part.bind(this);
+    if (this.mesh?.has('pill')) {
+      this.mesh.push('pill', x, y, z, face, S, K.concrete);
+      p(x, y, z, face, -.06 * S, .11 * S, -.06 * S, .006 * S, .08 * S, .006 * S, K.pole);
+      p(x, y, z, face, -.04 * S, .135 * S, -.06 * S, .04 * S, .025 * S, .004 * S, hold ? K.white : FLAG[f] ?? K.white);
+      return;
+    }
     p(x, y, z, face, 0, .03 * S, 0, .15 * S, .06 * S, .15 * S, K.concrete);
     p(x, y, z, face, 0, .015 * S, 0, .18 * S, .03 * S, .18 * S, K.sand2);
     p(x, y, z, face, 0, .068 * S, 0, .17 * S, .018 * S, .17 * S, K.concrete2);
@@ -474,6 +512,12 @@ export class Models {
   /** Deep bunker: a low concrete block under an earth mound, two firing slits. `hold` = holdout (white flag). */
   bunker(x: number, y: number, z: number, face: number, f: number, S: number, hold = false) {
     const p = this.part.bind(this);
+    if (this.mesh?.has('bunk')) {
+      this.mesh.push('bunk', x, y, z, face, S * 1.2, K.concrete);
+      p(x, y, z, face, -.1 * S, .13 * S, -.08 * S, .006 * S, .09 * S, .006 * S, K.pole);
+      p(x, y, z, face, -.08 * S, .16 * S, -.08 * S, .04 * S, .025 * S, .004 * S, hold ? K.white : FLAG[f] ?? K.white);
+      return;
+    }
     p(x, y, z, face, 0, .012 * S, 0, .32 * S, .024 * S, .26 * S, K.mud);
     p(x, y, z, face, 0, .04 * S, -.01 * S, .26 * S, .05 * S, .2 * S, K.dirt);
     p(x, y, z, face, 0, .05 * S, .04 * S, .24 * S, .06 * S, .12 * S, K.concrete);

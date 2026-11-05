@@ -8,6 +8,7 @@ import {
 import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
+import { COAST_GLSL, coastTexture } from './coast';
 import type { MeshKey, MeshPools } from './meshPools';
 
 /** Tiles per side of a close-up detail chunk (see detail.ts). */
@@ -77,22 +78,26 @@ const FAR_CH = 40;
 
 /** Far-ground material: region colours (linear-filtered, so borders read as painted), brush noise, rock on steep slopes,
  *  wet sand where the land runs into the sea. Fragments under a drawn close-up chunk are discarded (detail.ts paints there). */
-function farMaterial(strat: THREE.DataTexture, nat: THREE.DataTexture, cover: THREE.DataTexture, war: THREE.DataTexture) {
+function farMaterial(strat: THREE.DataTexture, nat: THREE.DataTexture, cover: THREE.DataTexture, war: THREE.DataTexture, coast: THREE.DataTexture) {
   const m = new THREE.MeshLambertMaterial();
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uStrat: { value: strat }, uNatL: { value: nat }, uCover: { value: cover }, uWar: { value: war }, uNear, uGrid: { value: new THREE.Vector2(COLS, ROWS) } });
+    Object.assign(sh.uniforms, { uStrat: { value: strat }, uNatL: { value: nat }, uCover: { value: cover }, uWar: { value: war }, uCoast: { value: coast }, uNear, uGrid: { value: new THREE.Vector2(COLS, ROWS) } });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normalize(mat3(modelMatrix)*objectNormal);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-uniform sampler2D uStrat, uNatL, uCover, uWar; uniform float uNear; uniform vec2 uGrid; varying vec3 vWP; varying vec3 vWN;
+uniform sampler2D uStrat, uNatL, uCover, uWar, uCoast; uniform float uNear; uniform vec2 uGrid; varying vec3 vWP; varying vec3 vWN;
 float fh(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float fn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(fh(i),fh(i+vec2(1,0)),f.x),mix(fh(i+vec2(0,1)),fh(i+vec2(1,1)),f.x),f.y); }
-float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+3.)*.08; }`)
+float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+3.)*.08; }
+${COAST_GLSL}`)
       .replace('void main() {', `void main() {
   vec2 _cc=floor((vWP.xz+vec2(${HW.toFixed(4)},${HH.toFixed(4)}))/${(DETAIL_CH * TS).toFixed(5)});
   if(uNear>.01 && texture2D(uCover,(_cc+.5)/vec2(${DCC}.,${DCR}.)).r>.5) discard;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
   vec2 _t=(vWP.xz/${TS.toFixed(6)}+uGrid*.5)/uGrid;
+  // smooth coastline: cut the land along the coast field, crinkled by noise into a rocky edge
+  float _cs=coastSd(uCoast,_t)+(fb(vWP.xz*9.)-.5)*.28+(fn(vWP.xz*31.)-.5)*.08;
+  if(_cs>0.) discard;
   vec2 _w=vec2(fb(vWP.xz*1.7),fb(vWP.xz*1.7+7.1))-.5;
   vec3 _s=pow(texture2D(uStrat,_t+_w*.0009).rgb,vec3(2.2)), _n=pow(texture2D(uNatL,_t+_w*.0012).rgb,vec3(2.2));
   vec3 _c=mix(_s,_n,uNear);
@@ -108,6 +113,12 @@ float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+
     vec2 _cg=vWP.xz*7.,_ci=floor(_cg),_cf=fract(_cg)-.5; float _cr=.18+.2*fh(_ci+3.);
     if(fh(_ci)<_dm*.7&&length(_cf)<_cr) _c*=length(_cf+vec2(.06))<_cr?.55:1.25;
   }
+  // the shore: wet sand a little inland, then a dark broken rock rim at the water's edge (lit top-left)
+  float _sand=smoothstep(-.42,-.2,_cs)*(1.-smoothstep(-.14,-.08,_cs));
+  _c=mix(_c,vec3(.24,.2,.14)*(.8+.3*_m2),_sand*.55);
+  float _rim=smoothstep(-.13,-.05,_cs);
+  vec3 _rk=mix(vec3(.12,.1,.085),vec3(.3,.26,.21),fn(vWP.xz*40.)); _rk*=.75+.5*step(.55,fn(vWP.xz*26.+3.));
+  _c=mix(_c,_rk,_rim*.9);
   float _wet=smoothstep(.235,.15,vWP.y);
   _c=mix(_c,vec3(.2,.17,.12)*(.75+.35*_m2),_wet*.45);
   _c*=mix(.55,1.,smoothstep(.04,.18,vWP.y));
@@ -155,6 +166,8 @@ export class Terrain {
   readonly warTex: THREE.DataTexture;
   private warKey = '';
   private readonly nearBorder = new Map<string, Int32Array>();
+  /** Signed distance to the smooth coastline (coast.ts), shared by the ground shaders and the water. */
+  readonly coastTex: THREE.DataTexture;
   /** Village and town houses (x, y, z, width, height, depth, wall colour) and churches (x, y, z, size), for the modelled scenery. */
   private readonly homes: [number, number, number, number, number, number, THREE.Color][] = [];
   private readonly churches: [number, number, number, number][] = [];
@@ -252,7 +265,8 @@ export class Terrain {
     }
     this.warTex = this.bag.add(new THREE.DataTexture(this.warData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
     this.warTex.magFilter = this.warTex.minFilter = THREE.LinearFilter; this.warTex.needsUpdate = true;
-    const farMat = this.bag.add(farMaterial(this.stratTex, this.natLTex, this.coverTex, this.warTex));
+    this.coastTex = this.bag.add(coastTexture(world));
+    const farMat = this.bag.add(farMaterial(this.stratTex, this.natLTex, this.coverTex, this.warTex, this.coastTex));
     this.buildFarGround(farMat);
     const treeMat = this.bag.add(new THREE.MeshLambertMaterial()), coverTex = this.coverTex;
     // voxel trees give way to the detailed close-up trees wherever the detail layer is drawn
@@ -409,7 +423,7 @@ export class Terrain {
       const vert = (lx: number, ly: number) => {
         const o = ly * G + lx; if (idx[o] >= 0) return idx[o];
         const gx = 2 * (c0 + lx), gy = 2 * (r0 + ly), h = this.vtxH(gx, gy); idx[o] = pos.length / 3;
-        pos.push(gx * TS / 2 - HW, h < 0 ? -.08 : h, gy * TS / 2 - HH); return idx[o];
+        pos.push(gx * TS / 2 - HW, h < 0 ? .24 : h, gy * TS / 2 - HH); return idx[o];
       };
       for (let r = r0; r < Math.min(ROWS, r0 + FAR_CH); r++) for (let c = c0; c < Math.min(COLS, c0 + FAR_CH); c++) {
         if (!near(c, r)) continue;

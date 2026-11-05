@@ -98,7 +98,7 @@ class WorldRenderer implements WorldRendererApi {
       this.world = buildWorld();
       this.rig = new CameraRig(this.scene, SM);
       this.terrain = new Terrain(this.scene, this.world);
-      this.water = new Water(this.scene, this.world);
+      this.water = new Water(this.scene, this.world, this.terrain.coastTex);
       this.shroud = new Shroud(this.scene, this.world);
       this.lit = new Pool(this.scene, 120000, litMaterial(), true);
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);

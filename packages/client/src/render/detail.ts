@@ -100,10 +100,12 @@ export class GroundDetail {
     const vert = (lx: number, ly: number) => {
       const o = ly * G + lx; if (idx[o] >= 0) return idx[o];
       const gx = gx0 + lx, gy = gy0 + ly; idx[o] = pos.length / 3;
-      pos.push(gx * TS / 2 - HW, T.vtxH(gx, gy), gy * TS / 2 - HH); return idx[o];
+      const h = T.vtxH(gx, gy); pos.push(gx * TS / 2 - HW, h < 0 ? .24 : h, gy * TS / 2 - HH); return idx[o];
     };
+    // land tiles plus the sea tiles beside them: the smooth coastline (coast.ts) bulges into those and is cut in the shader
+    const nearLand = (c: number, r: number) => { for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc2 = c + dc; if (rr >= 0 && rr < ROWS && cc2 >= 0 && cc2 < COLS && land[rr * COLS + cc2]) return true; } return false; };
     for (let r = cr * CH; r < Math.min(ROWS, cr * CH + CH); r++) for (let c = cc * CH; c < Math.min(COLS, cc * CH + CH); c++) {
-      if (!land[r * COLS + c]) continue;
+      if (!nearLand(c, r)) continue;
       const lx = (c - cc * CH) * 2, ly = (r - cr * CH) * 2;
       for (let sy = 0; sy < 2; sy++) for (let sx = 0; sx < 2; sx++) {
         const a = vert(lx + sx, ly + sy), b = vert(lx + sx + 1, ly + sy), d = vert(lx + sx, ly + sy + 1), e = vert(lx + sx + 1, ly + sy + 1);

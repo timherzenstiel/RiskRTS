@@ -12,8 +12,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 GLB = os.path.join(ROOT, 'packages', 'client', 'public', 'art', 'units.glb')
 OUT = os.path.join(ROOT, 'packages', 'client', 'public', 'art', 'cameo')
 FACTIONS_TS = os.path.join(ROOT, 'packages', 'shared', 'src', 'data', 'factions.ts')
-HELM_OF = ['helm_brodie', 'helm_adrian', 'helm_cap', 'helm_stahl', 'helm_stahl', 'helm_kabalak']
-TANK_OF = ['tank_mk4', 'tank_ft', 'tank_mk4', 'tank_a7v', 'tank_a7v', 'tank_mk4']
+HELM_OF = ['helm_brodie', 'helm_adrian', 'helm_cap', 'helm_stahl', 'helm_stahl', 'helm_kabalak', 'helm_brodie']  # US: M1917 = Brodie pattern
+TANK_OF = ['tank_mk4', 'tank_ft', 'tank_mk4', 'tank_a7v', 'tank_a7v', 'tank_mk4', 'tank_ft']  # US: French-built Renault FT
 SAMPLES = int(os.environ.get('CAMEO_SAMPLES', '24'))
 
 def lin(h):
@@ -96,7 +96,7 @@ def main():
         sc.render.filepath = path; bpy.ops.render.render(write_still=True)
         for o in made: bpy.data.objects.remove(o, do_unlink=True)
 
-    for f in range(6):
+    for f in range(len(fac)):
         U, T, F = tint_material(f'u{f}', uni[f]), tint_material(f't{f}', tank[f]), tint_material(f'f{f}', fac[f])
         def crew(spots):
             return [(lib['soldier_kneel'], x, z, a, 1, U) for x, z, a in spots] + [(lib[HELM_OF[f]], x, z, a, 1, U, .145) for x, z, a in spots]

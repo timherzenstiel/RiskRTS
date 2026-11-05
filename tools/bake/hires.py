@@ -320,8 +320,9 @@ def markings():
     spec = {
         0: [(1, P['blue']), (.66, P['white']), (.33, P['red'])], 1: [(1, P['red']), (.66, P['white']), (.33, P['blue'])],
         2: [(1, P['white']), (.66, P['blue']), (.33, P['red'])],
+        6: [(1, P['red']), (.66, P['blue']), (.33, P['white'])],   # US Air Service, 1918
     }
-    for f in range(6):
+    for f in range(7):
         k = Kit(f'mark_{f}', jitter=0)
         for sd in (-1, 1):
             for x, y, z, r in ((sd * .13, .0658, .04, .024), (sd * .12, -.0178, .045, .021)):
@@ -330,8 +331,8 @@ def markings():
                     k.box(x, y, z, r * 2, .0012, r * 2, P['white']); k.box(x, y + .0007, z, r * 1.7, .0012, r * .5, P['black']); k.box(x, y + .0007, z, r * .5, .0012, r * 1.7, P['black'])
                 else:
                     k.box(x, y, z, r * 2, .0012, r * 2, P['white']); k.box(x, y + .0007, z, r * 1.3, .0012, r * 1.3, P['black'])
-        if f in (0, 1, 2):
-            cols = [P['blue'], P['white'], P['red']] if f < 2 else [P['white'], P['blue'], P['red']]
+        if f in (0, 1, 2, 6):
+            cols = [P['blue'], P['white'], P['red']] if f in (0, 1, 6) else [P['white'], P['blue'], P['red']]
             for i, c in enumerate(cols): k.box(0, .026, -.143 - i * .0055, .0062, .04, .0056, c)
         else:
             k.box(0, .028, -.14, .0062, .022, .022, P['black'] if f != 5 else P['red'])

@@ -7,7 +7,7 @@ import { uChrome } from './pools';
 
 export type MeshKey = 'soldier_aim' | 'soldier_kneel_aim' | 'soldier_throw' | 'soldier_prone' | 'soldier_dead' | 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
   'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
-  'mg' | 'art' | 'tank_mk4' | 'tank_ft' | 'tank_a7v' | 'plane' | 'prop' | 'mark_0' | 'mark_1' | 'mark_2' | 'mark_3' | 'mark_4' | 'mark_5' |
+  'mg' | 'art' | 'tank_mk4' | 'tank_ft' | 'tank_a7v' | 'plane' | 'prop' | 'mark_0' | 'mark_1' | 'mark_2' | 'mark_3' | 'mark_4' | 'mark_5' | 'mark_6' |
   'pill' | 'bunk' | 'factory' | 'barracks' | 'hangar' |
   'tree_broad' | 'tree_pine' | 'tree_palm' | 'tree_acacia' | 'shrub' | 'house_a' | 'house_b' | 'church';
 const CAP: Record<MeshKey, number> = {
@@ -15,16 +15,17 @@ const CAP: Record<MeshKey, number> = {
   soldier: 3000, soldier_walk_a: 3000, soldier_walk_b: 3000, soldier_kneel: 3000, soldier_lo: 14000, soldier_kneel_lo: 6000,
   helm_brodie: 6000, helm_adrian: 6000, helm_cap: 6000, helm_stahl: 12000, helm_kabalak: 6000,
   mg: 2500, art: 2500, tank_mk4: 800, tank_ft: 800, tank_a7v: 800, plane: 600, prop: 600,
-  mark_0: 200, mark_1: 200, mark_2: 200, mark_3: 200, mark_4: 200, mark_5: 200,
+  mark_0: 200, mark_1: 200, mark_2: 200, mark_3: 200, mark_4: 200, mark_5: 200, mark_6: 200,
   pill: 1500, bunk: 1000, factory: 200, barracks: 200, hangar: 200,
   tree_broad: 1, tree_pine: 1, tree_palm: 1, tree_acacia: 1, shrub: 1, house_a: 1, house_b: 1, church: 1,
 };
 /** Static scenery: placed once by the terrain (no per-frame pool). */
 const STATIC = new Set<MeshKey>(['tree_broad', 'tree_pine', 'tree_palm', 'tree_acacia', 'shrub', 'house_a', 'house_b', 'church']);
 /** Tank of each faction: Mark IV (Britain, Russia, Ottomans), Renault FT (France), A7V (Germany, Austria-Hungary). */
-export const TANK_OF: MeshKey[] = ['tank_mk4', 'tank_ft', 'tank_mk4', 'tank_a7v', 'tank_a7v', 'tank_mk4'];
+export const TANK_OF: MeshKey[] = ['tank_mk4', 'tank_ft', 'tank_mk4', 'tank_a7v', 'tank_a7v', 'tank_mk4', 'tank_ft'];
 /** Headgear of each faction (index = faction id), as in models.ts. */
-export const HELM_OF: MeshKey[] = ['helm_brodie', 'helm_adrian', 'helm_cap', 'helm_stahl', 'helm_stahl', 'helm_kabalak'];
+/** US troops wore the M1917, a copy of the British Brodie. */
+export const HELM_OF: MeshKey[] = ['helm_brodie', 'helm_adrian', 'helm_cap', 'helm_stahl', 'helm_stahl', 'helm_kabalak', 'helm_brodie'];
 
 function unitMaterial(): THREE.MeshPhongMaterial {
   const m = new THREE.MeshPhongMaterial({ shininess: 30, specular: 0x404040, vertexColors: true });

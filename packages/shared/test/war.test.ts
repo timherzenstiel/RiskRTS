@@ -11,7 +11,7 @@ const id = (n: string) => W.byName[n].id;
 function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
 /** France (0) against Germany (1), everything else neutralised to power 2. */
 function setup(seed = 21) {
-  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 0, pace: 0 } });
+  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 0 } });
   for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; }
   const A = id('France'), B = id('Germany');
   g.regions[A].owner = 0; g.regions[A].home = 0; g.regions[B].owner = 1; g.regions[B].home = 1;
@@ -165,13 +165,20 @@ describe('fog of war and reconnaissance', () => {
 });
 
 describe('saves', () => {
+  it('a save from before the United States joined loads with them as a defeated power', () => {
+    const g = createGame({ seed: 4, humans: [0] }); const old = JSON.parse(JSON.stringify(g)) as GameState & { v: number };
+    old.factions.pop(); old.intel.pop(); for (const r of old.regions) if (r.owner === 6) { r.owner = 0; r.home = 0; if (r.capitalOf === 6) r.capitalOf = -1; }
+    const m = migrateState(old)!;
+    expect(m.factions.length).toBe(7); expect(m.factions[6].alive).toBe(false); expect(m.intel.length).toBe(7);
+    expect(m.regions.some(r => r.owner === 6)).toBe(false);
+  });
   it('migrates a version 2 save', () => {
     const g = createGame({ seed: 2, humans: [0] }) as unknown as Record<string, unknown> & GameState;
     const old = JSON.parse(JSON.stringify(g));
     old.v = 2; for (const r of old.regions) { r.trench = r.capitalOf >= 0 ? 2 : 0; delete r.works; delete r.men; delete r.mor; delete r.cut; delete r.home; }
     for (const f of old.factions) { delete f.ww; delete f.wounded; } delete old.intel; delete old.spies;
     const m = migrateState(old)!;
-    expect(m.v).toBe(5); expect(m.intel.length).toBe(6); expect(m.factions[0].shells).toBeGreaterThan(0);
+    expect(m.v).toBe(5); expect(m.intel.length).toBe(m.factions.length); expect(m.factions[0].shells).toBeGreaterThan(0);
     const cap = m.regions.find(r => r.capitalOf === 1)!;
     expect(Object.values(cap.works).some(w => w.tr === 2)).toBe(true);
     expect(cap.men.inf).toBe(cap.units.inf * 100);

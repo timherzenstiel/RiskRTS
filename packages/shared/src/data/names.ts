@@ -7,7 +7,7 @@ export function roman(n: number): string { let s = ''; for (const [v, r] of ROMA
 const WORDS = ['', 'First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'];
 const ordEn = (n: number) => { const t = n % 100; return n + (t >= 11 && t <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'); };
 
-/** Name of army number `n` of power `f` (British Empire, France, Russia, Germany, Austria-Hungary, Ottomans). */
+/** Name of army number `n` of power `f` (British Empire, France, Russia, Germany, Austria-Hungary, Ottomans, United States). */
 export function armyName(f: number, n: number): string {
   switch (f) {
     case 0: return (WORDS[n] ?? ordEn(n)) + ' Army';
@@ -16,6 +16,7 @@ export function armyName(f: number, n: number): string {
     case 3: return n + '. Armee';
     case 4: return 'k.u.k. ' + n + '. Armee';
     case 5: return n + '. Ordu';
+    case 6: return ordEn(n) + ' Army, AEF';
     default: return ordEn(n) + ' Army';
   }
 }

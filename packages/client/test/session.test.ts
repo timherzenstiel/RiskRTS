@@ -32,10 +32,13 @@ describe('host / guest sessions', () => {
   });
   it('streams unit detail only for watched battles', () => {
     const { host, guest, tick } = world(); tick(90);
-    const b = host.state.battles.find(x => !x.ended); if (!b) return; // seed-dependent; AI usually fights by 90 s
-    tick(1); expect(guest.state.battles.find(x => x.id === b.id)!.agents.length).toBe(0);
+    // a battle the guest can see (the host's own view may show others); seed-dependent, the AI usually fights by 90 s
+    const b = guest.state.battles.find(x => !x.ended); if (!b) return;
+    tick(1); const seen = guest.state.battles.find(x => x.id === b.id); if (!seen || seen.ended) return;
+    expect(seen.agents.length).toBe(0);
     guest.setWatch([b.id]); tick(1);
-    expect(guest.state.battles.find(x => x.id === b.id)!.agents.length).toBe(b.agents.length);
+    const real = (host as unknown as { sim: { battles: { id: number; agents: unknown[] }[] } }).sim.battles.find(x => x.id === b.id)!;
+    expect(guest.state.battles.find(x => x.id === b.id)!.agents.length).toBe(real.agents.length);
   });
   it('each player sees its own fog of war', () => {
     const { host, guest, tick } = world(); tick(5);

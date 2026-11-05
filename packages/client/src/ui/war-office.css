@@ -430,10 +430,10 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .screen.title .titleplate,.screen.title .sheet{z-index:2}
 
 /* ---- order of battle (solo setup) ---- */
-.sheet.oob{width:min(1060px,100%)}
+.sheet.oob{width:min(1180px,100%)}
 .oob-grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:16px;align-items:start}
 .radar-map canvas{width:100%;height:auto;display:block;image-rendering:pixelated}
-.ncards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ncards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .ncard{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:0 0 8px;border:1px solid #0e0f0b;border-radius:2px;background:var(--well);color:var(--khaki);cursor:pointer;overflow:hidden;text-align:left;box-shadow:inset 0 0 0 1px rgba(216,207,174,.1)}
 .ncard img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;filter:saturate(.9)}
 .ncard .crest{position:absolute;left:6px;top:6px;width:30px;height:24px;display:grid;place-items:center;background:var(--c);font-size:12px}

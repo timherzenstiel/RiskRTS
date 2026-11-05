@@ -64,7 +64,7 @@ export class Models {
 
   private helmet(f: number, hy: number) {
     const b = this.b, h = HELM[f], hi = this.hi;
-    if (f === 0) { // Brodie: wide flat brim and a shallow bowl
+    if (f === 0 || f === 6) { // Brodie (and the American M1917 copy): wide flat brim and a shallow bowl
       b(0, hy + .002, 0, .088, .007, .088, h); b(0, hy + .013, 0, .052, .018, .052, h);
       if (hi) { b(0, hy + .024, 0, .036, .006, .036, h); b(0, hy - .016, .016, .042, .003, .003, K.leather); }
     } else if (f === 1) { // Adrian: peaked front and back, crest along the top
@@ -405,7 +405,7 @@ export class Models {
     if (this.mesh?.has('plane')) {
       this.mesh.push('plane', x, y, z, face, S, c);
       this.mesh.push('prop', x, y, z, face, S, K.wood, this.t * 38 + x * 7);
-      if (f >= 0 && f < 6) this.mesh.push(`mark_${f}` as MeshKey, x, y, z, face, S, K.wood);
+      if (f >= 0 && f < 7) this.mesh.push(`mark_${f}` as MeshKey, x, y, z, face, S, K.wood);
       return;
     }
     const b = this.b, hi = this.hi;

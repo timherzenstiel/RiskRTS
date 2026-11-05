@@ -43,6 +43,8 @@ export function createGame(opt: GameOptions): GameState {
     for (const n of W.regions[t.id].adj) if (!W.seaLane.has(t.id + '|' + n)) t.works[n] = { tr: 2, sand: 0, wire: 0 };
     t.defs.push({ id: g.nextId++, k: 'pill', s: -1, hp: DT.pill.hp, f: id });
   });
+  // fixed home regions next to a capital (the United States hold the whole of their country)
+  for (const [name, f] of HOME_EXTRA) { const t = g.regions[W.byName[name].id]; if (t.owner < 0 && f < FACTIONS.length) { t.owner = f; t.units.inf = 3; } }
   const rest = R.shuffle(g.regions.filter(t => t.owner < 0)), off = R.int(6);
   rest.forEach((t, k) => { t.owner = (k + off) % NUM_FACTIONS; t.units.inf = 2 + (R.next() < .5 ? 1 : 0); });
   for (const t of g.regions) { t.men = fullStrength(t.units); t.home = t.owner; }
@@ -61,11 +63,15 @@ export function createGame(opt: GameOptions): GameState {
   return g;
 }
 
+/** Regions a power always starts with besides its capital. */
+const HOME_EXTRA: [string, number][] = [['Western States', 6]];
+
 const fullStrength = (u: Units) => { const m = emptyUnits(); for (const k of UNIT_TYPES) m[k] = u[k] * FORMATION[k].men; return m; };
 
 /** Bring a saved game from an older version up to date. Returns null if it cannot be read. */
 export function migrateState(s: GameState & { v: number }): GameState | null {
   if (!s || !Array.isArray(s.regions)) return null;
+  addMissingPowers(s);
   if (s.v === 5) return s;
   if (s.v === 4) return to5(fill4(s));
   if (s.v === 3) return migrate3(s);
@@ -83,6 +89,16 @@ export function migrateState(s: GameState & { v: number }): GameState | null {
   s.intel = s.factions.map(() => []); s.spies = [];
   (s as { v: number }).v = 3; updateSupplyLines(s);
   return migrate3(s);
+}
+
+/** Saves from before a power was added (the United States): it joins as already defeated, holding nothing. */
+function addMissingPowers(s: GameState) {
+  if (!Array.isArray(s.factions)) return;
+  for (let id = s.factions.length; id < FACTIONS.length; id++) {
+    s.factions.push({ id, supply: 0, alive: false, mission: null, aiT: 9, ai: true, ww: 0, wounded: 0, shells: 0, men: 0, mob: 0, unrestT: 0 } as GameState['factions'][number]);
+    s.intel?.push([]);
+    if (s.stats) { s.stats.won[id] ??= 0; s.stats.lost[id] ??= 0; }
+  }
 }
 
 /** Version 3 → 4: battle levers and shells. Stockpiles start from the guns each power has; battles in progress get default levers. */

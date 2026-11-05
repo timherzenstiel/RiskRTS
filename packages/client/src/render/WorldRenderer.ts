@@ -5,7 +5,7 @@ import { AIR_RANGE, HW, buildWorld, hops, tileAtW, wrapDx, type Battle, type Fx,
 import type { Session } from '../game/session';
 import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
-import type { CreateRenderer, RendererCallbacks, WorldRendererApi } from './api';
+import type { CreateRenderer, PixelScale, RendererCallbacks, WorldRendererApi } from './api';
 import { Ambient } from './ambient';
 import { AIR_Y, BS, BattleView } from './battleView';
 import { CameraRig } from './camera';
@@ -26,9 +26,11 @@ import { Water } from './water';
 import { battleAnchor, sectorPoint } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
-type Quality = 0 | 1 | 2;
+type Quality = PixelScale;
 /** Render-buffer scale: Ultra = device pixels, High = CSS pixels, Chunky = half resolution. */
-const QUAL_DIV = [() => 1 / Math.min(window.devicePixelRatio || 1, 2), () => 1, () => 2];
+const QUAL_DIV = [() => 1 / Math.min(window.devicePixelRatio || 1, 2), () => 1, () => 1 / .75, () => 2];
+/** Classic (0.75×) is upscaled with filtering: a 4:3 nearest stretch gives uneven pixel rows. */
+const QUAL_SMOOTH = [true, false, true, false];
 /** Battlefield ground pixels per local unit. */
 
 class WorldRenderer implements WorldRendererApi {
@@ -59,7 +61,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly cleanup: (() => void)[] = [];
 
   private session: Session | null = null;
-  private quality: Quality = 1;
+  private quality: Quality = 2;
   private lastStoreQ: Quality | -1 = -1;
   private vw = 1; private vh = 1;
   private now = 0; private frameNo = 0;
@@ -149,7 +151,7 @@ class WorldRenderer implements WorldRendererApi {
     this.renderer.setSize(w, h, false); this.post.setSize(w, h); this.rig.setAspect(this.vw / this.vh);
   }
 
-  setQuality(q: Quality) { this.quality = q; this.canvas.classList.toggle('smooth', q === 0); this.resize(); }
+  setQuality(q: Quality) { this.quality = q; this.canvas.classList.toggle('smooth', QUAL_SMOOTH[q]); this.resize(); }
 
   /** Fly to a region; zoomed in close on a region at war, fly to its (first) front instead. */
   flyTo(regionId: number, distance?: number) {

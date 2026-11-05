@@ -2,6 +2,12 @@
 // The renderer reads selection/hover/orderMode from useUi.getState() every frame and reports input through the callbacks.
 import type { Session } from '../game/session';
 
+/** Internal render scale: 0 Ultra (device pixels), 1 Crisp (1 CSS px), 2 Classic (0.75×, default), 3 Retro (0.5×). */
+export type PixelScale = 0 | 1 | 2 | 3;
+export const PIXEL_SCALES = ['Ultra', 'Crisp', 'Classic', 'Retro'] as const;
+export const PIXEL_HINT = ['Device pixels: sharpest, heaviest on the GPU', 'One pixel per CSS pixel', '0.75× scale, softly upscaled: the classic 90s look (default)', 'Half resolution, big chunky pixels'] as const;
+export const DEFAULT_PIXEL_SCALE: PixelScale = 2;
+
 export interface RendererCallbacks {
   /** Left click / tap on a region (-1 for water). */
   onSelect(regionId: number): void;
@@ -16,8 +22,8 @@ export interface WorldRendererApi {
   /** Called once per animation frame, after session.update(dt). Updates camera, draws the world, positions map labels. */
   frame(dtReal: number): void;
   resize(): void;
-  /** 0 Ultra (device pixels), 1 High (CSS pixels), 2 Chunky (half resolution). */
-  setQuality(q: 0 | 1 | 2): void;
+  /** Pixel scale of the 3D view (see PixelScale). The UI always draws at full resolution. */
+  setQuality(q: PixelScale): void;
   flyTo(regionId: number, distance?: number): void;
   /** Fly to one front (battle) of a region. */
   flyToBattle(battleId: number, distance?: number): void;

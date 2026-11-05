@@ -5,6 +5,7 @@ import { Sfx } from '../audio/sfx';
 import { click, quitToTitle } from './actions';
 import { writeSave } from './storage';
 import { Modal } from './Modal';
+import { PIXEL_HINT, PIXEL_SCALES, type PixelScale } from '../render/api';
 
 const lc = (t: string) => t[0].toLowerCase() + t.slice(1);
 
@@ -82,9 +83,9 @@ export function MenuSheet({ onHelp }: { onHelp: () => void }) {
           <button className="btn" onClick={() => { click(); onHelp(); }}>How to play</button>
           {session.kind === 'local' && !g.over && <button className="btn" onClick={() => { click(); ui().say(writeSave(session) ? 'Game saved.' : 'Saving is not available here.'); }}>Save game</button>}
         </div>
-        <div className="grp"><span>Graphics</span>
-          <div className="seg" role="group" aria-label="Graphics quality">
-            {['Ultra', 'High', 'Chunky'].map((l, i) => <button key={l} aria-pressed={quality === i} onClick={() => { click(); ui().setQuality(i as 0 | 1 | 2); }}>{l}</button>)}
+        <div className="grp"><span>Pixel scale</span>
+          <div className="seg" role="group" aria-label="Pixel scale">
+            {PIXEL_SCALES.map((l, i) => <button key={l} title={PIXEL_HINT[i]} aria-pressed={quality === i} onClick={() => { click(); ui().setQuality(i as PixelScale); }}>{l}</button>)}
           </div></div>
         <div className="grp"><span>Look</span>
           <div className="seg" role="group" aria-label="Visual style">

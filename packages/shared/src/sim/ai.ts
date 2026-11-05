@@ -2,7 +2,9 @@
 // same fog of war: it judges enemy regions by the estimate across its borders and by its own reconnaissance reports.
 import { COST, DT, MAX_TRENCH, SHELLS, TRENCH_COST, UT, groundUnits, isDef, unitPower, type FortKind, type UnitType } from '../data/units';
 import { forcePower, frontsOf, hops, offensives, rnd, worksAt, world } from './core';
-import { assault, build, fortify, patrol, recon, recruit, sendAir, sendArmy, shift, spy } from './commands';
+import { assault, build, fortify, patrol, recon, recruit, sabotage, sendAir, sendArmy, shift, spy } from './commands';
+import { buildRail, hasRail, railOpen } from './rails';
+import { activeSpies } from './fog';
 import { charge, mobilise, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
 import { nationOf } from '../data/nations';
 import { unitCost } from './rules';
@@ -44,6 +46,7 @@ export function aiThink(g: GameState, f: FactionState) {
   }
   levers(g, f, mine);
   manpower(g, f);
+  railways(g, f, mine);
   const P = nationOf(f.id).ai, W = world();
   const cap = g.cfg?.attackCap ?? 0;
   let guard = 50;
@@ -190,4 +193,29 @@ function manpower(g: GameState, f: FactionState) {
   else if (pool < 1200 && f.ww < thr - 25) want = Math.max(want, 1);
   else if (pool > 4000) want = Math.max(0, want - 1);
   if (want !== (f.mob ?? 0)) mobilise(g, f.id, want);
+}
+
+/** Rails: lay lines to regions on thin supply, let spies blow up enemy lines, and now and then bomb a rail hub. */
+function railways(g: GameState, f: FactionState, mine: RegionState[]) {
+  const W = world();
+  if (f.supply >= 14 && rnd(g) < .08) {
+    for (const r of mine) {
+      if (r.supplyQ !== 1 || r.contested >= 0) continue;
+      const n = W.regions[r.id].adj.find(j => g.regions[j].owner === f.id && g.regions[j].supplyQ === 2 && !W.seaLane.has(r.id + '|' + j) && !hasRail(g, r.id, j));
+      if (n !== undefined && !buildRail(g, f.id, r.id, n)) break;
+    }
+  }
+  for (const s of activeSpies(g, f.id)) {
+    if (rnd(g) > .12) continue;
+    const n = W.regions[s.region].adj.find(j => railOpen(g, s.region, j) && g.regions[j].owner === g.regions[s.region].owner);
+    if (n !== undefined) sabotage(g, f.id, s.region, n);
+  }
+  if (rnd(g) < .04) {
+    const base = mine.find(t => t.units.plane >= 3 && t.battle < 0);
+    if (base) {
+      const tgt = W.regions[base.id].adj.flatMap(j => [j, ...W.regions[j].adj]).map(j => g.regions[j])
+        .find(r => r.owner !== f.id && W.regions[r.id].adj.filter(n => railOpen(g, r.id, n)).length >= 2 && !r.defs.some(d => d.k === 'flak'));
+      if (tgt) sendAir(g, f.id, base.id, tgt.id, .5, true);
+    }
+  }
 }

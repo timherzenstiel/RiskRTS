@@ -1,5 +1,6 @@
 // Right-hand region file: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
 import { useState } from 'react';
+import { WEATHER, railOpen, railsOf, weatherAt, activeSpies } from '@riskrts/shared';
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useSim, useUi, dateStr, type Tab } from '../game/store';
 import { click } from './actions';
@@ -66,7 +67,8 @@ export function Drawer() {
         <div className="dh-row"><small>{CONT[wr.cont].name} · bonus +{CONT[wr.cont].bonus}</small>
           <button className="x" aria-label="Close region file" onClick={() => ui().select(-1)}><CloseIcon /></button></div>
         <h2>{wr.name}</h2>
-        <div className="owner"><span>{F.name}</span>{r.capitalOf >= 0 && <span className="badge">{r.capitalOf === r.owner ? 'Capital' : 'Captured capital'}</span>}</div>
+        <div className="owner"><span>{F.name}</span>{r.capitalOf >= 0 && <span className="badge">{r.capitalOf === r.owner ? 'Capital' : 'Captured capital'}</span>}
+          {(() => { const w = weatherAt(sel, g.day); return w ? <span className={'badge wx w' + w}>{WEATHER[w]}</span> : null; })()}</div>
       </div>
       {fronts.length > 0 && <Fronts g={g} me={me} fronts={fronts} own={own} />}
       {holdF && (
@@ -93,6 +95,8 @@ export function Drawer() {
             <span className={'wk' + (r.airfield ? '' : ' off')}>Airfield</span>
           </>
         ) : <span className="wk off">Buildings unknown</span>}
+        {own && <span className={'wk' + (r.supplyQ === 2 ? '' : ' off')} title="Full supply: an unbroken rail line to the capital, a factory or home territory. Thin supply (land or sea only): shells cost half again, half the wounded return.">{r.cut ? 'Cut off' : r.supplyQ === 1 ? 'Thin supply' : 'Full supply'}</span>}
+        {(() => { const rl = railsOf(g, sel); return rl.length ? <span className="wk rail" title={rl.map(([n, o]) => `${W.regions[n].name}${o ? '' : ' (cut)'}`).join(', ')}>Rail · {rl.length}{rl.some(x => !x[1]) ? ` (${rl.filter(x => !x[1]).length} cut)` : ''}</span> : <span className="wk off">No railway</span>; })()}
         <span className={'wk' + (maxTrench(r) ? '' : ' off')}>{maxTrench(r) ? `Trench up to ${roman(maxTrench(r))}` : own || vis >= 3 ? 'No trench' : 'No trench seen'}</span>
         {(() => { const n = r.defs.filter(d => d.f === r.owner).length; return <span className={'wk' + (n ? '' : ' off')}>{n} defence{n === 1 ? '' : 's'}{!own && vis < 3 ? ' known' : ''}</span>; })()}
       </div>
@@ -144,6 +148,7 @@ export function Drawer() {
               <i className="dot" style={{ '--c': FACTIONS[me].color } as React.CSSProperties} />
               <div className="tx"><b>{W.regions[x.id].name}</b><small>{x.units.plane} squadron{x.units.plane === 1 ? '' : 's'} · {hops(x.id, sel)} border{hops(x.id, sel) > 1 ? 's' : ''} away</small></div>
               <button className="buy atk" onClick={() => ui().air(x.id, sel)}>Strike</button>
+              {railsOf(g, sel).some(([n]) => railOpen(g, sel, n)) && <button className="buy plain" title="Bomb the railways of this region: they stay cut for two convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, rail: true })}>Rails</button>}
             </div>
           ))}
           <div className="lbl"><span>Reconnaissance · {reportAge(g, r)}</span></div>
@@ -167,6 +172,13 @@ export function Drawer() {
               <small>{spyHere ? 'Reports everything until unmasked' : capital ? `Watches everything here until caught · ${spies.length}/3 agents in the field` : 'Our capital has fallen: no spies can be trained'}</small></div>
             {!spyHere && <button className="buy plain" disabled={!capital || supply < COST.spy || spies.length >= 3} onClick={() => ui().order({ t: 'spy', to: sel })}><SupplyIcon />{COST.spy}</button>}
           </div>
+          {spyHere && activeSpies(g, me).some(s => s.region === sel) && railsOf(g, sel).filter(([, o]) => o).map(([n]) => (
+            <div className="it nb" key={'sab' + n}>
+              <span className="ic"><Icon k="spy" size={18} /></span>
+              <div className="tx"><b>Sabotage the line to {W.regions[n].name}</b><small>Cut for three convoys · our agent is twice as likely to be caught for a while</small></div>
+              <button className="buy atk" onClick={() => ui().order({ t: 'sabotage', region: sel, to: n })}>Blow up</button>
+            </div>
+          ))}
           {!myNb.length && !airBases.length && <p className="note">None of your regions border {wr.name}. Infantry and tanks need a direct border (or a sea lane); aircraft reach two borders.</p>}
         </div>
       )}

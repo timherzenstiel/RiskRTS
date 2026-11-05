@@ -6,6 +6,8 @@ import { consolidate, controls, emit, rnd, updateContested, world } from './core
 import { addUnits } from './commands';
 import { moraleCap } from './battle';
 import { spiesOnConvoy } from './fog';
+import { linkQuality, railsOnConvoy } from './rails';
+import { weatherAt } from '../data/terrain';
 import { ownsCont, checkElim, checkMissions } from './missions';
 import type { GameState } from './types';
 
@@ -103,17 +105,32 @@ function rise(g: GameState, r: GameState['regions'][number]) {
  * two of its own regions) leads back to its capital, a factory region or its home territory. Recomputes `cut` for every region.
  */
 export function updateSupplyLines(g: GameState, announce = false) {
-  const W = world(), seen = new Uint8Array(g.regions.length), q: number[] = [];
-  for (const r of g.regions) if (r.owner >= 0 && r.contested < 0 && (r.capitalOf === r.owner || r.factory || r.home === r.owner)) { seen[r.id] = 1; q.push(r.id); }
-  for (let h = 0; h < q.length; h++) {
-    const i = q[h], o = g.regions[i].owner;
-    for (const j of W.regions[i].adj) if (!seen[j] && g.regions[j].owner === o) { seen[j] = 1; q.push(j); }
-  }
+  const W = world(), N = g.regions.length, src: number[] = [];
+  for (const r of g.regions) if (r.owner >= 0 && r.contested < 0 && (r.capitalOf === r.owner || r.factory || r.home === r.owner)) src.push(r.id);
+  // two passes: over links of full quality (rails, hub-to-hub sea lanes) for full supply, then over any link for thin supply
+  const reach = (min: number) => {
+    const seen = new Uint8Array(N), q = [...src]; for (const i of src) seen[i] = 1;
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], o = g.regions[i].owner;
+      for (const j of W.regions[i].adj) if (!seen[j] && g.regions[j].owner === o && linkQuality(g, o, i, j) >= min) { seen[j] = 1; q.push(j); }
+    }
+    return seen;
+  };
+  const full = reach(2), thin = reach(1);
   for (const r of g.regions) {
-    const cut = r.owner >= 0 && !seen[r.id];
+    r.supplyQ = r.owner < 0 ? 0 : full[r.id] ? 2 : thin[r.id] ? 1 : 0;
+    const cut = r.owner >= 0 && !thin[r.id];
     if (cut && !r.cut && announce) emit(g, { k: 'cut', faction: r.owner, region: r.id });
     r.cut = cut;
   }
+}
+
+/** How fast a cut-off garrison wears down in the weather: winter twice as fast, heat half again (halved for those used to it). */
+export function cutWear(g: GameState, r: GameState['regions'][number]) {
+  const w = weatherAt(r.id, g.day), N = nationOf(r.owner);
+  if (w === 2) return N.flags.siberian ? 1.5 : 2;
+  if (w === 3) return N.flags.desert ? 1.25 : 1.5;
+  return 1;
 }
 
 /** Share of a holdout's strength lost per convoy. */
@@ -122,6 +139,7 @@ export const HOLDOUT_WEAR = .065;
 /** A convoy reaches every power at the same moment. */
 export function supplyTick(g: GameState) {
   g.day += 7;
+  railsOnConvoy(g);
   updateSupplyLines(g, true);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) {
@@ -137,7 +155,8 @@ export function supplyTick(g: GameState) {
     if (r.owner < 0 || r.battle >= 0) continue;
     if (r.cut) {
       // encircled: no food, no ammunition, no replacements
-      for (const k of UNIT_TYPES) r.men[k] = Math.floor(r.men[k] * (1 - CUT_WEAR));
+      const wear = CUT_WEAR * cutWear(g, r);
+      for (const k of UNIT_TYPES) r.men[k] = Math.floor(r.men[k] * (1 - wear));
       consolidate(r.units, r.men);
       r.mor = Math.max(0, r.mor - CUT_MORALE);
     } else r.mor = Math.min(moraleCap(g, r.owner), r.mor + 6);
@@ -164,7 +183,9 @@ function reinforce(g: GameState) {
     const gaps: [number, keyof typeof FORMATION, number][] = []; let need = 0;
     for (const r of g.regions) {
       if (r.owner !== f.id || r.cut || r.battle >= 0) continue;
-      for (const k of UNIT_TYPES) { const gap = r.units[k] * FORMATION[k].men - r.men[k]; if (gap > 0) { gaps.push([r.id, k, gap]); need += gap; } }
+      // thin supply brings back half as many of the wounded
+      const share = r.supplyQ === 1 ? .5 : 1;
+      for (const k of UNIT_TYPES) { const gap = r.units[k] * FORMATION[k].men - r.men[k]; if (gap > 0) { gaps.push([r.id, k, gap * share]); need += gap * share; } }
     }
     const give = Math.min(f.wounded * .5, need);
     if (give > 0) for (const [i, k, gap] of gaps) g.regions[i].men[k] += Math.floor(gap / need * give);

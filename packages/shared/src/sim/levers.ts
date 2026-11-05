@@ -2,6 +2,7 @@
 // Barrage level, over the top, stance, reinforcing a front from a neighbouring region, and withdrawing.
 import { SHELLS, groundUnits, isDef } from '../data/units';
 import { MARCH_MIN, MARCH_SPEED, emit, mkArmy, world } from './core';
+import { weatherMarch } from './rails';
 import { forceIn, goOverTheTop } from './battle';
 import { formArmy } from './commands';
 import { stanceIn } from './rules';
@@ -63,7 +64,7 @@ export function withdraw(g: GameState, fid: number, bid: number): string | null 
   const dest = adj.sort((x, y) => score(y) - score(x))[0];
   for (const x of b.agents) if (x.f === fid && !x.dead && !x.out && !isDef(x.type) && x.type !== 'plane') x.out = true;
   const a = mkArmy(g, fid, b.region, dest, MARCH_SPEED, MARCH_MIN);
-  a.units = f.u; a.men = f.m; a.mor = Math.max(0, f.mor - 10); a.tired = true; a.stance = stanceIn(b, fid);
+  a.units = f.u; a.men = f.m; a.mor = Math.max(0, f.mor - 10); a.tired = true; a.stance = stanceIn(b, fid); a.dur *= weatherMarch(g, fid, dest);
   g.armies.push(a);
   emit(g, { k: 'withdraw', faction: fid, region: b.region, to: dest });
   return null;

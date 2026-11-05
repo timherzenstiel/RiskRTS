@@ -47,7 +47,8 @@ export function spiesOnConvoy(g: GameState) {
   for (let i = g.spies.length - 1; i >= 0; i--) {
     const s = g.spies[i], r = g.regions[s.region]; if (s.eta > g.time) continue;
     recordIntel(g, s.f, s.region);
-    const p = .1 + (r.capitalOf === r.owner ? .1 : 0) + (r.barracks ? .06 : 0) + (r.battle >= 0 ? .04 : 0);
+    let p = .1 + (r.capitalOf === r.owner ? .1 : 0) + (r.barracks ? .06 : 0) + (r.battle >= 0 ? .04 : 0);
+    if ((s.hot ?? -1) > g.day) p *= 2;
     if (rnd(g) < p) { g.spies.splice(i, 1); emit(g, { k: 'spyFound', faction: s.f, region: s.region, owner: r.owner }); }
   }
 }
@@ -85,7 +86,7 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   return {
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
     factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false,
-    defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
+    supplyQ: undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
     vis, seen: known ? known.day : undefined, est: vis >= 1 ? estimate(g, r) : undefined,
   };
 }

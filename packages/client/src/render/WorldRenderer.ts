@@ -15,6 +15,7 @@ import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, FxSystem } from './fxSy
 import { Sprites } from './sprites';
 import { Input } from './input';
 import { Labels } from './labels';
+import { NetworkLayer } from './network';
 import { MapBattles } from './mapBattle';
 import { Models } from './models';
 import { K } from './palette';
@@ -49,6 +50,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly ambient = new Ambient();
   private readonly dyn: DynamicDraw;
   private readonly war: MapBattles;
+  private readonly net: NetworkLayer;
   /** True when a battle's close-up troops are on screen (map-scale fighting is drawn otherwise). */
   private readonly isClose = (b: Battle) => { const v = this.views.get(b.id); return !!v && v.visible; };
   private readonly post: Post;
@@ -95,6 +97,7 @@ class WorldRenderer implements WorldRendererApi {
       this.sprites = new Sprites(this.scene);
       this.models = new Models(this.lit, this.glow);
       this.dyn = new DynamicDraw(this.world, this.terrain, this.models, this.lines, this.fx);
+      this.net = new NetworkLayer(this.world, this.terrain);
       this.war = new MapBattles(this.world, this.terrain, this.models, this.fx);
       this.post = new Post(renderer, this.scene, this.rig.camera);
     } catch (e) {
@@ -207,7 +210,7 @@ class WorldRenderer implements WorldRendererApi {
     this.updateBattles(g, dt, fdt);
     if (s) this.processFx(s);
     this.fx.update(fdt); this.ambient.update(fdt, this.fx);
-    if (g) this.dyn.factorySmoke(g, fdt);
+    if (g) { this.dyn.factorySmoke(g, fdt); this.net.weather(this.fx, g, this.rig, dt); }
 
     this.drawScene(g, this.now);
     this.water.setTime(this.now);
@@ -400,6 +403,7 @@ class WorldRenderer implements WorldRendererApi {
     this.models.hi = rig.dist < 7; this.models.t = T;
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
+      this.net.draw(lines, g, this.session?.me ?? -1, rig);
       for (const b of g.battles) {
         const v = this.views.get(b.id); if (!v || !v.visible) continue;
         v.drawWorks(this.models, b); v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);

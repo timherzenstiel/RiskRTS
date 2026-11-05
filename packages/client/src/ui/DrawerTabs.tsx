@@ -1,7 +1,7 @@
 // The order tabs of the region drawer: Recruit, Build, Fortify, March (with air strikes and reconnaissance).
 import {
   AIR_RANGE, COST, DT, FACTIONS, FORMATION, MAX_SAND, MAX_TRENCH, MAX_WIRE, SHELLS, SLOT_USE, UNIT_TYPES, UT, buildWorld, fortCost, groundUnits, hops, offensives, slotsMax, slotsUsed, worksAt,
-  nationalUnit, NATIONS, unitCost, unitName, buildCostOf,
+  nationalUnit, NATIONS, unitCost, unitName, buildCostOf, RAIL_BUILD, hasRail, isMountain, monthStr,
   type FortKind, type RegionState, type UnitType,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -67,6 +67,7 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
       <BuildRow icon="factory" name="Factory" desc={`+2 supply and +${NATIONS[sim.me].factoryShells} shells per convoy · unlocks tanks · a supply depot`} label={region.factory ? 'Built' : <><SupplyIcon />{buildCostOf(sim.me, 'factory')}</>} disabled={region.factory || supply < buildCostOf(sim.me, 'factory')} onBuy={() => build(id, 'factory')} />
       <BuildRow icon="barracks" name="Barracks" desc="One volunteer battalion per convoy (stops when the war weariness is high)" label={region.barracks ? 'Built' : <><SupplyIcon />{COST.barracks}</>} disabled={region.barracks || supply < COST.barracks} onBuy={() => build(id, 'barracks')} />
       <BuildRow icon="airfield" name="Airfield" desc="Unlocks squadrons and reconnaissance flights here" label={region.airfield ? 'Built' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || supply < COST.airfield} onBuy={() => build(id, 'airfield')} />
+      <Railways region={region} id={id} />
       <div className="lbl"><span>Munitions · {Math.floor(sim.g.factions[sim.me].shells ?? 0)} shells in stock</span></div>
       <div className="it">
         <span className="ic"><Icon k="art" /></span>
@@ -112,7 +113,7 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
           return (
             <button key={x.s} role="option" aria-selected={sector === x.s} className={'sec' + (hostile ? ' hostile' : '')} onClick={() => { click(); ui().setFortMarker([id, x.s]); }}>
               {F ? <i className="dot" style={{ '--c': F.color } as React.CSSProperties} /> : <i className="dot in" />}
-              <span className="nm">{x.s < 0 ? 'Interior' : `Border · ${x.name}`}{x.sea ? ' (sea)' : ''}</span>
+              <span className="nm">{x.s < 0 ? 'Interior' : `Border · ${x.name}`}{x.sea ? ' (sea)' : ''}{x.s >= 0 && isMountain(id, x.s) ? ' · mountains' : ''}</span>
               <span className="have">
                 {w.tr > 0 && <span className="wtag" title={`Trench ${roman(w.tr)}`}><Icon k="trench" size={14} />{roman(w.tr)}</span>}
                 {w.sand > 0 && <Icon k="sand" size={14} />}{w.wire > 0 && <Icon k="wire" size={14} />}
@@ -134,6 +135,24 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
           })}
         </>
       ) : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}
+    </>
+  );
+}
+
+/** Railways from this region to neighbouring regions of ours: lay new lines, see the ones being built. */
+function Railways({ region, id }: { region: RegionState; id: number }) {
+  const sim = useSim(); if (!sim) return null;
+  const { g, me } = sim, W = buildWorld(), supply = g.factions[me].supply;
+  const nb = W.regions[id].adj.filter(n => g.regions[n].owner === me && !W.seaLane.has(id + '|' + n));
+  const rows = nb.map(n => ({ n, has: hasRail(g, id, n), job: (g.railNew ?? []).find(([a, b]) => (a === id && b === n) || (a === n && b === id)) })).filter(x => !x.has || x.job);
+  if (!rows.length) return null;
+  return (
+    <>
+      <div className="lbl"><span>Railways · rail lines carry troops 3× as fast and give full supply</span></div>
+      {rows.map(({ n, job }) => (
+        <BuildRow key={n} icon="factory" name={`Railway to ${W.regions[n].name}`} desc={job && job[2] > g.day ? `Being laid · open in ${monthStr(job[2])}` : `${RAIL_BUILD.days / 7} convoys to lay`}
+          label={job ? 'Building' : <><SupplyIcon />{RAIL_BUILD.cost}</>} disabled={!!job || supply < RAIL_BUILD.cost || region.contested >= 0} onBuy={() => useUi.getState().order({ t: 'rail', region: id, to: n })} />
+      ))}
     </>
   );
 }
@@ -174,7 +193,7 @@ export function NeighbourRow({ from, to, list, label }: { from: number; to: numb
   return (
     <div className="it nb">
       <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />
-      <div className="tx"><b>{W.regions[list].name}</b><small>{info}{sea ? ' · by sea' : ''}</small></div>
+      <div className="tx"><b>{W.regions[list].name}</b><small>{info}{sea ? ' · by sea' : ''}{isMountain(from, to) ? ' · over mountains' : ''}</small></div>
       <button className={'buy ' + (label === 'Attack' ? 'atk' : 'plain')} disabled={disabled}
         title={src.battle >= 0 ? 'Troops in a battle cannot leave' : groundUnits(src.units) < 2 ? 'Needs at least 2 ground formations' : undefined} onClick={() => march(from, to)}>{label}</button>
     </div>

@@ -1,6 +1,7 @@
 // Game state. Everything here is plain JSON-able data so it can be snapshotted, sent over the wire and unit-tested.
 import type { ContKey } from '../data/regions';
 import type { AgentType, DefKind, FortKind, Units, UnitType } from '../data/units';
+import type { DoctrineKey } from '../data/nations';
 
 export type Mission =
   | { type: 'conts' | 'conts1'; conts: ContKey[] }
@@ -22,6 +23,8 @@ export interface FactionState {
   mob: number;
   /** Convoys in a row spent above the unrest threshold. */
   unrestT: number;
+  /** Doctrines adopted, one per war year. */
+  doctrines?: DoctrineKey[];
 }
 
 /** Battle stance of a garrison or an attacking army: balanced, aggressive, defensive, hold at all costs. */
@@ -71,6 +74,8 @@ export interface RegionState {
   cr?: Record<number, number>;
   /** Strikes: the region pays no supply or shells and cannot recruit until the unrest eases. */
   strike?: boolean;
+  /** Supply quality: 2 full (rail to a source), 1 thin (land or sea only), 0 cut off. */
+  supplyQ?: number;
 }
 
 export interface Army {
@@ -89,6 +94,10 @@ export interface Army {
   front?: number;
   /** Fatigue: borders marched in a row, and whether the troops come straight out of a battle. */
   legs?: number; tired?: boolean;
+  /** Travelling by rail. */
+  rail?: boolean;
+  /** Aircraft on a strike against the rail links of the target region. */
+  strike?: 'rail';
 }
 
 export interface Agent {
@@ -177,6 +186,8 @@ export type GameEvent =
   | { k: 'withdraw'; faction: number; region: number; to: number }
   | { k: 'strike'; faction: number; region: number; end?: boolean }
   | { k: 'rising'; faction: number; region: number; to: number }
+  | { k: 'railCut'; faction: number; region: number; by: 'air' | 'spy'; owner: number }
+  | { k: 'railBuilt'; faction: number; a: number; b: number }
   | { k: 'over'; winner: number | null; reason?: string };
 
 export interface GameStats { won: number[]; lost: number[] }
@@ -202,7 +213,7 @@ export interface Intel {
   factory: boolean; barracks: boolean; airfield: boolean;
 }
 /** A spy: travelling until `eta`, then reporting continuously from `region` until found. */
-export interface Spy { id: number; f: number; region: number; eta: number }
+export interface Spy { id: number; f: number; region: number; eta: number; /** Exposed by sabotage until this day: twice as likely to be caught. */ hot?: number }
 
 export interface GameState {
   v: 4; seed: number; rng: number;
@@ -215,6 +226,8 @@ export interface GameState {
   spies: Spy[];
   /** After-action reports of the last battles (each power sees those it fought in). */
   reports: Report[];
+  /** Rail links cut until a day ("a|b" with a < b), and links under construction [a, b, ready day]. */
+  railCut: Record<string, number>; railNew: [number, number, number][];
   /** Fog-of-war views only: the faction this view was made for. */
   viewer?: number;
   over: boolean; winner: number | null;
@@ -228,6 +241,10 @@ export type BuildKind = 'factory' | 'barracks' | 'airfield';
 export type Command =
   | { t: 'recruit'; region: number; unit: UnitType; n?: number }
   | { t: 'build'; region: number; kind: BuildKind }
+  /** Lay a railway from one of your regions to a neighbouring one of yours. */
+  | { t: 'rail'; region: number; to: number }
+  /** A working spy cuts a rail link of the region it works in. */
+  | { t: 'sabotage'; region: number; to: number }
   /** Place a defence or field work on a border sector (neighbour id) or a defence in the interior (-1). */
   | { t: 'fortify'; region: number; kind: FortKind; sector: number }
   /** Reconnaissance: a cavalry patrol over one border, a reconnaissance flight up to AIR_RANGE borders, a spy from the capital to anywhere. */
@@ -238,7 +255,7 @@ export type Command =
   | { t: 'shift'; region: number; battle: number }
   | { t: 'march'; from: number; to: number; frac: number }
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */
-  | { t: 'air'; from: number; to: number; frac: number }
+  | { t: 'air'; from: number; to: number; frac: number; rail?: boolean }
   /** Storm the holdout defences in one of your own contested regions with its garrison. */
   | { t: 'assault'; region: number }
   /** Battle levers: barrage level of your guns, send the attackers over the top, stance, reinforce a front, withdraw. */

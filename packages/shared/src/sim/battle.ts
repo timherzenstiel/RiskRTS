@@ -9,7 +9,7 @@ import { FACTIONS } from '../data/factions';
 import { wrapDx } from '../world/build';
 import { consolidate, emit, frontsOf, rnd, updateContested, world, worksAt, worksFor } from './core';
 import { checkElim, checkMissions } from './missions';
-import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, dealtMod, holdMorale, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow } from './rules';
+import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, crossSpeed, dealtMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
 import { nationOf } from '../data/nations';
 import { PACES, type Agent, type Army, type Battle, type Defence, type Shell, type GameState, type RegionState, type Stance } from './types';
 
@@ -163,11 +163,11 @@ function nearestEnemy(b: Battle, a: Agent, gunsOnly = false, maxD = 1e9): number
 }
 
 const SMALL_ARMS = new Set<AgentType>(['inf', 'mg', 'pill', 'bunk']), HEAVY = new Set<AgentType>(['art', 'plane', 'fort']);
-interface Tick { bunker: boolean }
+interface Tick { bunker: boolean; fl: Field }
 
 function damage(g: GameState, b: Battle, t: Agent, dmg: number, src: AgentType, k: Tick, mult: number, sf: number) {
   if (t.dead || t.out) return;
-  dmg *= mult * STANCE_DEALT[stanceIn(b, sf)] * dealtMod(g, b, sf, src, t) * takenMod(g, b, t);
+  dmg *= mult * STANCE_DEALT[stanceIn(b, sf)] * dealtMod(g, b, sf, src, t) * takenMod(g, b, t) * fieldMod(g, b, k.fl, sf, src, t);
   const ts = stanceIn(b, t.f); dmg *= ts === 2 ? (t.trench || !t.moving ? STANCE_TAKEN[2] : 1) : STANCE_TAKEN[ts];
   if (t.type === 'plane') dmg *= ANTI_AIR[src];
   else if (isDef(t.type)) { if (SMALL_ARMS.has(src)) dmg *= .3; else if (src === 'tank') dmg *= .8; }
@@ -209,7 +209,9 @@ function drawShells(g: GameState, b: Battle, f: number, n: number): boolean {
   b.used[f] = (b.used[f] ?? 0) + n; return true;
 }
 /** Shells one shot costs a side (defending guns fire from prepared stocks at half the rate). */
-export const shotCost = (b: Battle, f: number) => SHELLS.shot * (f === b.def ? .5 : 1);
+export const shotCost = (b: Battle, f: number, g?: GameState) => SHELLS.shot * (f === b.def ? .5 : 1) * (g && supplyQOf(g, b, f) === 1 ? 1.5 : 1);
+/** Supply quality of the region a side draws its shells through (thin supply loses half again on the way). */
+const supplyQOf = (g: GameState, b: Battle, f: number) => (f === b.def ? g.regions[b.region] : b.from >= 0 ? g.regions[b.from] : undefined)?.supplyQ ?? 2;
 
 /** The attackers leave their start line. */
 export function goOverTheTop(g: GameState, b: Battle, f: number) {
@@ -235,7 +237,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
   let reach = b.reach ?? 99;
   const quiet = b.age - (b.lastJoin ?? 0), lull = quiet <= LULL_FROM ? 1 : Math.max(LULL_ROF, 1 - (1 - LULL_ROF) * (quiet - LULL_FROM) / (LULL_FULL - LULL_FROM));
   const rofK = P.rof / lull;
-  const k: Tick = { bunker: A.some(a => a.type === 'bunk' && !a.dead && a.f === b.def) };
+  const k: Tick = { bunker: A.some(a => a.type === 'bunk' && !a.dead && a.f === b.def), fl: fieldOf(g, b) };
   for (const a of A) {
     if (a.dead || a.out) continue; const s = statsOf(g, a.f, a.type);
     a.cd -= dt; a.rt -= dt;
@@ -254,7 +256,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
           if (t.type === 'plane') {
             const hit = rnd(g) < s.acc * morAcc(b, a.f) * (1 - .4 * d / s.range); if (hit) damage(g, b, t, s.dmg * .6, 'plane', k, 1, a.f);
             if (fx && fx.length < FX_CAP) fx.push({ k: 'shot', b: b.id, x0: a.x, z0: a.z, x1: t.x, z1: t.z, type: 'plane', hit, air: true });
-          } else b.shells.push({ x: t.x + (rnd(g) - .5) * 1.6, z: t.z + (rnd(g) - .5) * 1.6, time: .45, f: a.f, dmg: s.dmg, sp: s.splash ?? 2, src: 'plane' });
+          } else b.shells.push({ x: t.x + (rnd(g) - .5) * 1.6, z: t.z + (rnd(g) - .5) * 1.6, time: .45, f: a.f, dmg: s.dmg, sp: (s.splash ?? 2) * splashMod(k.fl), src: 'plane' });
         }
       }
       continue;
@@ -278,10 +280,10 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
       const sp = b.supp[a.f] ?? 0;
       if (a.cd <= 0 && !(gun && lvl === 0) && !((a.type === 'mg' || a.type === 'pill') && sp > SUPP_SILENCE)) {
         let rate = 1;
-        if (gun) rate = drawShells(g, b, a.f, shotCost(b, a.f)) ? (lvl === 2 ? 1 / BARRAGE.heavy : 1) : BARRAGE.rationed;
+        if (gun) rate = drawShells(g, b, a.f, shotCost(b, a.f, g)) ? (lvl === 2 ? 1 / BARRAGE.heavy : 1) : BARRAGE.rationed;
         a.cd = s.rof * rofK * (.75 + rnd(g) * .5) * rate * suppSlow(sp); a.fireT = g.time;
         if (s.splash && t.type !== 'plane') {
-          const sh: Shell = { x: t.x + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), z: t.z + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), time: .5 + d * .03, f: a.f, dmg: s.dmg, sp: s.splash, src: a.type };
+          const sh: Shell = { x: t.x + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), z: t.z + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), time: .5 + d * .03, f: a.f, dmg: s.dmg, sp: s.splash * splashMod(k.fl), src: a.type };
           b.shells.push(sh);
           if (fx && fx.length < FX_CAP) fx.push({ k: 'fire', b: b.id, x: a.x + Math.sin(a.face) * 2, z: a.z + Math.cos(a.face) * 2, face: a.face, tx: sh.x, tz: sh.z, fl: sh.time });
         } else {
@@ -297,7 +299,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
         }
       }
     } else if (s.speed > 0 && !(a.trench && !charge) && !(a.type === 'art' && a.f === b.def && !charge) && !(attacker && !b.go && a.type !== 'art') && !a.cb) {
-      let st = s.speed * dt;
+      let st = s.speed * dt * (attacker ? crossSpeed(k.fl, a.type) : 1);
       // barbed wire in front of the trench: infantry and gun teams crawl through cutting it slowly, tanks flatten it
       if (b.wire > 0 && a.f !== b.def && inWire(b, a)) { if (a.type === 'tank') b.wire = Math.max(0, b.wire - dt * 3); else { st *= wireSlow(g, a.f, a.type); b.wire = Math.max(0, b.wire - dt * .15); } }
       a.x += dx / d * st; a.z += dz / d * st; a.moving = true; a.phase += dt * 9;

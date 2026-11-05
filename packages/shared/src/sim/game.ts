@@ -31,7 +31,7 @@ export function createGame(opt: GameOptions): GameState {
     v: 4, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
     factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start, men: 0, mob: 0, unrestT: 0 })),
-    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], over: false, winner: null, nextId: 1,
+    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], over: false, winner: null, nextId: 1,
     stats: { won: Array(NUM_FACTIONS).fill(0), lost: Array(NUM_FACTIONS).fill(0) },
     events: [], fx: opt.fx === false ? null : [],
   };
@@ -101,6 +101,7 @@ function fill4(s: GameState): GameState {
     if (f.men === undefined) { let m = 0; for (const t of s.regions) if (t.owner === f.id) for (const k of UNIT_TYPES) m += t.men[k]; f.men = Math.round(m * MANPOWER.startMult * nationOf(f.id).pool); }
     f.mob ??= 0; f.unrestT ??= 0;
   }
+  s.railCut ??= {}; s.railNew ??= [];
   return s;
 }
 

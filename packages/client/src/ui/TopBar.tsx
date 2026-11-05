@@ -1,7 +1,8 @@
 // Top zone: sealed-orders chip, supply ring + powers pills, clock / speed / menu.
 import { useEffect, useRef, useState } from 'react';
-import { FACTIONS, NATIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome } from '@riskrts/shared';
+import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome, weatherAt } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
+import { buildWorld } from '@riskrts/shared';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
 import { MenuIcon, PauseIcon } from './icons';
@@ -54,6 +55,8 @@ export function TopBar() {
       <div className="right">
         <div className="glass clock">
           <span id="date">{dateStr(g.day)}</span>
+          {(() => { const sel = useUi.getState().sel, at = sel >= 0 ? sel : g.regions.find(r => r.capitalOf === me)?.id ?? 0, w = weatherAt(at, g.day);
+            return <span className={'wx w' + w} title={`Weather in ${buildWorld().regions[at].name}: ${WEATHER[w]}${w === 1 ? ' · marches and assaults 30% slower, shells sink into the mud' : w === 2 ? ' · marches 40% slower, cut-off troops wear down twice as fast' : w === 3 ? ' · cut-off troops wear down 50% faster' : ''}`}>{WEATHER[w]}</span>; })()}
           {session.canControlTime ? (
             <div className="seg" role="group" aria-label="Game speed">
               <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>

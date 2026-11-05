@@ -10,6 +10,9 @@ import { joinBattle, launch, startAssault, startBattle, transferAgents } from '.
 import { charge, mobilise, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
 import { buildCostOf, unitCost, unitName } from './rules';
 import { nationOf } from '../data/nations';
+import { mountainRegion } from '../data/terrain';
+import { buildRail, cutRails, hasRail, marchFactor, railOpen, weatherMarch } from './rails';
+import { activeSpies } from './fog';
 import { recordIntel, MAX_SPIES } from './fog';
 import type { Army, Battle, BuildKind, Command, GameState, RegionState } from './types';
 
@@ -63,12 +66,15 @@ export function build(g: GameState, fid: number, r: RegionState, kind: BuildKind
 /** Cost of the next step of a field work or defence on a sector, or null if it is at its limit. */
 export function fortCost(r: RegionState, kind: FortKind, sector: number): number | null {
   const w = worksAt(r, sector);
-  if (kind === 'trench') return w.tr >= MAX_TRENCH ? null : TRENCH_COST[w.tr];
+  if (kind === 'trench' && w.tr >= MAX_TRENCH) return null;
   if (kind === 'sand' && w.sand >= MAX_SAND) return null;
   if (kind === 'wire' && w.wire >= MAX_WIRE) return null;
   // France's fortress belt: concrete is cheaper at home
-  if ((kind === 'bunk' || kind === 'fort') && r.home === r.owner && nationOf(r.owner).flags.fortress) return Math.ceil(COST[kind] * .75);
-  return COST[kind];
+  const base = kind === 'trench' ? TRENCH_COST[w.tr] : COST[kind];
+  if ((kind === 'bunk' || kind === 'fort') && r.home === r.owner && nationOf(r.owner).flags.fortress) return Math.ceil(base * .75);
+  // Austria-Hungary's mountain war: fortifications are cheaper in mountain regions
+  if (nationOf(r.owner).flags.mountain && mountainRegion(r.id)) return Math.max(1, Math.round(base * .8));
+  return base;
 }
 
 /** Place a defence or field work on a border sector (`sector` = neighbouring region id), or a defence in the interior (-1). */
@@ -120,6 +126,7 @@ export function formArmy(g: GameState, fid: number, fromId: number, toId: number
   if (sent >= tot) { for (const k of GROUND_TYPES) if (n[k] > 0) { n[k]--; sent--; break; } }
   if (sent <= 0) { for (const k of GROUND_TYPES) if (A.units[k] > 0) { n[k] = 1; sent = 1; break; } }
   const a = mkArmy(g, fid, fromId, toId, MARCH_SPEED, MARCH_MIN); a.mor = A.mor; a.stance = A.stance ?? 0;
+  const mf = marchFactor(g, fid, fromId, toId); a.dur *= mf.k; if (mf.rail) a.rail = true;
   for (const k of GROUND_TYPES) { const men = takeForce(A.units, A.men, k, n[k]); a.units[k] += n[k]; a.men[k] += men; }
   // fatigue: marching on right after arriving, or straight out of a battle
   a.legs = (A.arrT !== undefined && g.time - A.arrT < FORCED_MARCH ? (A.legs ?? 1) : 0) + 1;
@@ -137,16 +144,20 @@ export function sendArmy(g: GameState, fid: number, fromId: number, toId: number
 }
 
 /** Fly aircraft to a region up to AIR_RANGE borders away: strike an enemy, support a battle, or rebase. */
-export function sendAir(g: GameState, fid: number, fromId: number, toId: number, frac: number): string | null {
+export function sendAir(g: GameState, fid: number, fromId: number, toId: number, frac: number, rail = false): string | null {
   const W = world(), A = g.regions[fromId], B = g.regions[toId];
   if (!A || !B || fromId === toId) return 'Pick another region as the target.';
   if (A.owner !== fid) return 'Select one of your own regions first.';
   if (A.units.plane < 1) return `No squadrons are based in ${W.regions[fromId].name}.`;
   if (hops(fromId, toId, AIR_RANGE) > AIR_RANGE) return `${W.regions[toId].name} is out of range. Aircraft reach regions up to ${AIR_RANGE} borders away.`;
+  if (rail) {
+    if (B.owner === fid) return 'Bomb the railways of enemy regions.';
+    if (!W.regions[toId].adj.some(n => railOpen(g, toId, n))) return `No working railway runs through ${W.regions[toId].name}.`;
+  }
   const cap = capCheck(g, fid, toId); if (cap) return cap;
   const n = Math.max(1, Math.min(A.units.plane, Math.round(A.units.plane * Math.max(.05, Math.min(1, frac)))));
   const men = takeForce(A.units, A.men, 'plane', n);
-  launch(g, fid, fromId, toId, { ...emptyUnits(), plane: n }, false, { ...emptyUnits(), plane: men });
+  const fl = launch(g, fid, fromId, toId, { ...emptyUnits(), plane: n }, false, { ...emptyUnits(), plane: men }); if (rail) fl.strike = 'rail';
   emit(g, { k: 'air', faction: fid, from: fromId, to: toId, units: n });
   return null;
 }
@@ -160,7 +171,7 @@ export function patrol(g: GameState, fid: number, fromId: number, toId: number):
   if (!W.regions[fromId].adj.includes(toId)) return `A patrol only reaches across one border. ${W.regions[toId].name} does not border ${W.regions[fromId].name}.`;
   if (f.supply < COST.patrol) return `Not enough supply: a patrol costs ${COST.patrol}.`;
   f.supply -= COST.patrol;
-  const a = mkArmy(g, fid, fromId, toId, 4.5, 1.5); a.scout = 'patrol'; g.armies.push(a);
+  const a = mkArmy(g, fid, fromId, toId, 4.5, 1.5); a.scout = 'patrol'; a.dur *= weatherMarch(g, fid, toId); g.armies.push(a);
   return null;
 }
 
@@ -237,8 +248,29 @@ function scoutArrives(g: GameState, a: Army) {
   emit(g, { k: 'intel', faction: a.owner, region: t.id, by: a.scout! });
 }
 
+/** A rail strike reaches its target: anti-air guns may down squadrons; the survivors wreck the region's rail links and fly home. */
+function railStrike(g: GameState, a: Army) {
+  const t = g.regions[a.to], flak = t.defs.filter(d => d.f === t.owner && d.k === 'flak').length;
+  let n = a.units.plane; for (let i = 0; i < a.units.plane; i++) if (rnd(g) < Math.min(.7, .05 + .15 * flak)) n--;
+  if (n < a.units.plane) emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'recon' });
+  if (n > 0 && t.owner !== a.owner) cutRails(g, a.owner, t.id, null, 'air');
+  const home = g.regions[a.from].owner === a.owner ? a.from : world().regions[a.to].adj.find(j => g.regions[j].owner === a.owner);
+  if (n > 0 && home !== undefined) launch(g, a.owner, a.to, home, { ...emptyUnits(), plane: n }, true, { ...emptyUnits(), plane: Math.round(a.men.plane * n / Math.max(1, a.units.plane)) });
+}
+
+/** A working spy cuts one rail link of the region it works in, and is twice as likely to be caught for a while. */
+export function sabotage(g: GameState, fid: number, region: number, to: number): string | null {
+  const s = activeSpies(g, fid).find(x => x.region === region), W = world();
+  if (!s) return `None of your agents works in ${W.regions[region]?.name ?? 'that region'}.`;
+  if (!W.regions[region].adj.includes(to) || !hasRail(g, region, to)) return 'No railway runs there.';
+  if (!railOpen(g, region, to)) return 'That line is already cut.';
+  cutRails(g, fid, region, to, 'spy'); s.hot = g.day + 21;
+  return null;
+}
+
 export function arrive(g: GameState, a: Army) {
   if (a.scout) { scoutArrives(g, a); return; }
+  if (a.strike === 'rail') { railStrike(g, a); return; }
   const t = g.regions[a.to], len = Math.hypot(a.dx, a.dz) || 1, dir = { x: -a.dx / len, z: -a.dz / len };
   // fatigue: more than two borders in a row, or straight out of a battle, costs morale when the troops have to fight
   if (!a.air && ((a.legs ?? 1) > 2 || a.tired) && (frontsOf(g, t.id).length || t.owner !== a.owner)) a.mor = Math.max(5, a.mor - FATIGUE_MORALE);
@@ -287,7 +319,9 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
     case 'fortify': { const r = g.regions[c.region]; if (!r) return 'Invalid order.'; return fortify(g, fid, r, c.kind, c.sector); }
     case 'march': return sendArmy(g, fid, c.from, c.to, c.frac);
-    case 'air': return sendAir(g, fid, c.from, c.to, c.frac);
+    case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail);
+    case 'rail': return buildRail(g, fid, c.region, c.to);
+    case 'sabotage': return sabotage(g, fid, c.region, c.to);
     case 'patrol': return patrol(g, fid, c.from, c.to);
     case 'recon': return recon(g, fid, c.from, c.to);
     case 'spy': return spy(g, fid, c.to);

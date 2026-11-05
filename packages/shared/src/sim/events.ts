@@ -46,6 +46,11 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (e.faction === me) return { text: `Uprising in ${R(e.region)}! The garrison mutinies and the region goes over to ${F(e.to).the}.`, cls: 'bad', region: e.region };
       if (e.to === me) return { text: `${R(e.region)} rises against ${F(e.faction).the} and declares for us.`, cls: 'good', region: e.region };
       return { text: `Uprising in ${R(e.region)}: it breaks away from ${F(e.faction).the}.`, cls: '', region: e.region };
+    case 'railCut':
+      if (e.faction === me) return { text: e.by === 'air' ? `Our bombers wreck the railways of ${R(e.region)}.` : `Our agent blows up a railway line in ${R(e.region)}.`, cls: 'good', region: e.region };
+      if (e.owner === me) return { text: e.by === 'air' ? `Enemy bombers have cut the railways of ${R(e.region)}.` : `Saboteurs have blown up a railway line in ${R(e.region)}.`, cls: 'bad', region: e.region };
+      return null;
+    case 'railBuilt': return e.faction === me ? { text: `The railway between ${R(e.a)} and ${R(e.b)} is open.`, cls: 'good', region: e.b } : null;
     case 'air':
       if (e.faction === me) return { text: `${e.units} squadron${e.units === 1 ? '' : 's'} take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };
       if (g.regions[e.to].owner === me) return { text: `Enemy aircraft spotted heading for ${R(e.to)}!`, cls: 'bad', region: e.to };

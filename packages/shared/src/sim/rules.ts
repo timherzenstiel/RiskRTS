@@ -2,6 +2,7 @@
 // suppression effects. Later systems (weather, terrain, doctrines) plug in here so the battle code needs no special cases.
 import { AS, COST, isDef, type AgentType, type UnitStats, type UnitType } from '../data/units';
 import { nationOf, nationalUnit } from '../data/nations';
+import { isMountain, weatherAt } from '../data/terrain';
 import type { Agent, Battle, GameState, Stance } from './types';
 
 const statCache = new Map<string, UnitStats>();
@@ -49,6 +50,24 @@ export const holdMorale = (f: number) => nationOf(f).hold;
 export const unitCost = (_g: GameState, f: number, t: UnitType) => t === 'tank' ? Math.round(COST.tank * nationOf(f).tankCost) : COST[t];
 /** Supply cost of a building for a power. */
 export const buildCostOf = (f: number, kind: 'factory' | 'barracks' | 'airfield') => COST[kind] + (kind === 'factory' ? nationOf(f).factoryCost : 0);
+
+/** Ground conditions of a front: mud (weather), winter, and whether the attack comes over a mountain border. */
+export interface Field { mud: boolean; winter: boolean; mtn: boolean }
+export function fieldOf(g: GameState, b: Battle): Field {
+  const w = weatherAt(b.region, g.day);
+  return { mud: w === 1, winter: w === 2, mtn: isMountain(b.region, b.from) };
+}
+/** Speed factor of attackers crossing no-man's-land: mud and mountains slow them, tanks struggle in the mountains. */
+export function crossSpeed(fl: Field, t: AgentType) { return (fl.mud ? 1 / 1.3 : 1) * (fl.mtn ? (t === 'tank' ? .5 : 1 / 1.3) : 1); }
+/** Terrain and weather damage modifiers: defenders of a mountain border (more so for Austria-Hungary), tanks in the mountains, Siberians in winter. */
+export function fieldMod(g: GameState, b: Battle, fl: Field, sf: number, st: AgentType, t: Agent): number {
+  let m = 1;
+  if (fl.mtn) { if (t.f === b.def) m *= nationOf(t.f).flags.mountain ? .8 * .7 : .8; if (st === 'tank') m *= .5; }
+  if (fl.winter && st === 'inf' && nationOf(sf).flags.siberian) m *= 1.2;
+  return m;
+}
+/** Shell splash in the mud is smaller (shells bury themselves). */
+export const splashMod = (fl: Field) => fl.mud ? .8 : 1;
 
 /** Stance of a side in a battle. */
 export const stanceIn = (b: Battle, f: number): Stance => b.st?.[f] ?? 0;

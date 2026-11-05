@@ -37,7 +37,7 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
           const noMen = pool < men;
           const lock = early ? monthStr(techDayFor(me, tech!, g.factions[me].rushed)) : needs ?? (region.cut ? 'Cut off' : region.strike ? 'Strike' : undefined);
           return (
-            <Cameo key={k} k={k} name={unitName(g, me, k)} hotkey={i < 4 ? String(i + 1) : undefined} national={!!nat} count={region.units[k]}
+            <Cameo key={k} k={k} nation={me} name={unitName(g, me, k)} hotkey={i < 4 ? String(i + 1) : undefined} national={!!nat} count={region.units[k]}
               cost={<><SupplyIcon />{c}</>} lock={lock} disabled={supply < c || locked || noMen}
               title={`${nat ? NATIONS[me].unitDesc : UDESC[k]} · ${men} men${noMen && !locked ? ` · needs ${men} men from the pool` : ''}`}
               onBuy={five => recruit(id, k, five ? 5 : 1)} five fiveDisabled={supply < c * 5 || locked || pool < men * 5} />

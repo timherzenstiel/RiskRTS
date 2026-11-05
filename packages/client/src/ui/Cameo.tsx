@@ -5,12 +5,15 @@ import { Icon, type IconKey } from './icons';
 
 /** Painted cameo portraits in public/art/cameo; keys without one fall back to the line icon on a plate well. */
 const ART: Partial<Record<IconKey, string>> = {
-  inf: 'inf', mg: 'nest', art: 'gun', tank: 'tank',
+  mg: 'nest', art: 'gun',
   trench: 'trench', sand: 'trench', wire: 'wire', pill: 'nest', bunk: 'bunker', fort: 'gun',
   factory: 'house', barracks: 'house',
 };
 const base = import.meta.env.BASE_URL ?? '/';
-export const cameoUrl = (k: IconKey) => ART[k] ? `${base}art/cameo/${ART[k]}.webp` : null;
+/** Units have a portrait per nation (tools/bake/cameos.py); works and buildings share one. */
+const PER_NATION = new Set<IconKey>(['inf', 'mg', 'art', 'tank', 'plane']);
+export const cameoUrl = (k: IconKey, nation?: number) =>
+  nation !== undefined && PER_NATION.has(k) ? `${base}art/cameo/${k}_${nation}.webp` : ART[k] ? `${base}art/cameo/${ART[k]}.webp` : null;
 
 export interface CameoProps {
   k: IconKey;
@@ -32,12 +35,14 @@ export interface CameoProps {
   fiveDisabled?: boolean;
   national?: boolean;
   done?: boolean;
+  /** Faction whose portrait to show for unit cameos. */
+  nation?: number;
 }
 
 const Info = createContext<(t: string | null) => void>(() => {});
 
-export function Cameo({ k, name, cost, hotkey, lock, disabled, pips, count, title, onBuy, five, fiveDisabled, national, done }: CameoProps) {
-  const url = cameoUrl(k); const say = useContext(Info); const line = `${name} · ${title}`;
+export function Cameo({ k, name, cost, hotkey, lock, disabled, pips, count, title, onBuy, five, fiveDisabled, national, done, nation }: CameoProps) {
+  const url = cameoUrl(k, nation); const say = useContext(Info); const line = `${name} · ${title}`;
   return (
     <div className={'cameo' + (lock ? ' locked' : '') + (done ? ' done' : '') + (national ? ' nat' : '')}
       onPointerEnter={() => say(line)} onPointerLeave={() => say(null)} onFocus={() => say(line)} onBlur={() => say(null)}>

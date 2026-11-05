@@ -84,6 +84,7 @@ export function loadPixelScale(get: (k: string) => string | null = lsGet): Pixel
   const old = get('f14q');
   if (old === '0') return 0;
   if (old === '2') return 3;
+  if (old === '1') return 2;
   return DEFAULT_PIXEL_SCALE;
 }
 

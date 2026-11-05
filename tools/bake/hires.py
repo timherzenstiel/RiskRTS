@@ -91,8 +91,8 @@ def figure(name, pose):
 def helmets_hi():
     out = []
     k = Kit('helm_brodie')
-    k.ring(0, .003, 0, .041, .0045, P['helm'], axis='y', seg=20, seg2=4); k.cyl(0, .003, 0, .043, .043, .002, P['helm'], seg=20)
-    k.ball(0, .006, 0, .028, P['helm'], sy=.62, seg=14); k.box(0, -.014, .016, .036, .003, .003, P['leather']); out.append(k.done())
+    k.ring(0, .003, 0, .031, .0035, P['helm'], axis='y', seg=20, seg2=4); k.cyl(0, .003, 0, .033, .033, .002, P['helm'], seg=20)
+    k.ball(0, .006, 0, .024, P['helm'], sy=.62, seg=14); k.box(0, -.014, .016, .036, .003, .003, P['leather']); out.append(k.done())
     k = Kit('helm_adrian')
     k.ball(0, .008, 0, .027, P['helm'], sy=.8, seg=14); k.cyl(0, .001, 0, .03, .03, .003, P['helm'], seg=16)
     k.box(0, .0, .03, .05, .003, .022, P['helm'], bevel=.002, rx=-.25); k.box(0, .002, -.029, .048, .003, .018, P['helm'], bevel=.002, rx=.3)
@@ -192,7 +192,7 @@ def tank_mk4():
         k.poly([(xo, y, z) for z, y in prof], P['drab'], thick=.034 * sd * (1 if sd > 0 else 1))
         # raised inner plate, recognition stripes (team colour) on the front horns, rivets along every edge
         inner = [(z * .84, .02 + (y - .012) * .78) for z, y in prof]
-        k.poly([(xo + sd * .0025, y, z) for z, y in inner], P['drab2'], thick=.002)
+        k.poly([(xo + sd * .0025, y, z) for z, y in inner], P['drab2'], house=True, thick=.002)
         for j, zz in enumerate((.135, .15, .165)):
             k.box(xo + sd * .003, .09, zz, .004, .07, .009, P['white'] if j != 1 else P['red'], house=(j == 1), rx=.55)
         for i in range(len(prof)):
@@ -207,7 +207,7 @@ def tank_mk4():
         k.box(sd * (W + .069), .086, -.01, .002, .006, .02, P['black'])
         rivet_row(k, sd * (W + .069), (-.028, .044), (.05, .044), 6); rivet_row(k, sd * (W + .069), (-.028, .088), (.05, .088), 6)
     k.box(0, H * .6, -.01, W * 2, H * .55, L * .74, P['drab'], bevel=.004)              # hull between the frames
-    k.box(0, H + .02, .06, .075, .034, .06, P['drab'], bevel=.004)                      # driver's cab
+    k.box(0, H + .02, .06, .075, .034, .06, P['drab'], house=True, bevel=.004)          # driver's cab
     for i in range(3): k.box(-.022 + i * .022, H + .025, .0905, .012, .004, .002, P['black'])
     k.box(0, H + .039, .055, .03, .004, .028, P['drab2'], bevel=.002)                   # hatch
     rivet_row(k, .038, (.032, H + .006), (.088, H + .006), 5); rivet_row(k, -.038, (.032, H + .006), (.088, H + .006), 5)
@@ -242,7 +242,7 @@ def tank_a7v():
         track_loop(k, sd, sd * (W - .01), [(-L / 2 + .02, .03), (L / 2 - .02, .03), (L / 2 - .03, .006), (-L / 2 + .03, .006)], 36, w=.03)
     k.poly([(-W, .03, -L / 2), (W, .03, -L / 2), (W, .03, L / 2), (-W, .03, L / 2)], P['drab'], thick=.004)
     for sd in (-1, 1):  # sloped armour skirts
-        k.poly([(sd * W, .03, -L / 2), (sd * W, .03, L / 2), (sd * (W - .012), .1, L / 2 - .01), (sd * (W - .012), .1, -L / 2 + .01)], P['drab'], house=False, thick=.004 * sd)
+        k.poly([(sd * W, .03, -L / 2), (sd * W, .03, L / 2), (sd * (W - .012), .1, L / 2 - .01), (sd * (W - .012), .1, -L / 2 + .01)], P['drab'], house=True, thick=.004 * sd)
         for i in range(3): k.box(sd * (W - .006), .07, -.08 + i * .08, .003, .012, .016, P['black'], ry=0)
         rivet_row(k, sd * (W - .002), (-L / 2 + .01, .036), (L / 2 - .01, .036), 14)
         rivet_row(k, sd * (W - .011), (-L / 2 + .02, .095), (L / 2 - .02, .095), 13)
@@ -250,7 +250,7 @@ def tank_a7v():
     k.box(0, .1, 0, (W - .012) * 2, .006, L - .02, P['drab2'], bevel=.002)
     k.box(0, .095, L / 2 - .015, (W - .012) * 2, .07, .008, P['drab'], rx=.3, bevel=.002)
     k.limb((0, .07, L / 2), (0, .072, L / 2 + .06), .007, .006, P['gun'], seg=8)         # 57 mm
-    k.box(0, .118, .07, .05, .03, .05, P['drab'], bevel=.003)                            # commander's cupola
+    k.box(0, .118, .07, .05, .03, .05, P['drab'], house=True, bevel=.003)                # commander's cupola
     for i in range(4): k.box(-.015 + i * .01, .123, .096, .006, .004, .002, P['black'])
     rivet_row(k, 0, (-L / 2 + .02, .104), (L / 2 - .02, .104), 15)
     return k.done()

@@ -2,11 +2,11 @@
 // The renderer reads selection/hover/orderMode from useUi.getState() every frame and reports input through the callbacks.
 import type { Session } from '../game/session';
 
-/** Internal render scale: 0 Ultra (device pixels), 1 Crisp (1 CSS px), 2 Classic (0.75×, default), 3 Retro (0.5×). */
+/** Internal render scale: 0 Ultra (device pixels), 1 Crisp (1 CSS px, default), 2 Classic (0.75×), 3 Retro (0.5×). */
 export type PixelScale = 0 | 1 | 2 | 3;
 export const PIXEL_SCALES = ['Ultra', 'Crisp', 'Classic', 'Retro'] as const;
-export const PIXEL_HINT = ['Device pixels: sharpest, heaviest on the GPU', 'One pixel per CSS pixel', '0.75× scale, softly upscaled: the classic 90s look (default)', 'Half resolution, big chunky pixels'] as const;
-export const DEFAULT_PIXEL_SCALE: PixelScale = 2;
+export const PIXEL_HINT = ['Device pixels: sharpest on high-DPI screens, heaviest on the GPU', 'One pixel per screen pixel: crisp, detailed units (default)', '0.75× scale, softly upscaled', 'Half resolution, big chunky pixels'] as const;
+export const DEFAULT_PIXEL_SCALE: PixelScale = 1;
 
 export interface RendererCallbacks {
   /** Left click / tap on a region (-1 for water). */

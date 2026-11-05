@@ -65,7 +65,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly cleanup: (() => void)[] = [];
 
   private session: Session | null = null;
-  private quality: Quality = 2;
+  private quality: Quality = 1;
   private lastStoreQ: Quality | -1 = -1;
   private vw = 1; private vh = 1;
   private now = 0; private frameNo = 0;

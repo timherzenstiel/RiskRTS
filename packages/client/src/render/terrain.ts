@@ -247,6 +247,8 @@ export class Terrain {
         const x = tx(i % COLS) + (rng.next() - .5) * TS * .8, z = tz((i / COLS) | 0) + (rng.next() - .5) * TS * .8, y = tileH[i], t = terrOf[i];
         const cc = TREEC[k]!, ci = Math.floor(rng.next() * cc.length), c = cc[ci], s = .8 + rng.next() * .5;
         this.treeRec.push(x, z, y, s, this.biome[i], ci, t);
+        // the light box trees of the far view keep their old density (at most two per tile); the extra trees of a wood are modelled only
+        if (n >= 2) continue;
         if (k === 'taiga') { addPart(t, x, y + .025 * s, z, .02, .05 * s, .02, TRUNK); addPart(t, x, y + .08 * s, z, .11 * s, .06 * s, .11 * s, c); addPart(t, x, y + .135 * s, z, .075 * s, .05 * s, .075 * s, c); addPart(t, x, y + .18 * s, z, .035 * s, .04 * s, .035 * s, c); }
         else if (k === 'jungle') { addPart(t, x, y + .045 * s, z, .03, .09 * s, .03, TRUNK); addPart(t, x, y + .12 * s, z, .17 * s, .07 * s, .17 * s, c); addPart(t, x, y + .17 * s, z, .1 * s, .04 * s, .1 * s, c); }
         else if (k === 'savanna') { addPart(t, x, y + .04 * s, z, .02, .08 * s, .02, TRUNK); addPart(t, x, y + .09 * s, z, .17 * s, .03 * s, .17 * s, c); }

@@ -12,7 +12,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,glb,json}'], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         runtimeCaching: [{ urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i, handler: 'StaleWhileRevalidate', options: { cacheName: 'fonts' } }] },
       manifest: {
         name: 'Fronts of 1914', short_name: 'Fronts 1914',

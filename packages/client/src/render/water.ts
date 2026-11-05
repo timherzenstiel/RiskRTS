@@ -1,6 +1,6 @@
 // Pixel-quantised animated sea: depth from a coast distance field, foam rings along shores, sparkles and a faint grid.
 import * as THREE from 'three';
-import { COLS, HH, HW, N, ROWS, TS, type World } from '@riskrts/shared';
+import { COLS, HH, HW, ROWS, TS, type World } from '@riskrts/shared';
 
 export class Water {
   readonly mesh: THREE.Mesh;
@@ -9,14 +9,31 @@ export class Water {
   private readonly geo: THREE.PlaneGeometry;
 
   constructor(scene: THREE.Scene, world: World) {
-    const coast = new Uint8Array(N).fill(20), q: number[] = [], nb = [0, 0, 0, 0];
-    for (let i = 0; i < N; i++) if (world.land[i]) { coast[i] = 0; q.push(i); }
-    for (let h = 0; h < q.length; h++) {
-      const i = q[h], d = coast[i]; if (d >= 16) continue;
-      const c = i % COLS; nb[0] = c > 0 ? i - 1 : -1; nb[1] = c < COLS - 1 ? i + 1 : -1; nb[2] = i >= COLS ? i - COLS : -1; nb[3] = i + COLS < N ? i + COLS : -1;
-      for (const j of nb) if (j >= 0 && coast[j] > d + 1) { coast[j] = d + 1; q.push(j); }
+    // Smooth coast distance (in tiles) at 3x the tile resolution: the land mask is bilinearly smoothed (rounding the tile
+    // corners) and a two-pass chamfer transform measures the distance, so depth bands and foam rings follow the coast in curves.
+    const SS = 3, CW = COLS * SS, CH = ROWS * SS, D = new Float32Array(CW * CH), INF = 1e6;
+    const L = (c: number, r: number) => (c >= 0 && c < COLS && r >= 0 && r < ROWS && world.land[r * COLS + c]) ? 1 : 0;
+    for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+      const fx = (x + .5) / SS - .5, fy = (y + .5) / SS - .5, c0 = Math.floor(fx), r0 = Math.floor(fy), tx = fx - c0, ty = fy - r0;
+      const v = (L(c0, r0) * (1 - tx) + L(c0 + 1, r0) * tx) * (1 - ty) + (L(c0, r0 + 1) * (1 - tx) + L(c0 + 1, r0 + 1) * tx) * ty;
+      D[y * CW + x] = v >= .5 ? 0 : INF;
     }
-    this.tex = new THREE.DataTexture(coast, COLS, ROWS, THREE.RedFormat, THREE.UnsignedByteType);
+    const d1 = 1, d2 = Math.SQRT2;
+    for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+      const i = y * CW + x; let v = D[i]; if (!v) continue;
+      if (x > 0) v = Math.min(v, D[i - 1] + d1);
+      if (y > 0) { v = Math.min(v, D[i - CW] + d1); if (x > 0) v = Math.min(v, D[i - CW - 1] + d2); if (x < CW - 1) v = Math.min(v, D[i - CW + 1] + d2); }
+      D[i] = v;
+    }
+    for (let y = CH - 1; y >= 0; y--) for (let x = CW - 1; x >= 0; x--) {
+      const i = y * CW + x; let v = D[i]; if (!v) continue;
+      if (x < CW - 1) v = Math.min(v, D[i + 1] + d1);
+      if (y < CH - 1) { v = Math.min(v, D[i + CW] + d1); if (x < CW - 1) v = Math.min(v, D[i + CW + 1] + d2); if (x > 0) v = Math.min(v, D[i + CW - 1] + d2); }
+      D[i] = v;
+    }
+    const coast = new Uint8Array(CW * CH);
+    for (let i = 0; i < CW * CH; i++) coast[i] = Math.min(255, Math.round(D[i] / SS * 12));
+    this.tex = new THREE.DataTexture(coast, CW, CH, THREE.RedFormat, THREE.UnsignedByteType);
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter; this.tex.needsUpdate = true;
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uCoast: { value: this.tex }, uSize: { value: new THREE.Vector2(COLS, ROWS) }, uTS: { value: TS } },
@@ -29,14 +46,14 @@ export class Water {
     vec2 wp=(vMap-uSize*.5)*uTS;
     if(vMap.x<0.||vMap.y<0.||vMap.x>uSize.x||vMap.y>uSize.y){ gl_FragColor=vec4(pow(deep*.6,vec3(2.2)),1.); return; }
     vec2 q=floor(wp*16.)/16.;
-    float d=texture2D(uCoast,vMap/uSize).r*255.;
-    vec3 c=mix(vec3(.28,.37,.34),vec3(.13,.21,.24),smoothstep(1.,6.,d)); c=mix(c,deep,smoothstep(5.,18.,d));
+    float d=texture2D(uCoast,vMap/uSize).r*255./12.;
+    vec3 c=mix(vec3(.2,.29,.28),vec3(.13,.21,.24),smoothstep(.3,4.,d)); c=mix(c,deep,smoothstep(5.,18.,d));
     float n=vn(q*2.2+vec2(uTime*.07,uTime*.05))*.6+vn(q*5.5+vec2(-uTime*.11,uTime*.09))*.4;
     c*=.9+.2*n;
     float w=sin((q.x*1.3+q.y*.8)*3.1+uTime*.9+n*6.)*.5+.5;
     c+=vec3(.04,.06,.06)*smoothstep(.9,1.,w)*(.5+n);
     float ring=sin(d*1.6-uTime*1.3+n*3.)*.5+.5;
-    float foam=smoothstep(3.2,.5,d)*smoothstep(.62,.95,ring)*.9+smoothstep(1.3,.2,d)*.55;
+    float foam=smoothstep(.9,.2,d)*smoothstep(.8,.98,ring)*.28+smoothstep(.22,.03,d)*.45;
     foam*=.65+.5*h21(floor(q*5.));
     c=mix(c,vec3(.66,.68,.6),clamp(foam,0.,.6));
     if(h21(floor(wp*26.)+floor(uTime*1.4))>.994&&n>.5) c+=.4;

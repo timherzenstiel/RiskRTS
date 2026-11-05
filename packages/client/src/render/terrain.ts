@@ -109,7 +109,7 @@ float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+
     if(fh(_ci)<_dm*.7&&length(_cf)<_cr) _c*=length(_cf+vec2(.06))<_cr?.55:1.25;
   }
   float _wet=smoothstep(.235,.15,vWP.y);
-  _c=mix(_c,vec3(.29,.24,.16)*(.75+.35*_m2),_wet*.75);
+  _c=mix(_c,vec3(.2,.17,.12)*(.75+.35*_m2),_wet*.45);
   _c*=mix(.55,1.,smoothstep(.04,.18,vWP.y));
   diffuseColor.rgb=_c;`);
   };
@@ -409,7 +409,7 @@ export class Terrain {
       const vert = (lx: number, ly: number) => {
         const o = ly * G + lx; if (idx[o] >= 0) return idx[o];
         const gx = 2 * (c0 + lx), gy = 2 * (r0 + ly), h = this.vtxH(gx, gy); idx[o] = pos.length / 3;
-        pos.push(gx * TS / 2 - HW, h < 0 ? .02 : h, gy * TS / 2 - HH); return idx[o];
+        pos.push(gx * TS / 2 - HW, h < 0 ? -.08 : h, gy * TS / 2 - HH); return idx[o];
       };
       for (let r = r0; r < Math.min(ROWS, r0 + FAR_CH); r++) for (let c = c0; c < Math.min(COLS, c0 + FAR_CH); c++) {
         if (!near(c, r)) continue;

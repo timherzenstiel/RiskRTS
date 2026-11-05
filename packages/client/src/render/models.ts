@@ -23,6 +23,8 @@ export class Models {
 
   /** Use the detailed baked figures (battle and close bands). */
   hiMesh = true;
+  /** Far-zoom sprite cards for infantry (used when the detailed meshes are off). */
+  sprites: import('./impostors').Impostors | null = null;
   /** Baked meshes (null or not ready: box models). */
   mesh: MeshPools | null = null;
 
@@ -85,6 +87,8 @@ export class Models {
   /** Infantryman. `pose`: POSE_RIFLE carries the rifle at the ready, GRIP reaches forward to a gun, SHELL carries a shell, HANG lets the arms hang. */
   soldier(x: number, y: number, z: number, face: number, f: number, S: number, crouch: boolean, walk: number, pose = POSE_RIFLE) {
     const sw = walk ? Math.sin(walk) * .018 : 0, bob = walk ? Math.abs(Math.cos(walk)) * .008 : 0;
+    // beyond the battle band: a pre-rendered sprite card instead of a mesh (crouching figures keep the light mesh)
+    if (!this.hiMesh && !crouch && this.sprites?.ready) { this.sprites.push(x, y + bob * S, z, face, f, S, walk ? (Math.sin(walk) > 0 ? 1 : 2) : 0); return; }
     if (this.mesh?.has('soldier_lo')) {
       // close up: the detailed figure, two stride frames while marching; further out the light figure with a sway
       const d = crouch ? -.045 : 0, hiRes = this.hiMesh && this.mesh.has('soldier');

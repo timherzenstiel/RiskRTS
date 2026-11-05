@@ -19,7 +19,7 @@ export const atPeace = (g: GameState, a: number, b: number) => a !== b && !!trea
 export function offer(g: GameState, fid: number, to: number, kind: TreatyKind): string | null {
   const T = g.factions[to];
   if (!T || to === fid || !T.alive) return 'There is no one to talk to there.';
-  if (!(kind in TREATY_NAMES)) return 'Invalid order.';
+  if (!Object.hasOwn(TREATY_NAMES, kind)) return 'Invalid order.';
   const t = treatyOf(g, fid, to);
   if (t?.kind === kind && t.ends === undefined) return `You already have a ${TREATY_NAMES[kind].toLowerCase()} with ${FACTIONS[to].the}.`;
   if ((g.offers ??= []).some(o => o.from === fid && o.to === to)) return 'Your last offer is still waiting for an answer.';
@@ -53,7 +53,7 @@ function sign(g: GameState, a: number, b: number, kind: TreatyKind) {
 }
 let stopAttack = (_g: GameState, _b: number, _f: number) => { /* set by levers to avoid an import cycle */ };
 export function setStopAttack(fn: typeof stopAttack) { stopAttack = fn; }
-function turnBack(a: GameState['armies'][number]) {
+export function turnBack(a: GameState['armies'][number]) {
   [a.from, a.to] = [a.to, a.from]; a.ax += a.dx; a.az += a.dz; a.dx = -a.dx; a.dz = -a.dz; a.t = 1 - a.t;
   a.front = undefined; a.strike = undefined;
 }

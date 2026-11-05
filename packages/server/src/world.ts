@@ -1,7 +1,7 @@
 // One persistent world on the dedicated server: the authoritative simulation, its seats, connected players and spectators.
 // Same rules as a browser host (createGame, step, applyCommand, makeSnapshot), saved after every convoy.
 import {
-  applyCommand, createGame, drainEvents, makeSnapshot, migrateState, step, TICK_DT,
+  applyCommand, createGame, drainEvents, eventsFor, makeSnapshot, migrateState, step, TICK_DT,
   type ClientMsg, type Fx, type GameEvent, type GameSettings, type GameState, type ServerMsg, type WorldInfo,
 } from '@riskrts/shared';
 import { randomBytes } from 'node:crypto';
@@ -35,7 +35,7 @@ export class World {
     opts: { seed?: number; restore?: SavedWorld; spectatorDelay?: number } = {}) {
     this.spectatorDelay = opts.spectatorDelay ?? 20;
     if (opts.restore) {
-      const st = migrateState({ ...opts.restore.state, events: [], fx: null } as GameState & { v: number });
+      const st = migrateState({ ...opts.restore.state, events: [], fx: [] } as GameState & { v: number });
       if (!st) throw new Error(`World ${id} cannot be read.`);
       this.sim = st; this.seats = opts.restore.seats; this.rated = !!opts.restore.rated;
       // nobody is connected after a restart: every power is on the computer until its player comes back
@@ -65,7 +65,9 @@ export class World {
   join(conn: Conn, faction: number, player: string, name: string, token?: string): { token: string } | { error: string } {
     const seat = this.seats[faction]; if (!seat) return { error: 'There is no such power.' };
     if (this.sim.over) return { error: 'This war is over.' };
-    const mine = seat.player === player || (!!token && seat.token === token);
+    if (!player) return { error: 'Invalid player.' };
+    // a held seat is only given back with its token (player ids are not secret)
+    const mine = !!seat.player && !!token && seat.token === token;
     if (seat.player && !mine) return { error: `${seat.name ?? 'Another player'} commands that power.` };
     if (this.ranked && !mine && this.seats.some(s => s.player === player)) return { error: 'In a ranked war each player commands one power.' };
     for (const p of this.peers.values()) if (!p.spectator && p.faction === faction) return { error: 'That power is already being commanded from another window.' };
@@ -114,6 +116,7 @@ export class World {
     if (this.sinceSnap >= SNAP_EVERY) {
       this.sinceSnap = 0;
       for (const p of this.peers.values()) if (!p.spectator) this.sendSnap(p, false);
+      this.specEv.push(...eventsFor(this.sim, this.evNet, -1));
       if (this.sinceSpec >= SPEC_EVERY) { this.sinceSpec = 0; this.queueSpectators(); }
       this.evNet.length = 0; this.fxNet.length = 0;
     }
@@ -127,14 +130,14 @@ export class World {
 
   private sendSnap(p: Peer, full: boolean) {
     const fx = this.fxNet.filter(f => p.watch.has(f.b));
-    p.conn.send({ t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : this.evNet, speed: this.running ? 1 : 0 });
+    p.conn.send({ t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: this.running ? 1 : 0 });
   }
 
   /** Spectators get full-vision snapshots (no sealed orders) after a delay. */
   private specEv: GameEvent[] = [];
   private queueSpectators() {
     const specs = [...this.peers.values()].filter(p => p.spectator);
-    this.specEv.push(...this.evNet); if (!specs.length) { this.specEv.length = 0; return; }
+    if (!specs.length) { this.specEv.length = 0; return; }
     const snap = makeSnapshot(this.sim, -1, [], []);
     const at = Date.now() / 1000;
     for (const p of specs) p.queue!.push({ at, msg: { t: 'snap', snap, events: this.specEv.slice(), speed: this.running ? 1 : 0 } });

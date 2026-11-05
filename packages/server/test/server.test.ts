@@ -57,6 +57,7 @@ describe('dedicated server', () => {
     expect(world.sim.factions[1].ai).toBe(true); expect(world.sim.factions[1].away).toBe(true); expect(world.running).toBe(false);
     const b = await hello(server.port, 'Intruder');
     b.send({ t: 'join', world: w.id, faction: 1, player: 'p-other' }); expect((await b.wait('err')).message).toMatch(/commands that power/);
+    b.send({ t: 'join', world: w.id, faction: 1, player: 'p-foch' }); expect((await b.wait('err')).message).toMatch(/commands that power/); // the id alone is not enough
     const c = await hello(server.port, 'Foch');
     c.send({ t: 'join', world: w.id, faction: 1, player: 'new-device', token }); expect((await c.wait('joined')).faction).toBe(1);
     expect(world.sim.factions[1].ai).toBe(false); b.close(); c.close();

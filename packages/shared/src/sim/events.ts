@@ -114,3 +114,8 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
     default: return null;
   }
 }
+
+/** Events a recipient may receive over the network: only those that concern it (spectators, -1: public ones only). */
+export function eventsFor(g: GameState, events: GameEvent[], me: number): GameEvent[] {
+  return events.filter(e => e.k === 'supply' || e.k === 'over' || e.k === 'start' || describeEvent(g, e, me) !== null);
+}

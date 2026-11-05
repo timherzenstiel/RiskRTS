@@ -2,7 +2,7 @@
 // Barrage level, over the top, stance, reinforcing a front from a neighbouring region, and withdrawing.
 import { COST, FORMATION, SHELLS, groundUnits, isDef } from '../data/units';
 import { recordIntel } from './fog';
-import { setStopAttack } from './diplomacy';
+import { setStopAttack, treatyCheck } from './diplomacy';
 import { marchFactor } from './rails';
 import { MARCH_MIN, MARCH_SPEED, emit, mkArmy, rnd, world } from './core';
 import { weatherMarch } from './rails';
@@ -50,6 +50,7 @@ export function reinforce(g: GameState, fid: number, from: number, bid: number, 
   const b = live(g, bid); if (!b) return 'That battle is over.';
   const own = g.regions[b.region].owner === fid;
   if (!own && !b.sides.includes(fid)) return NOT_HERE;
+  if (!own) { const t = treatyCheck(g, fid, b.region); if (t) return t; }
   const a = formArmy(g, fid, from, b.region, frac); if (typeof a === 'string') return a;
   a.front = b.id; g.armies.push(a);
   emit(g, { k: 'march', faction: fid, from, to: b.region, units: groundUnits(a.units) });
@@ -104,7 +105,9 @@ export function decoy(g: GameState, fid: number, from: number, to: number): stri
   if (f.supply < COST.decoy) return `Not enough supply: a decoy costs ${COST.decoy}.`;
   f.supply -= COST.decoy;
   const a = mkArmy(g, fid, from, to, MARCH_SPEED, MARCH_MIN); a.decoy = true; a.fake = DECOY.min + Math.floor(rnd(g) * DECOY.spread);
-  a.dur *= marchFactor(g, fid, from, to).k; g.armies.push(a);
+  // look like a real march: the garrison's morale and stance, a first leg
+  a.mor = A.mor; a.stance = A.stance ?? 0; a.legs = 1;
+  const mf = marchFactor(g, fid, from, to); a.dur *= mf.k; if (mf.rail) a.rail = true; g.armies.push(a);
   return null;
 }
 

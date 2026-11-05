@@ -61,7 +61,7 @@ export class GameServer {
       case 'join': {
         const w = this.worlds.get(m.world); if (!w) { this.send(c, { t: 'err', message: 'That war no longer exists.' }); return; }
         c.world?.leave(c.id);
-        const r = w.join(this.conn(c), m.faction | 0, String(m.player).slice(0, 64), c.name, m.token);
+        const r = w.join(this.conn(c), m.faction | 0, typeof m.player === 'string' ? m.player.slice(0, 64) : '', c.name, typeof m.token === 'string' ? m.token : undefined);
         if ('error' in r) { this.send(c, { t: 'err', message: r.error }); return; }
         c.world = w; this.broadcastList(); return;
       }
@@ -88,7 +88,8 @@ export class GameServer {
 
   private list(): ServerMsg {
     const worlds = [...this.worlds.values()].map(w => w.info()).sort((a, b) => Number(a.over) - Number(b.over) || b.day - a.day);
-    const ladder = [...this.ladder.values()].sort((a, b) => b.elo - a.elo).slice(0, 20);
+    // player ids stay on the server: the ladder shows names only
+    const ladder = [...this.ladder.values()].sort((a, b) => b.elo - a.elo).slice(0, 20).map((r, i) => ({ player: String(i + 1), name: r.name, elo: r.elo, games: r.games }));
     return { t: 'worlds', worlds, ladder };
   }
   private listTimer: ReturnType<typeof setTimeout> | null = null;

@@ -51,7 +51,7 @@ export function aiThink(g: GameState, f: FactionState) {
   }
   levers(g, f, mine);
   manpower(g, f);
-  railways(g, f, mine);
+  railways(g, f, mine, V);
   research(g, f);
   diplomacy(g, f, mine);
   const P = nationOf(f.id).ai, W = world();
@@ -208,7 +208,7 @@ function manpower(g: GameState, f: FactionState) {
 }
 
 /** Rails: lay lines to regions on thin supply, let spies blow up enemy lines, and now and then bomb a rail hub. */
-function railways(g: GameState, f: FactionState, mine: RegionState[]) {
+function railways(g: GameState, f: FactionState, mine: RegionState[], V: GameState) {
   const W = world();
   if (f.supply >= 14 && rnd(g) < .08) {
     for (const r of mine) {
@@ -232,7 +232,7 @@ function railways(g: GameState, f: FactionState, mine: RegionState[]) {
   }
   if (techOn(g, f.id, 'bomb') && rnd(g) < .05) {
     const base = mine.find(t => t.units.plane >= 2 && t.battle < 0);
-    const tgt = base && g.regions.find(r => r.owner !== f.id && r.factory && (r.vis ?? 3) >= 1 && !r.defs.some(d => d.k === 'flak') && Math.abs(W.regions[r.id].cx - W.regions[base.id].cx) < 30 && W.regions[base.id].adj.some(j => j === r.id || W.regions[j].adj.includes(r.id)));
+    const tgt = base && V.regions.find(r => r.owner !== f.id && r.factory && (r.vis ?? 3) >= 1 && !r.defs.some(d => d.k === 'flak') && Math.abs(W.regions[r.id].cx - W.regions[base.id].cx) < 30 && W.regions[base.id].adj.some(j => j === r.id || W.regions[j].adj.includes(r.id)));
     if (base && tgt) sendAir(g, f.id, base.id, tgt.id, .6, false, true);
   }
 }

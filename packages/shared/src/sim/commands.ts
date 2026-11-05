@@ -14,7 +14,7 @@ import { mountainRegion } from '../data/terrain';
 import { buildRail, cutRails, hasRail, marchFactor, railOpen, weatherMarch } from './rails';
 import { activeSpies } from './fog';
 import { chooseDoctrine, hasDoc, rush, techOn } from './tech';
-import { answer, cancel, offer, treatyCheck } from './diplomacy';
+import { answer, atPeace, cancel, offer, treatyCheck, turnBack } from './diplomacy';
 import { decoy, decoyArrives, raid } from './levers';
 import { PHRASES } from './types';
 import { techDayFor, type TechKey } from '../data/tech';
@@ -330,6 +330,8 @@ export function arrive(g: GameState, a: Army) {
     }
     return;
   }
+  // a treaty signed while the troops were on the way: they turn back instead of attacking
+  if (atPeace(g, a.owner, t.owner) && g.regions[a.from].owner === a.owner) { turnBack(a); a.t = 0; g.armies.push(a); return; }
   // attacking: join the front over the same border, aircraft support any front, otherwise open a new front
   const same = fronts.find(b => b.from === sector) ?? (a.air ? fronts.find(b => b.sides.includes(a.owner)) ?? fronts[0] : undefined);
   if (same) { joinBattle(g, same, a.owner, a.units, dir, same.def === a.owner, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance); return; }
@@ -337,19 +339,30 @@ export function arrive(g: GameState, a: Army) {
   joinBattle(g, nb, a.owner, a.units, dir, false, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance);
 }
 
+const FORT_KINDS: FortKind[] = ['trench', 'sand', 'wire', 'pill', 'fort', 'flak', 'bunk'];
+const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's'] as const;
+/** Commands arrive from the network: every numeric field must be a finite number. */
+function validCommand(c: Command): boolean {
+  if (!c || typeof c !== 'object' || typeof c.t !== 'string') return false;
+  const o = c as unknown as Record<string, unknown>;
+  for (const k of NUM_FIELDS) if (k in o && o[k] !== undefined && !(typeof o[k] === 'number' && Number.isFinite(o[k]))) return false;
+  return true;
+}
+
 /** Validate and apply a player command. Returns an error message, or null on success. */
 export function applyCommand(g: GameState, fid: number, c: Command): string | null {
   if (g.over) return 'The war is over.';
   const f = g.factions[fid]; if (!f || !f.alive) return 'Your power has been destroyed.';
+  if (!validCommand(c)) return 'Invalid order.';
   switch (c.t) {
     case 'recruit': {
-      const r = g.regions[c.region]; if (!r || !UT[c.unit]) return 'Invalid order.';
+      const r = g.regions[c.region]; if (!r || !Object.hasOwn(UT, c.unit)) return 'Invalid order.';
       const n = Math.max(1, Math.min(10, Math.floor(c.n ?? 1)));
       for (let i = 0; i < n; i++) { const e = recruit(g, fid, r, c.unit); if (e) return i ? null : e; }
       return null;
     }
     case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
-    case 'fortify': { const r = g.regions[c.region]; if (!r) return 'Invalid order.'; return fortify(g, fid, r, c.kind, c.sector); }
+    case 'fortify': { const r = g.regions[c.region]; if (!r || !FORT_KINDS.includes(c.kind)) return 'Invalid order.'; return fortify(g, fid, r, c.kind, c.sector); }
     case 'march': return sendArmy(g, fid, c.from, c.to, c.frac, c.brk);
     case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail, !!c.factory, c.brk);
     case 'decoy': return decoy(g, fid, c.from, c.to);

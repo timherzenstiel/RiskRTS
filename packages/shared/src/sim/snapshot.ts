@@ -64,7 +64,7 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
   });
   return {
     time: q2(g.time), day: g.day, supplyT: q2(g.supplyT), diff: g.diff, over: g.over, winner: g.winner,
-    f: g.factions.map(f => [f.supply, f.alive ? 1 : 0, Math.round(f.ww * 10) / 10, Math.round(f.wounded), Math.floor(f.shells ?? 0), Math.floor(f.men ?? 0), f.mob ?? 0, f.unrestT ?? 0]), missions, rep: g.reports, rc: g.railCut, rn: g.railNew, tr: g.treaties, of: (g.offers ?? []).filter(o => o.to === recipient || o.from === recipient),
+    f: g.factions.map(f => [f.supply, f.alive ? 1 : 0, Math.round(f.ww * 10) / 10, Math.round(f.wounded), Math.floor(f.shells ?? 0), Math.floor(f.men ?? 0), f.mob ?? 0, f.unrestT ?? 0]), missions, rep: g.reports, rc: g.railCut, rn: (g.railNew ?? []).filter(([a, b]) => (g.regions[a].vis ?? 3) >= 1 || (g.regions[b].vis ?? 3) >= 1), tr: g.treaties, of: (g.offers ?? []).filter(o => o.to === recipient || o.from === recipient),
     cal: g.factions.map(f => ({ d: f.doctrines, r: f.id === recipient ? f.rushed : undefined, ry: f.id === recipient ? f.rushY : undefined, o: f.id === recipient ? f.docOffer : undefined, due: f.id === recipient ? f.docDue : undefined })),
     r: g.regions.map(r => [r.owner, r.units.inf, r.units.mg, r.units.art, r.units.tank, r.units.plane,
       (r.factory ? 1 : 0) | (r.barracks ? 2 : 0) | (r.airfield ? 4 : 0) | (r.cut ? 8 : 0) | (r.spied ? 16 : 0) | (r.strike ? 32 : 0), r.battle, r.contested,

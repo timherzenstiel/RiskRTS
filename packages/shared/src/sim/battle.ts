@@ -451,7 +451,7 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
   }
 
   if (winner !== null && winner !== prev) {
-    t.owner = winner;
+    t.owner = winner; t.strike = false; t.fake = undefined; t.stance = 0;
     for (const w of Object.values(t.works)) { w.tr = Math.max(0, w.tr - 1); }
     if (b.from >= 0) worksFor(t, b.from).wire = 0;
   }

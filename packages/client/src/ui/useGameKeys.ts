@@ -26,6 +26,9 @@ export function useGameKeys() {
         e.preventDefault();
         if (!s.canControlTime || ui.overlay) return;
         if (s.speed > 0) { lastSpeed = s.speed; ui.setSpeed(0); } else ui.setSpeed(lastSpeed || 1);
+      } else if (e.key === 't' || e.key === 'T' || e.key === 'b' || e.key === 'B') {
+        // map layers: T troops, B industry (buildings); the same key again shows everything
+        const want = e.key === 't' || e.key === 'T' ? 1 : 2; ui.setLayer(ui.layer === want ? 0 : want);
       } else if ((e.key === 'a' || e.key === 'A') && ui.sel >= 0 && s.state.regions[ui.sel].owner === s.me && s.state.regions[ui.sel].units.plane > 0) {
         ui.beginOrder('air');
       } else if (e.key >= '1' && e.key <= '5' || (e.code >= 'Digit1' && e.code <= 'Digit5')) {

@@ -11,7 +11,7 @@ import { K } from './palette';
 import { FLAME as FLAME_K, GLOW, type Sprites } from './sprites';
 import type { Terrain } from './terrain';
 import { clamp, col } from './util';
-import { battleAnchor } from './sectors';
+import { battleAnchor } from '@riskrts/shared';
 
 /** One front per region and border it is attacked over. */
 const frontKey = (b: { region: number; from: number }) => b.region * 512 + b.from + 1;

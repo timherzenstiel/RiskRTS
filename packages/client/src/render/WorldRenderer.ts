@@ -23,7 +23,7 @@ import { Post } from './post';
 import { LineBatch, Pool, litMaterial, uChrome } from './pools';
 import { Terrain } from './terrain';
 import { Water } from './water';
-import { battleAnchor, sectorPoint } from './sectors';
+import { battleAnchor, sectorPoint } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
 type Quality = 0 | 1 | 2;
@@ -203,7 +203,7 @@ class WorldRenderer implements WorldRendererApi {
     this.rig.update(dt, px, pz);
     this.terrain.setCameraDistance(this.rig.dist);
     this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
-    this.dyn.marker = ui.fortMarker;
+    this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.dyn.sel = ui.sel;
 
     this.syncPaint(g, ui.sel, ui.hover);
     const speed = s ? s.speed : 1, fdt = dt * (speed > 0 ? Math.min(speed, 4) : .5);

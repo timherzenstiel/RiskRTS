@@ -2,7 +2,8 @@
 // same fog of war: it judges enemy regions by the estimate across its borders and by its own reconnaissance reports.
 import { COST, DT, MAX_TRENCH, SHELLS, TRENCH_COST, UT, groundUnits, isDef, unitPower, type FortKind, type UnitType } from '../data/units';
 import { forcePower, frontsOf, hops, offensives, rnd, worksAt, world } from './core';
-import { assault, build, fortify, patrol, recon, recruit, sabotage, sendAir, sendArmy, shift, spy } from './commands';
+import { assault, build, fortify, patrol, recon, recruit, sabotage, sendAir, sendArmy, setOrder, shift, spy } from './commands';
+import { columnsAgainst, corpsPosts, mainOf } from './posts';
 import { buildRail, hasRail, railOpen } from './rails';
 import { activeSpies } from './fog';
 import { atPeace, cancel, enemiesOf, offer, treatyOf } from './diplomacy';
@@ -50,6 +51,7 @@ export function aiThink(g: GameState, f: FactionState) {
     }
   }
   levers(g, f, mine);
+  offensivesStep(g, f, mine);
   manpower(g, f);
   railways(g, f, mine, V);
   research(g, f);
@@ -114,14 +116,15 @@ export function aiThink(g: GameState, f: FactionState) {
     if (attacks >= 2 + (cap ? 0 : 1) || !room()) break; if (groundUnits(t.units) < 3) continue;
     const avail = forcePower({ ...t.units, plane: 0 }, t.men, pw) * (.6 + .4 * t.mor / 100) * .85; let best: RegionState | null = null, bs = -1e9;
     for (const n of enemyNb(V, t, f.id)) {
-      if (g.armies.some(a => a.owner === f.id && a.to === n.id && !a.decoy)) continue;
+      if (g.armies.some(a => a.owner === f.id && a.to === n.id && !a.decoy) || columnsAgainst(g, f.id, n.id).length || (t.fr?.[n.id]?.ord ?? 0) >= 1) continue;
       if (atPeace(g, f.id, n.owner)) continue;
       const dp = defPower(n, t.id), margin = avail - dp * 1.3 * P.aggr - 1.5; if (margin <= 0) continue;
       const sea = W.seaLane.has(t.id + '|' + n.id) || W.regions[n.id].seaAdj.length > 0;
       const s = margin + (missionWants(g, f, n.id) ? 6 : 0) + (n.capitalOf >= 0 ? 3 : 0) - dp * .2 + rnd(g) * 2 + (sea ? 2 * (P.navy - 1) : 0);
       if (s > bs) { bs = s; best = n; }
     }
-    if (best && !sendArmy(g, f.id, t.id, best.id, .85)) {
+    // the national style decides whether the offensive stops at the enemy's first line or goes on into the depth
+    if (best && !sendArmy(g, f.id, t.id, best.id, .85, false, rnd(g) < P.line ? 1 : 2)) {
       attacks++;
       // a feint elsewhere to draw the enemy's eye
       if (rnd(g) < .25 && f.supply >= 3) { const o = mine.find(x => x !== t && x.battle < 0 && enemyNb(V, x, f.id).length); if (o) { const own = world().regions[o.id].adj.find(j => g.regions[j].owner === f.id && enemyNb(V, g.regions[j], f.id).length); decoy(g, f.id, o.id, own !== undefined && rnd(g) < .5 ? own : enemyNb(V, o, f.id)[0].id); } }
@@ -194,6 +197,20 @@ function levers(g: GameState, f: FactionState, mine: RegionState[]) {
       const from = world().regions[b.region].adj.map(i => g.regions[i]).filter(r => r.owner === fid && r.battle < 0 && groundUnits(r.units) >= 3).sort((x, y) => groundUnits(y.units) - groundUnits(x.units))[0];
       if (from) reinforce(g, fid, from.id, b.id, .6);
     }
+  }
+}
+
+/** Phased offensives: rush an assembling attack now and then (Russia often); carry a foothold into the depth when it looks good. */
+function offensivesStep(g: GameState, f: FactionState, mine: RegionState[]) {
+  const P = nationOf(f.id).ai;
+  for (const r of mine) for (const s of corpsPosts(r)) {
+    const c = r.fr![s]; if ((c.ord ?? 0) < 1 || c.now || g.time >= (c.ready ?? 0)) continue;
+    if (rnd(g) < P.rush * .15) setOrder(g, f.id, r.id, s, c.ord!, true);
+  }
+  for (const b of g.battles) {
+    if (b.ended || b.attacker !== f.id || b.stage !== 3 || b.age - (b.stT ?? 0) < 40 || rnd(g) > .2) continue;
+    const [me, foe] = sidePower(b, f.id), depth = g.regions[b.region];
+    if (me > foe + unitPower(mainOf(depth)) * .8 && g.regions[b.from]?.owner === f.id) setOrder(g, f.id, b.from, b.region, 2);
   }
 }
 

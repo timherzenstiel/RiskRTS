@@ -6,7 +6,9 @@ import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
-export type Tab = 'rec' | 'build' | 'fort' | 'march';
+export type Tab = 'rec' | 'build' | 'fort' | 'deploy' | 'march';
+/** Map layer: 0 everything, 1 troops (markers and front lines first), 2 industry (buildings, rails, supply). */
+export type MapLayer = 0 | 1 | 2;
 export type OrderKind = 'march' | 'air';
 export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy';
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
@@ -17,6 +19,8 @@ interface Ui {
   /** Bumped ~5×/s and after every command so components re-read session.state. */
   rev: number;
   sel: number; hover: number; tab: Tab; sendFrac: number; orderMode: boolean; orderKind: OrderKind;
+  /** Goal of new attacks: 1 take the first line, 2 invade. */
+  goal: 1 | 2; layer: MapLayer;
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
   fortMarker: [number, number] | null;
   overlay: Overlay; scoreOpen: boolean;
@@ -39,6 +43,8 @@ interface Ui {
   setHover(id: number): void;
   setTab(t: Tab): void;
   setSendFrac(f: number): void;
+  setGoal(g: 1 | 2): void;
+  setLayer(l: MapLayer): void;
   beginOrder(kind?: OrderKind): void;
   setFortMarker(m: [number, number] | null): void;
   cancelOrder(): void;
@@ -73,7 +79,7 @@ let feedId = 1;
 Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
   sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -87,6 +93,8 @@ export const useUi = create<Ui>((set, get) => ({
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
   setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
+  setGoal: (goal) => set({ goal }),
+  setLayer: (layer) => set({ layer }),
   beginOrder: (orderKind = 'march') => set({ orderMode: true, orderKind }),
   setFortMarker: (fortMarker) => set({ fortMarker }),
   cancelOrder: () => set({ orderMode: false }),
@@ -114,7 +122,7 @@ export const useUi = create<Ui>((set, get) => ({
   order: (cmd) => { const s = get().session; if (!s) return false; const err = s.send(cmd); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); return !err; },
   assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); },
   march: (from, to, brk) => {
-    const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac, brk });
+    const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac, brk, goal: get().goal });
     if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(3); Sfx.order(); } set({ orderMode: false }); get().bump();
   },
 

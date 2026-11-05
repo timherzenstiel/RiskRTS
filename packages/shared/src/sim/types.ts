@@ -34,6 +34,8 @@ export interface FactionState {
   trust?: number[];
   /** Its player is away (dedicated server): the computer stands in but keeps the player's stances. */
   away?: boolean;
+  /** Armies and corps raised so far (their numbers name the next ones). */
+  nArmy?: number; nCorps?: number;
 }
 
 export type TreatyKind = 'cease' | 'nap' | 'ally';
@@ -54,6 +56,27 @@ export const BARRAGES = ['Hold fire', 'Light', 'Heavy'] as const;
 
 /** Field works on one border sector: trench depth (0..3), sandbag rows (0..2), barbed wire belts (0..2). */
 export interface Works { tr: number; sand: number; wire: number }
+
+/** Order of a corps at a front: hold the border, take the enemy's first line, or invade the region beyond. */
+export type Order = 0 | 1 | 2;
+export const ORDERS = ['Hold', 'Take the first line', 'Invade'] as const;
+/**
+ * A corps: the troops holding one border of a region. Its formations are part of the region's `units` (the main army in the
+ * middle of the region is whatever is not in a corps); men are spread evenly, so a corps fights at the region's strength.
+ */
+export interface Corps {
+  u: Units;
+  /** Corps number within its power (names are made from it, see data/names.ts); -1 when the viewer does not know it. */
+  n: number;
+  /** Standing order and stance. `ready`: game time from which the corps is assembled (jump-off trenches dug, guns registered). */
+  ord?: Order; ready?: number; st?: Stance;
+  /** Game time the corps has been holding its border since (it digs in over time). */
+  since?: number;
+  /** Attack now without waiting for assembly. */
+  now?: boolean;
+  /** Fog-of-war views only: estimated men [low, high]. */
+  est?: [number, number];
+}
 
 /** A fixed defence. `s` is the border sector it covers (a neighbouring region id) or -1 for the interior. */
 export interface Defence { id: number; k: DefKind; s: number; hp: number; f: number }
@@ -88,6 +111,10 @@ export interface RegionState {
   stance: Stance;
   /** Fatigue bookkeeping: when marching troops last arrived, after how many borders in a row, and when a battle here last ended. */
   arrT?: number; legs?: number; foughtT?: number;
+  /** Corps per border (keyed by neighbouring region id). The main army is `units` minus every corps. */
+  fr?: Record<number, Corps>;
+  /** Number of the main army (names, see data/names.ts), and the deploy mode (1 manual; otherwise the region deploys itself). */
+  an?: number; deploy?: number;
   /** Shell craters per border sector, left by past battles (visual). */
   cr?: Record<number, number>;
   /** Strikes: the region pays no supply or shells and cannot recruit until the unrest eases. */
@@ -122,6 +149,16 @@ export interface Army {
   strike?: 'rail' | 'factory';
   /** A decoy: no troops, but rivals watching see `fake` battalions marching. */
   decoy?: boolean; fake?: number;
+  /** Ground columns: the post they left (-1 the main army, else a border) and the post they march to; their group's number and kind (0 army, 1 corps). */
+  src?: number; post?: number; gn?: number; gk?: number;
+  /** Seconds still needed to form up before the column moves (called up from the main army for an offensive). */
+  wait?: number;
+  /** Order the troops take up at the front they march to, and attacking without waiting for assembly. */
+  ord?: Order; now?: boolean;
+  /** Regions still to pass after `to` on a march through own land, and the post to end at in the last one. */
+  path?: number[]; fin?: number;
+  /** Moving between posts of one region (`from` = `to`). */
+  inner?: boolean;
 }
 
 export interface Agent {
@@ -172,6 +209,14 @@ export interface Battle {
   fell?: Record<number, number>;
   /** Battle time of each faction's last trench raid here. */
   raidT?: Record<number, number>;
+  /** Phased offensives: goal 1 take the first line, 2 invade (none = the whole region at once, as for holdout assaults). */
+  goal?: number;
+  /** Stage: 0 first line, 1 consolidating the captured line, 2 fighting the depth, 3 foothold (first line held, attack stopped). */
+  stage?: number;
+  /** Battle age the current stage began at; the barrage before going over the top counts from here. */
+  stT?: number;
+  /** Number of the defending corps of this border, and battle age until which the attackers' guns fire unregistered. */
+  cn?: number; unreg?: number;
 }
 
 /** After-action report of a finished battle. */
@@ -219,6 +264,11 @@ export type GameEvent =
   | { k: 'doctrine'; faction: number; doc: DoctrineKey }
   | { k: 'bombed'; faction: number; region: number; owner: number }
   | { k: 'fallback'; faction: number; region: number }
+  /** Phased offensives: the attacker took the first line (and stops there with `hold`), pushes into the depth, or orders the advance from a foothold; troops mass on a border. */
+  | { k: 'firstLine'; faction: number; def: number; region: number; from: number; hold: boolean }
+  | { k: 'depth'; faction: number; def: number; region: number }
+  | { k: 'advance'; faction: number; region: number }
+  | { k: 'massing'; faction: number; region: number; to: number; owner: number }
   | { k: 'raid'; faction: number; region: number; ok: boolean; target: number }
   | { k: 'offer'; id: number; from: number; to: number; kind: TreatyKind }
   | { k: 'treaty'; a: number; b: number; kind: TreatyKind; what: 'signed' | 'declined' | 'ended' | 'broken' | 'notice'; by?: number }
@@ -237,21 +287,23 @@ export interface GameSettings {
 export const DEFAULT_SETTINGS: GameSettings = { attackCap: 3, pace: 1 };
 export const ATTACK_CAPS = [1, 2, 3, 5, 0] as const;
 export const PACES = [
-  { name: 'Fast', rof: .65, charge: 110, go: 40, fuel: 30, desc: 'Short, bloody battles' },
-  { name: 'Normal', rof: 1, charge: 180, go: 75, fuel: 40, desc: 'Length follows army size' },
-  { name: 'Long', rof: 1.6, charge: 300, go: 120, fuel: 60, desc: 'Drawn-out sieges, time to reinforce' },
+  { name: 'Fast', rof: .65, charge: 110, go: 40, fuel: 30, move: .6, desc: 'Short, bloody battles' },
+  { name: 'Normal', rof: 1, charge: 180, go: 75, fuel: 40, move: 1, desc: 'Length follows army size' },
+  { name: 'Long', rof: 1.6, charge: 300, go: 120, fuel: 60, move: 1.5, desc: 'Drawn-out sieges, time to reinforce' },
 ] as const;
 
 /** What a power last learned about a region from reconnaissance. */
 export interface Intel {
   day: number; time: number; owner: number; units: Units; men: Units; defs: Defence[]; works: Record<number, Works>;
   factory: boolean; barracks: boolean; airfield: boolean;
+  /** Corps seen on the borders. */
+  fr?: Record<number, Corps>;
 }
 /** A spy: travelling until `eta`, then reporting continuously from `region` until found. */
 export interface Spy { id: number; f: number; region: number; eta: number; /** Exposed by sabotage until this day: twice as likely to be caught. */ hot?: number }
 
 export interface GameState {
-  v: 4; seed: number; rng: number;
+  v: 5; seed: number; rng: number;
   time: number; day: number; supplyT: number; diff: number;
   cfg: GameSettings;
   regions: RegionState[]; factions: FactionState[];
@@ -290,7 +342,14 @@ export type Command =
   | { t: 'spy'; to: number }
   /** Move part of the defenders of a region from its other fronts to the front in battle `battle`. */
   | { t: 'shift'; region: number; battle: number }
-  | { t: 'march'; from: number; to: number; frac: number; brk?: boolean }
+  /** Quick order: a share of the main army of `from` marches to `to`. Into an enemy region it forms up, moves to the border, assembles and attacks (`goal` 1 first line, 2 invade). */
+  | { t: 'march'; from: number; to: number; frac: number; brk?: boolean; goal?: Order; post?: number }
+  /** Move a share of a group (`post` -1 the main army, else the corps of that border) to another post of the region, or through own land to a post of region `to`. */
+  | { t: 'move'; region: number; post: number; to: number; toPost: number; frac: number }
+  /** Standing order of the corps on border `post`: 0 hold, 1 take the first line, 2 invade. `now`: attack without waiting for assembly. */
+  | { t: 'order'; region: number; post: number; k: Order; now?: boolean; brk?: boolean }
+  /** Deploy mode of a region: 0 the region deploys itself, 1 manual. */
+  | { t: 'deploy'; region: number; mode: number }
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */
   | { t: 'air'; from: number; to: number; frac: number; rail?: boolean; factory?: boolean; brk?: boolean }
   /** Bring one unlock forward by six months (one rush per war year). */

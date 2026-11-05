@@ -3,7 +3,7 @@ import { FACTIONS } from '../data/factions';
 import { AGENT_TYPES, DEF_KINDS, type AgentType } from '../data/units';
 import { newRegion, world } from './core';
 import { fogView } from './fog';
-import { DEFAULT_SETTINGS, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance } from './types';
+import { DEFAULT_SETTINGS, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order } from './types';
 
 /** [agent type index, faction, x, z, face, flags(1 dead,2 moving,4 trench,8 left the field), seconds since last shot] */
 export type AgentSnap = [number, number, number, number, number, number, number];
@@ -13,6 +13,8 @@ export interface BattleSnap {
   counts: [number, number, number][]; agents?: AgentSnap[];
   /** Levers per faction: barrage, stance, suppression (rounded), shells in the local dump and spent; over the top; closest approach. */
   bar: Record<number, Barrage>; st: Record<number, Stance>; supp: Record<number, number>; ammo: Record<number, number>; used: Record<number, number>; go: boolean; reach: number;
+  /** Phased offensive: goal, stage, stage start, defending corps number. */
+  goal?: number; stage?: number; stT?: number; cn?: number;
 }
 export interface Snapshot {
   time: number; day: number; supplyT: number; diff: number; over: boolean; winner: number | null;
@@ -35,6 +37,8 @@ export interface Snapshot {
   r: number[][];
   /** Field works: [region, sector, trench, sandbags, wire]. */
   w: number[][];
+  /** Corps: [region, border, inf, mg, art, tank, number, order (-1 none), seconds until assembled, estimate low, high (-1), stance (-1), holding since (-1)]. Fogged. */
+  p?: number[][];
   /** The recipient's spies. */
   spies: Spy[];
   /** Defences: [region, id, kind index, sector, hp, faction]. */
@@ -57,7 +61,7 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
     for (const a of x.agents) { const c = cnt.get(a.f) ?? [0, 0]; c[1]++; if (!a.dead && !a.out) c[0]++; cnt.set(a.f, c); }
     const mor: Record<number, number> = {}; for (const [f, m] of Object.entries(x.mor ?? {})) mor[+f] = Math.round(m);
     const s: BattleSnap = { id: x.id, region: x.region, ax: q2(x.ax), az: q2(x.az), age: q2(x.age), ended: x.ended, sides: x.sides, attacker: x.attacker, def: x.def, from: x.from,
-      tr: x.tr, sand: x.sand, wire: Math.round(x.wire), wire0: x.wire0, mor, lastJoin: q2(x.lastJoin ?? 0), counts: [...cnt].map(([f, c]) => [f, c[0], c[1]]),
+      tr: x.tr, sand: x.sand, wire: Math.round(x.wire), wire0: x.wire0, mor, lastJoin: q2(x.lastJoin ?? 0), counts: [...cnt].map(([f, c]) => [f, c[0], c[1]]), goal: x.goal, stage: x.stage, stT: x.stT === undefined ? undefined : q2(x.stT), cn: x.cn,
       bar: x.bar ?? {}, st: x.st ?? {}, supp: rnd0(x.supp), ammo: rnd0(x.ammo), used: rnd0(x.used), go: !!x.go, reach: q2(Math.min(99, x.reach ?? 99)) };
     if (w.has(x.id)) s.agents = x.agents.map(a => [AGENT_TYPES.indexOf(a.type), a.f, q2(a.x), q2(a.z), q2(a.face), (a.dead ? 1 : 0) | (a.moving ? 2 : 0) | (a.trench ? 4 : 0) | (a.out ? 8 : 0), q2(Math.max(0, Math.min(9, g.time - a.fireT)))]);
     return s;
@@ -68,8 +72,9 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
     cal: g.factions.map(f => ({ d: f.doctrines, r: f.id === recipient ? f.rushed : undefined, ry: f.id === recipient ? f.rushY : undefined, o: f.id === recipient ? f.docOffer : undefined, due: f.id === recipient ? f.docDue : undefined })),
     r: g.regions.map(r => [r.owner, r.units.inf, r.units.mg, r.units.art, r.units.tank, r.units.plane,
       (r.factory ? 1 : 0) | (r.barracks ? 2 : 0) | (r.airfield ? 4 : 0) | (r.cut ? 8 : 0) | (r.spied ? 16 : 0) | (r.strike ? 32 : 0), r.battle, r.contested,
-      r.vis ?? 3, r.seen ?? -1, r.est ? r.est[0] : -1, r.est ? r.est[1] : -1, Math.round(r.mor), r.men.inf, r.men.mg, r.men.art, r.men.tank, r.men.plane, r.home, r.stance ?? 0, r.supplyQ ?? -1, r.bombed ?? -1, r.fake && r.owner === recipient ? r.fake.until : -1]),
+      r.vis ?? 3, r.seen ?? -1, r.est ? r.est[0] : -1, r.est ? r.est[1] : -1, Math.round(r.mor), r.men.inf, r.men.mg, r.men.art, r.men.tank, r.men.plane, r.home, r.stance ?? 0, r.supplyQ ?? -1, r.bombed ?? -1, r.fake && r.owner === recipient ? r.fake.until : -1, r.an ?? -1, r.deploy ?? 0]),
     w: g.regions.flatMap(r => Object.entries(r.works).map(([s, x]) => [r.id, +s, x.tr, x.sand, x.wire])),
+    p: g.regions.flatMap(r => Object.entries(r.fr ?? {}).map(([s, c]) => [r.id, +s, c.u.inf, c.u.mg, c.u.art, c.u.tank, c.n, c.ord ?? -1, q2(Math.max(0, (c.ready ?? 0) - g.time)), c.est ? c.est[0] : -1, c.est ? c.est[1] : -1, c.st ?? -1, c.since === undefined ? -1 : q2(c.since)])),
     spies: g.spies,
     d: g.regions.flatMap(r => r.defs.map(d => [r.id, d.id, DEF_KINDS.indexOf(d.k), d.s, Math.round(d.hp), d.f])), cfg: g.cfg,
     a: g.armies, b, stats: g.stats, fx,
@@ -80,7 +85,7 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
 export function createMirror(): GameState {
   const W = world();
   return {
-    v: 4, seed: 0, rng: 0, time: 0, day: 0, supplyT: 0, diff: 1, cfg: { ...DEFAULT_SETTINGS },
+    v: 5, seed: 0, rng: 0, time: 0, day: 0, supplyT: 0, diff: 1, cfg: { ...DEFAULT_SETTINGS },
     regions: W.regions.map(r => newRegion(r.id)),
     factions: FACTIONS.map((_, id) => ({ id, supply: 0, alive: true, mission: null, aiT: 0, ai: false, ww: 0, wounded: 0, shells: 0, men: 0, mob: 0, unrestT: 0 })),
     armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], treaties: [], offers: [], over: false, winner: null, nextId: 1, stats: { won: [], lost: [] }, events: [], fx: [],
@@ -107,8 +112,14 @@ export function applySnapshot(m: GameState, s: Snapshot) {
     t.factory = !!(r[6] & 1); t.barracks = !!(r[6] & 2); t.airfield = !!(r[6] & 4); t.cut = !!(r[6] & 8); t.spied = !!(r[6] & 16); t.strike = !!(r[6] & 32); t.battle = r[7]; t.contested = r[8];
     t.vis = r[9]; t.seen = r[10] >= 0 ? r[10] : undefined; t.est = r[12] >= 0 ? [r[11], r[12]] : undefined; t.mor = r[13];
     t.men = { inf: r[14], mg: r[15], art: r[16], tank: r[17], plane: r[18] }; t.home = r[19] ?? -1; t.stance = (r[20] ?? 0) as Stance; t.supplyQ = r[21] !== undefined && r[21] >= 0 ? r[21] : undefined; t.bombed = r[22] !== undefined && r[22] >= 0 ? r[22] : undefined; t.fake = r[23] !== undefined && r[23] >= 0 ? { men: 0, day: 0, until: r[23] } : undefined; t.defs = []; t.works = {};
+    t.an = r[24] !== undefined && r[24] >= 0 ? r[24] : undefined; t.deploy = r[25] === 1 ? 1 : undefined; t.fr = undefined;
   });
   for (const [ri, sec, tr, sand, wire] of s.w ?? []) m.regions[ri].works[sec] = { tr, sand, wire };
+  for (const [ri, sec, inf, mg, art, tank, n, ord, left, e0, e1, st, since] of s.p ?? []) {
+    const c: Corps = { u: { inf, mg, art, tank, plane: 0 }, n };
+    if (ord >= 0) c.ord = ord as Order; if (left > 0) c.ready = m.time + left; if (e1 >= 0) c.est = [e0, e1]; if (st >= 0) c.st = st as Stance; if (since >= 0) c.since = since;
+    (m.regions[ri].fr ??= {})[sec] = c;
+  }
   for (const [ri, id, k, sec, hp, f] of s.d ?? []) m.regions[ri].defs.push({ id, k: DEF_KINDS[k], s: sec, hp, f });
   m.spies = s.spies ?? []; m.viewer = undefined;
   m.armies = s.a;
@@ -124,6 +135,7 @@ export function applySnapshot(m: GameState, s: Snapshot) {
     b.bar = bs.bar ?? {}; b.st = bs.st ?? {}; b.supp = bs.supp ?? {}; b.ammo = bs.ammo ?? {}; b.used = bs.used ?? {}; b.go = !!bs.go; b.reach = bs.reach ?? 99;
     b.age = bs.age; b.ended = bs.ended; b.sides = bs.sides; b.counts = bs.counts; b.ax = bs.ax; b.az = bs.az; b.def = bs.def; b.from = bs.from;
     b.tr = bs.tr; b.sand = bs.sand; b.wire = bs.wire; b.wire0 = bs.wire0; b.mor = bs.mor; b.lastJoin = bs.lastJoin;
+    b.goal = bs.goal; b.stage = bs.stage; b.stT = bs.stT; b.cn = bs.cn;
     if (bs.agents) {
       const old = b.agents;
       b.agents = bs.agents.map((a, i): Agent => ({ f: a[1], type: AGENT_TYPES[a[0]] as AgentType, x: a[2], z: a[3], hp: 1, cd: 0, rt: 0, tgt: -1, dead: !!(a[5] & 1), dieT: old[i]?.dieT ?? (a[5] & 1 ? m.time : 0), fireT: m.time - a[6], face: a[4], phase: old[i]?.phase ?? 0, moving: !!(a[5] & 2), trench: !!(a[5] & 4), out: !!(a[5] & 8) }));

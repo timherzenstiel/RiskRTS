@@ -4,6 +4,7 @@ import {
   FORMATION, UNIT_TYPES, WIRE_HP, applyCommand, buildWorld, consolidate, createGame, emptyUnits, fogView, frontsOf, migrateState, run, slotsUsed, startBattle, step,
   updateSupplyLines, visibility, worksAt, income, dayOf, type GameState,
 } from '../src';
+import { strike } from './helpers';
 
 const W = buildWorld();
 const id = (n: string) => W.byName[n].id;
@@ -48,7 +49,7 @@ describe('border works', () => {
     const t = (wire: number) => {
       const { g, A, B } = setup(); g.regions[A].units = { ...emptyUnits(), inf: 14 }; g.regions[B].units = { ...emptyUnits(), inf: 5 };
       g.regions[B].works[A] = { tr: 0, sand: 0, wire }; fill(g);
-      applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 });
+      strike(g, 0, A, B);
       let s = 0; for (let i = 0; i < 20 * 600; i++) { step(g, .05); if (g.battles.some(b => b.region === B && b.ended)) break; s += .05; }
       return { s, left: g.regions[B].works[A]?.wire ?? 0 };
     };
@@ -64,9 +65,11 @@ describe('fronts', () => {
     const C = W.regions[B].adj.find(i => i !== A && !W.seaLane.has(B + '|' + i))!;
     g.regions[C].owner = 0; g.regions[C].home = 0;
     g.regions[A].units.inf = 10; g.regions[C].units.inf = 10; g.regions[B].units = { ...emptyUnits(), inf: 12, art: 2 }; fill(g);
-    applyCommand(g, 0, { t: 'march', from: A, to: B, frac: .5 }); run(g, 6);
+    // the defenders stand on both borders
+    g.regions[B].deploy = 1; g.regions[B].fr = { [A]: { u: { ...emptyUnits(), inf: 6, art: 1 }, n: 1, ord: 0 }, [C]: { u: { ...emptyUnits(), inf: 6, art: 1 }, n: 2, ord: 0 } };
+    strike(g, 0, A, B, .5, 2, true); run(g, 6);
     expect(frontsOf(g, B).length).toBe(1);
-    applyCommand(g, 0, { t: 'march', from: C, to: B, frac: .5 }); run(g, 6);
+    strike(g, 0, C, B, .5, 2, true); run(g, 6);
     const fr = frontsOf(g, B); expect(fr.length).toBe(2);
     const defs = fr.map(b => b.agents.filter(a => a.f === 1 && !a.dead && !a.out).length);
     expect(defs[0]).toBeGreaterThan(0); expect(defs[1]).toBeGreaterThan(0);
@@ -167,7 +170,7 @@ describe('saves', () => {
     old.v = 2; for (const r of old.regions) { r.trench = r.capitalOf >= 0 ? 2 : 0; delete r.works; delete r.men; delete r.mor; delete r.cut; delete r.home; }
     for (const f of old.factions) { delete f.ww; delete f.wounded; } delete old.intel; delete old.spies;
     const m = migrateState(old)!;
-    expect(m.v).toBe(4); expect(m.intel.length).toBe(6); expect(m.factions[0].shells).toBeGreaterThan(0);
+    expect(m.v).toBe(5); expect(m.intel.length).toBe(6); expect(m.factions[0].shells).toBeGreaterThan(0);
     const cap = m.regions.find(r => r.capitalOf === 1)!;
     expect(Object.values(cap.works).some(w => w.tr === 2)).toBe(true);
     expect(cap.men.inf).toBe(cap.units.inf * 100);

@@ -4,6 +4,7 @@ import {
   FORMATION, UNIT_TYPES, applyCommand, applySnapshot, buildWorld, createGame, createMirror, emptyUnits, fogView, frontsOf, initMirrorCapitals, makeSnapshot, run, step,
   treatyOf, updateSupplyLines, visibility, eventsFor, type GameState,
 } from '../src';
+import { strike } from './helpers';
 
 const W = buildWorld(); const id = (n: string) => W.byName[n].id;
 function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
@@ -32,7 +33,7 @@ describe('deception', () => {
   });
   it('a trench raid from a quiet front costs men and brings back a report', () => {
     const { g, A, B } = setup(); g.regions[A].units = { ...emptyUnits(), inf: 6 }; g.regions[B].units = { ...emptyUnits(), inf: 8, mg: 2 }; g.regions[B].works[A] = { tr: 3, sand: 2, wire: 2 }; fill(g);
-    applyCommand(g, 0, { t: 'march', from: A, to: B, frac: .5 }); for (let i = 0; i < 400 && !frontsOf(g, B).length; i++) step(g, .05);
+    strike(g, 0, A, B, .5); for (let i = 0; i < 400 && !frontsOf(g, B).length; i++) step(g, .05);
     const b = frontsOf(g, B)[0];
     expect(applyCommand(g, 1, { t: 'raid', battle: b.id })).toMatch(/trench warfare/);
     b.lastJoin = b.age - 100; const lost = b.lost[1] ?? 0;
@@ -55,10 +56,11 @@ describe('diplomacy', () => {
   });
   it('signing a ceasefire pulls attackers out and turns armies back', () => {
     const { g, A, B } = setup(); g.regions[A].units = { ...emptyUnits(), inf: 10 }; g.regions[B].units = { ...emptyUnits(), inf: 6 }; fill(g);
-    applyCommand(g, 0, { t: 'march', from: A, to: B, frac: .5 }); for (let i = 0; i < 400 && !frontsOf(g, B).length; i++) step(g, .05);
+    strike(g, 0, A, B, .5); for (let i = 0; i < 400 && !frontsOf(g, B).length; i++) step(g, .05);
     applyCommand(g, 0, { t: 'march', from: A, to: B, frac: .9 });
     applyCommand(g, 1, { t: 'offer', to: 0, kind: 'cease' }); applyCommand(g, 0, { t: 'answer', id: g.offers[0].id, yes: true });
-    run(g, 20);
+    run(g, 90);
+    expect(g.armies.length).toBe(0); expect(frontsOf(g, B).length).toBe(0);
     expect(g.regions[B].owner).toBe(1); expect(g.regions[A].units.inf).toBeGreaterThan(6);
   });
   it('offers lapse unanswered; pacts end after notice; ceasefires run out', () => {
@@ -106,12 +108,12 @@ describe('review fixes', () => {
     applyCommand(g, 0, { t: 'march', from: A, to: B, frac: .9 });
     for (let i = 0; i < 20 * 200 && g.regions[B].owner !== 0; i++) step(g, .05);
     expect(g.regions[B].owner).toBe(0); expect(g.regions[B].strike).toBe(false);
-    applyCommand(g, 0, { t: 'decoy', from: A, to: B }); const d = fogView(g, 1).armies.find(a => a.from === A)!;
+    applyCommand(g, 0, { t: 'decoy', from: A, to: B }); const d = fogView(g, 1).armies.find(a => a.from === A && a.to === B && !a.inner)!;
     expect(d.stance).toBeDefined(); expect(d.legs).toBe(1);
   });
   it('reinforcing an attack on a treaty partner needs the treaty broken', () => {
     const { g, A, B, C } = setup(); g.regions[A].units = { ...emptyUnits(), inf: 10 }; g.regions[C].units = { ...emptyUnits(), inf: 6 }; g.regions[B].units = { ...emptyUnits(), inf: 8 }; fill(g);
-    applyCommand(g, 0, { t: 'march', from: A, to: B, frac: .5 }); for (let i = 0; i < 400 && !frontsOf(g, B).length; i++) step(g, .05);
+    strike(g, 0, A, B, .5); for (let i = 0; i < 400 && !frontsOf(g, B).length; i++) step(g, .05);
     const b = frontsOf(g, B)[0]; g.treaties.push({ a: 0, b: 1, kind: 'nap' });
     expect(applyCommand(g, 0, { t: 'reinforce', from: C, battle: b.id, frac: .5 })).toMatch(/non-aggression/);
   });

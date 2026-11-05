@@ -25,3 +25,6 @@ export * from './sim/fog';
 export * from './sim/events';
 export * from './sim/snapshot';
 export * from './protocol';
+export * from './world/sectors';
+export * from './sim/posts';
+export * from './data/names';

@@ -26,7 +26,7 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
     <>
       {region.cut && <p className="note budget full">Cut off from supply: no recruiting here until a route home is reopened.</p>}
       {region.strike && <p className="note budget full">On strike: no recruits from here until the war weariness eases.</p>}
-      {pool < FORMATION.inf.men && <p className="note budget full">The manpower pool is nearly empty ({Math.floor(pool)} men). Mobilise on the nation screen, or wait for the next age class.</p>}
+      {pool < FORMATION.inf.men && <p className="note budget full">The manpower pool is nearly empty ({Math.floor(pool)} men). Raise conscription on the nation screen, or wait for the next age class.</p>}
       {UNIT_TYPES.map((k, i) => {
         const c = unitCost(g, me, k), men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
         const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
@@ -161,6 +161,20 @@ function Railways({ region, id }: { region: RegionState; id: number }) {
 }
 
 const FRACS: [number, string][] = [[.25, '25%'], [.5, '50%'], [.75, '75%'], [1, 'All but 1']];
+
+/** Goal of new attacks: take the enemy's first line and dig in there, or invade the region. */
+export function GoalPicker() {
+  const goal = useUi(s => s.goal);
+  return (
+    <>
+      <div className="lbl"><span>Attack goal</span></div>
+      <div className="seg share" role="group" aria-label="Attack goal">
+        <button aria-pressed={goal === 2} title="Take the first line, consolidate, then fight the main army in the depth and take the region" onClick={() => { click(); useUi.getState().setGoal(2); }}>Invade</button>
+        <button aria-pressed={goal === 1} title="Take the enemy's first line on that border and dig in there; order the invasion later" onClick={() => { click(); useUi.getState().setGoal(1); }}>First line only</button>
+      </div>
+    </>
+  );
+}
 
 export function SharePicker() {
   const frac = useUi(s => s.sendFrac);
@@ -306,6 +320,8 @@ export function MarchTab({ region, id }: { region: RegionState; id: number }) {
     <>
       <AttackBudget />
       <SharePicker />
+      <GoalPicker />
+      <p className="note">An attack runs in phases: the troops form up in the middle of the region, march to the border, assemble there for half a minute, then go in. The enemy sees them gather.</p>
       <button className="btn sm wide pick-target" aria-pressed={active} disabled={region.battle >= 0 || groundUnits(region.units) < 2}
         onClick={() => { click(); const u = useUi.getState(); if (active) u.cancelOrder(); else u.beginOrder('march'); }}>
         {active ? 'Cancel · pick a target on the map' : 'Pick a target on the map'}

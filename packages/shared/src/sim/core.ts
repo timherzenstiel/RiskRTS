@@ -41,7 +41,13 @@ export function approachSector(from: number, to: number): number {
 /** Regions a power is currently attacking (armies on the way to a foreign region, or battles it fights as the attacker). */
 export function offensives(g: GameState, fid: number): Set<number> {
   const s = new Set<number>();
-  for (const a of g.armies) if (a.owner === fid && !a.ret && !a.decoy && g.regions[a.to].owner !== fid) s.add(a.to);
+  for (const a of g.armies) {
+    if (a.owner !== fid || a.ret || a.decoy) continue;
+    // a column forming up or marching to a border to attack counts against the region beyond it
+    if (a.inner) { if ((a.ord ?? 0) >= 1 && a.post !== undefined && a.post >= 0 && g.regions[a.post].owner !== fid) s.add(a.post); }
+    else if (g.regions[a.to].owner !== fid) s.add(a.to);
+  }
+  for (const r of g.regions) if (r.owner === fid && r.fr) for (const [k, c] of Object.entries(r.fr)) if ((c.ord ?? 0) >= 1 && g.regions[+k].owner !== fid) s.add(+k);
   for (const b of g.battles) {
     if (b.ended || b.def === fid) continue;
     const inIt = b.agents.length ? b.agents.some(x => x.f === fid && !x.dead && !x.out) : (b.counts ?? []).some(([f, al]) => f === fid && al > 0);

@@ -4,6 +4,7 @@ import {
   FORMATION, RAIL_BUILD, RAIL_LINKS, UNIT_TYPES, applyCommand, applySnapshot, buildWorld, createGame, createMirror, dayOf, emptyUnits, fortCost, frontsOf, hasRail,
   initMirrorCapitals, isMountain, makeSnapshot, railOpen, run, step, updateSupplyLines, weatherAt, COST, type GameState,
 } from '../src';
+import { strike } from './helpers';
 
 const W = buildWorld();
 const id = (n: string) => W.byName[n].id;
@@ -28,7 +29,9 @@ describe('rail network', () => {
     };
     const fr = t(1, 'France', 'Iberia'), de = t(3, 'France', 'Iberia');
     expect(fr.rail).toBe(true);
-    const g = blank(); g.day = dayOf(1915, 5); g.regions[id('France')].owner = 1; g.regions[id('Iberia')].owner = 0; g.regions[id('France')].units.inf = 4; fill(g);
+    // the same march on foot: the line is cut
+    const g = blank(); g.day = dayOf(1915, 5); g.regions[id('France')].owner = 1; g.regions[id('Iberia')].owner = 1; g.regions[id('France')].units.inf = 4; fill(g);
+    g.railCut[`${Math.min(id('France'), id('Iberia'))}|${Math.max(id('France'), id('Iberia'))}`] = g.day + 99;
     applyCommand(g, 1, { t: 'march', from: id('France'), to: id('Iberia'), frac: .5 }); const foot = g.armies[0];
     expect(foot.rail).toBeFalsy(); expect(fr.dur).toBeLessThan(foot.dur / 2.5); expect(de.dur).toBeLessThan(fr.dur);
   });
@@ -91,7 +94,7 @@ describe('weather and terrain', () => {
     const fight = (from: string, seed: number) => {
       const g = blank(seed); const T = id('Austria-Hungary'), A = id(from); g.day = dayOf(1915, 6);
       g.regions[A].owner = 1; g.regions[T].owner = 3; g.regions[A].units = { ...emptyUnits(), inf: 10 }; g.regions[T].units = { ...emptyUnits(), inf: 5 }; fill(g); updateSupplyLines(g);
-      applyCommand(g, 1, { t: 'march', from: A, to: T, frac: 1 }); for (let i = 0; i < 20 * 30 && !frontsOf(g, T).length; i++) step(g, .05);
+      strike(g, 1, A, T); for (let i = 0; i < 20 * 30 && !frontsOf(g, T).length; i++) step(g, .05);
       const b = frontsOf(g, T)[0]; run(g, 25); return b.lost[3] ?? 0;
     };
     const sum = (from: string) => [11, 12, 13].reduce((s, k) => s + fight(from, k), 0);

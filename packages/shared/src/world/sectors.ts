@@ -1,6 +1,6 @@
 // Where each border sector of a region lies on the map: the middle of the shared border (or the coast facing a sea lane),
 // pulled a little inland so defences stand on the region's own ground. Interior = the region anchor.
-import { COLS, N, tileAtW, tx, tz, wrapDx, type World } from '@riskrts/shared';
+import { COLS, N, tileAtW, tx, tz, wrapDx, type World } from './build';
 
 export interface SectorPt { x: number; z: number; /** unit tangent along the border, for spacing several defences */ ux: number; uz: number; tile: number }
 

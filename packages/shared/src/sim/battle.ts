@@ -4,10 +4,11 @@
 // Fixed defences fight where they stand (their border; interior defences and anti-air guns join the first front), field works
 // (trench depth, sandbags, barbed wire) belong to the border they were dug on. Formations fight at their strength: a battalion at
 // half strength takes the field with half its hit points, and men lost feed casualties, wounded and war weariness.
-import { ANTI_AIR, AS, BARRAGE, FORMATION, GROUND_TYPES, SHELLS, UNIT_TYPES, WIRE_HP, emptyUnits, isDef, totalUnits, type AgentType, type Units, type UnitType } from '../data/units';
+import { ANTI_AIR, AS, BARRAGE, FORMATION, GROUND_TYPES, MAX_TRENCH, SHELLS, UNIT_TYPES, WIRE_HP, emptyUnits, groundUnits, isDef, totalUnits, type AgentType, type Units, type UnitType } from '../data/units';
 import { FACTIONS } from '../data/factions';
 import { wrapDx } from '../world/build';
 import { consolidate, emit, frontsOf, rnd, updateContested, world, worksAt, worksFor } from './core';
+import { CONSOLIDATE, DIG_IN, UNREG, addToGroup, armyNo, column, corpsAt, fixPosts, mainOf, moveK, takeGroup } from './posts';
 import { checkElim, checkMissions } from './missions';
 import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, combinedMod, crossSpeed, dealtMod, depthBonus, shellMod, wwLossMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
 import { hasDoc, techOn } from './tech';
@@ -34,19 +35,49 @@ function newBattle(g: GameState, region: number, dir: { x: number; z: number }, 
   };
 }
 
-/** Open a front in `region` against an attack over border sector `from` (a neighbour id, or -1). */
-export function startBattle(g: GameState, region: RegionState, dir: { x: number; z: number }, attacker: number, from: number): Battle {
+/**
+ * Open a front in `region` against an attack over border sector `from` (a neighbour id, or -1).
+ * With a `goal` (phased offensives) the corps of that border and its defences hold the first line; the main army waits in the
+ * depth (a region that deploys itself sends half of it to the threatened border). Without one the whole garrison fights at once.
+ */
+export function startBattle(g: GameState, region: RegionState, dir: { x: number; z: number }, attacker: number, from: number, goal?: number): Battle {
   const others = frontsOf(g, region.id).filter(o => o.def === region.owner);
   const b = newBattle(g, region.id, dir, attacker, region.owner, from);
   if (region.battle < 0) region.battle = b.id;
   g.battles.push(b);
-  if (totalUnits(region.units) > 0) joinBattle(g, b, region.owner, region.units, dir, true, region.id, region.men, region.mor, region.stance);
-  region.units = emptyUnits(); region.men = emptyUnits();
-  // a new front draws its share of the defenders from the fronts already burning in this region
-  for (const o of others) transferAgents(g, o, b, region.owner, 1 / (others.length + 1));
-  // Defences on the attacked sector; interior defences and anti-air guns only stand with the first front. Holdouts rise up behind the lines.
   const first = !others.length;
-  const own = region.defs.filter(d => d.f === region.owner && (d.s === from || (first && (d.s < 0 || d.k === 'flak'))));
+  if (goal) {
+    b.goal = goal; b.stage = 0; b.stT = 0;
+    const c = from >= 0 ? region.fr?.[from] : undefined;
+    if (c && groundUnits(c.u) > 0) {
+      b.cn = c.n;
+      // a corps that has held its border for a while has dug in deeper
+      if ((c.ord ?? 0) === 0 && c.since !== undefined && g.time - c.since >= DIG_IN) b.tr = Math.min(MAX_TRENCH + 1, b.tr + 1);
+      const st = c.st ?? region.stance, out = takeGroup(region, from, 1);
+      joinBattle(g, b, region.owner, out.u, dir, true, region.id, out.m, region.mor, st);
+    }
+    if (region.fr && from >= 0) delete region.fr[from];
+    // the squadrons of the region scramble to the first front
+    if (first && region.units.plane > 0) {
+      const u = { ...emptyUnits(), plane: region.units.plane }, m = { ...emptyUnits(), plane: region.men.plane };
+      region.units.plane = 0; region.men.plane = 0;
+      joinBattle(g, b, region.owner, u, dir, true, region.id, m, region.mor, region.stance);
+    }
+    fixPosts(g, region);
+    // a region that deploys itself sends half of its main army to the threatened border
+    if (region.deploy !== 1 && from >= 0) {
+      const main = mainOf(region);
+      if (groundUnits(main) > 1) { const out = takeGroup(region, -1, .5); column(g, region.owner, region.id, -1, region.id, from, out.u, out.m, region.mor, { front: b.id, stance: region.stance, gn: armyNo(g, region), gk: 0 }); }
+    }
+  } else {
+    if (totalUnits(region.units) > 0) joinBattle(g, b, region.owner, region.units, dir, true, region.id, region.men, region.mor, region.stance);
+    region.units = emptyUnits(); region.men = emptyUnits(); region.fr = undefined;
+    // a new front draws its share of the defenders from the fronts already burning in this region
+    for (const o of others) transferAgents(g, o, b, region.owner, 1 / (others.length + 1));
+  }
+  // Defences on the attacked sector, and anti-air guns with the first front. Interior defences stand with the first front, or in the
+  // depth of a phased attack. Holdouts rise up behind the lines.
+  const own = region.defs.filter(d => d.f === region.owner && (d.s === from || (first && (d.k === 'flak' || (d.s < 0 && !goal)))));
   const hold = first ? region.defs.filter(d => d.f === attacker) : [];
   region.defs = region.defs.filter(d => !own.includes(d) && !hold.includes(d));
   placeDefs(b, own, true); placeDefs(b, hold, false);
@@ -58,6 +89,45 @@ export function startBattle(g: GameState, region: RegionState, dir: { x: number;
   b.mor0[region.owner] ??= b.mor[region.owner];
   emit(g, { k: 'battleStart', region: region.id, attacker, defender: region.owner });
   return b;
+}
+
+/**
+ * Only the attackers are left on a phased front. Returns true when the battle goes on: the first line is taken (the attackers
+ * stop there for a foothold, or consolidate and then push into the depth), or they wait in the captured line.
+ */
+function stageWon(g: GameState, b: Battle): boolean {
+  const st = b.stage ?? 0, r = g.regions[b.region];
+  if (st === 1 || st === 3) return true;
+  if (st === 2 || r.owner !== b.def) return false;
+  // nobody at all left in the region: the attackers simply march in
+  if (groundUnits(r.units) <= 0 && !r.defs.some(d => d.f === r.owner && d.s < 0)) return false;
+  // the trench of that border is the attackers' now: wire and sandbags are gone, the trench is battered
+  if (b.from >= 0) { const w = worksFor(r, b.from); w.tr = Math.max(0, w.tr - 1); w.sand = 0; w.wire = 0; }
+  b.tr = 0; b.sand = 0; b.wire = 0; b.wire0 = 0;
+  const depth = groundUnits(mainOf(r)) > 0 || r.defs.some(d => d.f === r.owner && d.s < 0);
+  if (b.goal !== 1 && !depth) return false; // only corps on other borders are left: the region falls
+  b.stage = b.goal === 1 ? 3 : 1; b.stT = b.age;
+  emit(g, { k: 'firstLine', faction: b.attacker, def: b.def, region: b.region, from: b.from, hold: b.goal === 1 });
+  return true;
+}
+
+/** After consolidating the captured first line, the attackers meet the main army and the interior defences in the depth. */
+function startDepth(g: GameState, b: Battle) {
+  const r = g.regions[b.region];
+  b.stage = 2; b.stT = b.age; b.go = false; b.lastJoin = b.age;
+  if (r.owner !== b.def) return;
+  // the attackers re-form in the captured line, facing open ground
+  for (const a of b.agents) if (!a.dead && !a.out && a.f !== b.def && !isDef(a.type) && a.type !== 'plane') {
+    const u = alongOf(b, a.x, a.z), to = (a.type === 'art' ? 24 : 18) + rnd(g) * 3; a.x += b.ax * (to - u); a.z += b.az * (to - u); a.trench = false;
+  }
+  const main = takeGroup(r, -1, 1);
+  if (groundUnits(main.u) > 0) joinBattle(g, b, b.def, main.u, null, true, r.id, main.m, r.mor, r.stance);
+  const own = r.defs.filter(d => d.f === b.def && d.s < 0);
+  r.defs = r.defs.filter(d => !own.includes(d));
+  placeDefs(b, own, true);
+  if (own.some(d => d.k === 'fort')) b.ammo[b.def] = (b.ammo[b.def] ?? 0) + own.filter(d => d.k === 'fort').length * SHELLS.dump;
+  if (!b.sides.includes(b.def) && (own.length || groundUnits(main.u))) b.sides.push(b.def);
+  emit(g, { k: 'depth', faction: b.attacker, def: b.def, region: b.region });
 }
 
 /** The owner of a contested region storms the holdouts with the region's garrison. */
@@ -225,17 +295,19 @@ export function goOverTheTop(g: GameState, b: Battle, f: number) {
 }
 
 /** Seconds until the attackers go over the top on their own (they go at once without guns to prepare the assault). */
-export function autoGoIn(g: GameState, b: Battle) { return Math.max(0, paceOf(g).go - b.age); }
+export function autoGoIn(g: GameState, b: Battle) { return Math.max(0, paceOf(g).go - (b.age - (b.stT ?? 0))); }
 
 export function stepBattle(g: GameState, b: Battle, dt: number) {
   if (b.ended) return;
   b.age += dt;
   const A = b.agents, P = paceOf(g), fx = g.fx;
+  // a captured first line is consolidated before the push into the depth
+  if (b.stage === 1 && b.age - (b.stT ?? 0) >= CONSOLIDATE * moveK(g)) startDepth(g, b);
   // Over the top: attackers hold their start line while the guns prepare, then go on order or at the pace's latest time.
-  if (!b.go) {
+  if (!b.go && b.stage !== 1 && b.stage !== 3) {
     let ground = false, guns = false, waitAll = true;
     for (const a of A) if (!a.dead && !a.out && a.f !== b.def && !isDef(a.type)) { if (a.type === 'art') guns = true; else if (a.type !== 'plane') { ground = true; if (stanceIn(b, a.f) !== 2) waitAll = false; } }
-    if (ground && (!guns || (b.age > P.go && !waitAll))) goOverTheTop(g, b, b.attacker);
+    if (ground && (!guns || (b.age - (b.stT ?? 0) > P.go && !waitAll))) goOverTheTop(g, b, b.attacker);
   }
   const dst = stanceIn(b, b.def), charge = dst === 1 ? b.go && b.age > P.charge * .5 : dst === 0 ? b.age > P.charge : false;
   const decay = Math.pow(.5, dt / BARRAGE.half); for (const f in b.supp) b.supp[f] *= decay;
@@ -334,7 +406,9 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
       if (d < sh.sp + 1) pinned.add(o.f);
     }
     // shells landing on a side pin it down: suppressed troops fire less, MGs fall silent
-    const drill = sh.src !== 'plane' && (b.bar[sh.f] ?? 1) === 2 && techOn(g, sh.f, 'heavy') ? 1.2 : 1;
+    const drill = (sh.src !== 'plane' && (b.bar[sh.f] ?? 1) === 2 && techOn(g, sh.f, 'heavy') ? 1.2 : 1)
+      // guns of an attack launched before assembly fire unregistered for a while
+      * (b.unreg !== undefined && b.age < b.unreg && sh.f !== b.def ? .7 : 1);
     for (const f of pinned) b.supp[f] = Math.min(100, (b.supp[f] ?? 0) + BARRAGE.supp * (sh.src === 'plane' ? .8 : 1) * suppMod(g, sh.f) * drill);
     const u = alongOf(b, sh.x, sh.z); if (u > 2 && u < 18) b.craters = (b.craters ?? 0) + 1;
     if (b.wire > 0) { if (u > 2 && u < 9) b.wire = Math.max(0, b.wire - sh.dmg * .4); }
@@ -348,7 +422,10 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
     const ground = new Set<number>(); let raid = false;
     for (const a of A) if (!a.dead && !a.out && a.type !== 'plane') ground.add(a.f);
     for (const a of A) if (!a.dead && !a.out && a.type === 'plane' && a.home !== b.region && !ground.has(a.f)) raid = true;
-    if (ground.size <= 1 && !raid && !b.shells.length) endBattle(g, b, ground.size ? [...ground][0] : null);
+    if (ground.size <= 1 && !raid && !b.shells.length) {
+      const w = ground.size ? [...ground][0] : null;
+      if (!(w !== null && w !== b.def && b.goal && stageWon(g, b))) endBattle(g, b, w);
+    }
   }
 }
 
@@ -451,12 +528,21 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
   }
 
   if (winner !== null && winner !== prev) {
-    t.owner = winner; t.strike = false; t.fake = undefined; t.stance = 0;
+    // defenders still standing elsewhere in the region (corps on other borders, what is left of the main army) fall back
+    evacuate(g, t, prev);
+    t.owner = winner; t.strike = false; t.fake = undefined; t.stance = 0; t.fr = undefined; t.an = undefined; t.deploy = undefined;
     for (const w of Object.values(t.works)) { w.tr = Math.max(0, w.tr - 1); }
     if (b.from >= 0) worksFor(t, b.from).wire = 0;
+    t.units = surv ? surv.u : emptyUnits(); t.men = surv ? surv.m : emptyUnits();
+    t.mor = surv ? Math.min(moraleCap(g, winner!), surv.mor + 10) : 60;
+  } else if (surv && winner === t.owner && totalUnits(surv.u) > 0) {
+    // the region held: the survivors rejoin the troops still there, the defenders of a border man it again
+    const holds = winner === b.def && !!b.goal && b.from >= 0;
+    const ground = { ...surv.u, plane: 0 }, gm = { ...surv.m, plane: 0 };
+    addToGroup(g, t, holds ? b.from : -1, ground, gm, Math.min(moraleCap(g, winner!), surv.mor + 10), b.cn);
+    if (holds) { const c = corpsAt(g, t, b.from, b.cn); c.ord = 0; c.since = g.time; }
+    t.units.plane += surv.u.plane; t.men.plane += surv.m.plane;
   }
-  t.units = surv ? surv.u : emptyUnits(); t.men = surv ? surv.m : emptyUnits();
-  t.mor = surv ? Math.min(moraleCap(g, winner!), surv.mor + 10) : 60;
   updateContested(t);
   const capital = t.capitalOf === prev && t.owner !== prev;
   emit(g, { k: 'battleEnd', region: t.id, winner, prev, sides: [...b.sides], capital, holdouts: t.contested });
@@ -465,6 +551,20 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
   for (const f of b.sides) checkElim(g, f, winner);
   if (prev !== winner) checkElim(g, prev, winner);
   checkMissions(g);
+}
+
+/** The troops left in a fallen region march to a neighbouring region of their power, or are lost. */
+function evacuate(g: GameState, t: RegionState, f: number) {
+  if (f < 0 || totalUnits(t.units) <= 0) return;
+  const W = world(), land = W.regions[t.id].adj.filter(j => g.regions[j].owner === f && !W.seaLane.has(t.id + '|' + j));
+  const dest = land.sort((a, b) => (g.regions[a].cut ? 1 : 0) - (g.regions[b].cut ? 1 : 0))[0];
+  if (dest !== undefined) {
+    const u = { ...t.units, plane: 0 }, m = { ...t.men, plane: 0 };
+    if (groundUnits(u) > 0) column(g, f, t.id, -1, dest, -1, u, m, Math.max(0, t.mor - 15), { tired: true, gn: t.an, gk: 0 });
+    if (t.units.plane > 0) launch(g, f, t.id, dest, { ...emptyUnits(), plane: t.units.plane }, true, { ...emptyUnits(), plane: t.men.plane });
+    emit(g, { k: 'withdraw', faction: f, region: t.id, to: dest });
+  } else if (groundUnits(t.units) > 0) emit(g, { k: 'surrender', faction: f, region: t.id, n: groundUnits(t.units) });
+  t.units = emptyUnits(); t.men = emptyUnits();
 }
 
 /** How far the attackers got, from the closest distance to the trench line: 0 start line, 1 no-man's-land, 2 the wire, 3 the trench. */

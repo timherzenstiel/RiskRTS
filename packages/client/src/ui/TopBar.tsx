@@ -10,6 +10,18 @@ import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
 
 const SPEEDS = [1, 2, 4];
 
+/** Map layer: everything, troops first (markers, front lines), or industry (buildings, rails, supply). */
+function LayerPicker() {
+  const layer = useUi(s => s.layer), set = useUi.getState().setLayer;
+  return (
+    <div className="seg layer-seg" role="group" aria-label="Map layer">
+      <button aria-pressed={layer === 0} title="Show everything" onClick={() => { click(); set(0); }}>Map</button>
+      <button aria-pressed={layer === 1} title="Troops first: corps on the borders, front lines, columns on the move (T)" onClick={() => { click(); set(layer === 1 ? 0 : 1); }}>Troops</button>
+      <button aria-pressed={layer === 2} title="Industry: factories, barracks, airfields, rails and supply (B)" onClick={() => { click(); set(layer === 2 ? 0 : 2); }}>Industry</button>
+    </div>
+  );
+}
+
 export function TopBar() {
   const sim = useSim(); const scoreOpen = useUi(s => s.scoreOpen);
   const [pulse, setPulse] = useState(0); const prevT = useRef(0);
@@ -37,7 +49,7 @@ export function TopBar() {
           <div className="ri"><span>+{income(g, me)}</span><small>per convoy</small></div>
           <div className="ww sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab.">
             <small>Shells</small><b>{Math.floor(f.shells ?? 0)}<i>+{shellIncome(g, me)}</i></b></div>
-          <button className={'ww men' + ((f.men ?? 0) < 300 ? ' hi' : '')} title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for mobilisation." onClick={() => { click(); ui().setOverlay('nation'); }}>
+          <button className={'ww men' + ((f.men ?? 0) < 300 ? ' hi' : '')} title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for conscription." onClick={() => { click(); ui().setOverlay('nation'); }}>
             <small>Men</small><b>{(f.men ?? 0) >= 10000 ? `${Math.round((f.men ?? 0) / 1000)}k` : Math.floor(f.men ?? 0).toLocaleString('en-GB')}<i>+{poolGrowth(g, me)}</i></b></button>
           <div className={'ww' + (f.ww >= NATIONS[me].unrest ? ' hi' : f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
             <small>Weariness</small><b>{Math.round(f.ww)}%</b></div>
@@ -69,6 +81,7 @@ export function TopBar() {
           <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
           <button className="ico" aria-label="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
         </div>
+        <div className="glass layers"><LayerPicker /></div>
       </div>
     </header>
   );

@@ -4,6 +4,7 @@ import {
   DOCTRINE_TIME, FORMATION, RUSH, TRENCH_COST, UNIT_TYPES, UT, applyCommand, applySnapshot, buildWorld, createGame, createMirror, dayOf, doctrinesOf, emptyUnits,
   fortCost, income, initMirrorCapitals, makeSnapshot, poolGrowth, run, statsOf, techOn, unitCost, updateSupplyLines, type GameState,
 } from '../src';
+import { strike } from './helpers';
 
 const W = buildWorld(); const id = (n: string) => W.byName[n].id;
 const GB = 0, FR = 1, RU = 2, DE = 3;
@@ -61,7 +62,7 @@ describe('doctrines', () => {
     g.factions.forEach(f => { f.mission = null; }); g.factions[1].doctrines = ['elastic'];
     const A = id('France'), B = id('Germany'); g.regions[A].owner = 0; g.regions[B].owner = 1;
     g.regions[A].units = { ...emptyUnits(), inf: 16 }; g.regions[B].units = { ...emptyUnits(), inf: 5 }; fill(g); updateSupplyLines(g);
-    applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 }); let fell = false;
+    strike(g, 0, A, B); let fell = false;
     for (let i = 0; i < 20 * 200; i++) { run(g, .05); if (g.events.some(e => e.k === 'fallback')) fell = true; g.events.length = 0; if (g.battles.every(b => b.ended) && g.battles.length) break; }
     expect(fell).toBe(true);
   });

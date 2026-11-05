@@ -43,7 +43,8 @@ export function HelpSheet({ onBack }: { onBack: () => void }) {
       <div className="kicker">Field manual</div><h2>How to play</h2>
       <dl className="keys">
         <dt>Click · tap</dt><dd>Select a region. Its file opens on the right: garrison, recruiting, building and march orders.</dd>
-        <dt>Right-click</dt><dd>With your region selected, march its troops into a bordering region. On a phone use <b>March → Pick a target on the map</b>. Dashed sea lanes count as borders; troops sail across.</dd>
+        <dt>Right-click</dt><dd>With your region selected, march its troops into a bordering region. On a phone use <b>March → Pick a target on the map</b>. Dashed sea lanes count as borders; troops sail across. Attacks run in phases: forming up, the march to the border, assembly, then the first line and the depth.</dd>
+        <dt>T · B</dt><dd>Map layers: troops (corps, front lines, columns) or industry (buildings, rails). Press again for the full map.</dd>
         <dt>Drag · wheel</dt><dd>Pan and zoom (pinch on a phone). Zoom close to a battle to watch it. Double-click a region to fly there. The minimap in the corner jumps anywhere.</dd>
         <dt>1 2 3 4</dt><dd>Recruit infantry, machine guns, field guns or tanks in the selected region. Shift buys five.</dd>
         <dt>Space · Esc</dt><dd>Pause. Esc steps back: cancels a march, closes the scoreboard, deselects, then opens the menu.</dd>

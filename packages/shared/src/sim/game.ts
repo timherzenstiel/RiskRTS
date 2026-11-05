@@ -6,6 +6,7 @@ import { Rng } from '../rng';
 import { newRegion, world, rnd } from './core';
 import { aiThink } from './ai';
 import { arrive } from './commands';
+import { autoDeploy, stepPosts } from './posts';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
@@ -30,7 +31,7 @@ export interface GameOptions {
 export function createGame(opt: GameOptions): GameState {
   const W = world(), seed = (opt.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0, R = new Rng(seed);
   const g: GameState = {
-    v: 4, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
+    v: 5, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
     factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start, men: 0, mob: 0, unrestT: 0 })),
     armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], treaties: [], offers: [], over: false, winner: null, nextId: 1,
@@ -54,6 +55,8 @@ export function createGame(opt: GameOptions): GameState {
   g.factions.forEach(f => { if (f.mission!.type === 'destroy') (f.mission as { n0?: number }).n0 = g.regions.filter(r => r.owner === (f.mission as { target: number }).target).length; });
   g.rng = R.s;
   updateSupplyLines(g);
+  // every region starts with its troops placed: a main army in the middle and corps on the borders facing foreign powers
+  for (const t of g.regions) autoDeploy(g, t, true);
   g.events.push({ k: 'start' });
   return g;
 }
@@ -63,7 +66,8 @@ const fullStrength = (u: Units) => { const m = emptyUnits(); for (const k of UNI
 /** Bring a saved game from an older version up to date. Returns null if it cannot be read. */
 export function migrateState(s: GameState & { v: number }): GameState | null {
   if (!s || !Array.isArray(s.regions)) return null;
-  if (s.v === 4) return fill4(s);
+  if (s.v === 5) return s;
+  if (s.v === 4) return to5(fill4(s));
   if (s.v === 3) return migrate3(s);
   if (s.v !== 2) return null;
   const W = world();
@@ -93,8 +97,8 @@ function migrate3(s: GameState): GameState {
     b.go ??= b.age > 30;
   }
   s.reports ??= [];
-  s.v = 4;
-  return fill4(s);
+  (s as { v: number }).v = 4;
+  return to5(fill4(s));
 }
 
 /** Fields added to version 4 during the Great War update: defaults for saves made before them. */
@@ -107,12 +111,28 @@ function fill4(s: GameState): GameState {
   return s;
 }
 
+/**
+ * Version 4 → 5: deployment. Every garrison becomes its region's main army and is placed at once; marching armies arrive as
+ * before (they have no post), and battles already burning fight on the old rules.
+ */
+function to5(s: GameState): GameState {
+  (s as { v: number }).v = 5;
+  for (const r of s.regions) autoDeploy(s, r, true);
+  return s;
+}
+
 /** Advance the simulation by dt seconds (callers use small fixed steps, e.g. 0.05). */
 export function step(g: GameState, dt: number) {
   if (g.over) return;
   g.time += dt; g.supplyT += dt;
   if (g.supplyT >= TICK_SECONDS) { g.supplyT -= TICK_SECONDS; supplyTick(g); }
-  for (let i = g.armies.length - 1; i >= 0; i--) { const a = g.armies[i]; a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); } }
+  for (let i = g.armies.length - 1; i >= 0; i--) {
+    const a = g.armies[i];
+    // troops called up for an offensive form up before they move
+    if (a.wait) { a.wait = Math.max(0, a.wait - dt); if (a.wait > 0) continue; delete a.wait; }
+    a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); }
+  }
+  stepPosts(g);
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
   updateSpies(g); doctrineDeadlines(g); diploStep(g);
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);

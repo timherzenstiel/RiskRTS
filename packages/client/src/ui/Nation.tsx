@@ -1,4 +1,4 @@
-// National character: the power's own unit, strengths and weaknesses; in game also manpower, mobilisation and unrest.
+// National character: the power's own unit, strengths and weaknesses; in game also manpower, conscription and unrest.
 import { FACTIONS, FORMATION, NATIONS, MANPOWER, buildWorld, monthStr, poolGrowth } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { click } from './actions';
@@ -20,7 +20,7 @@ export function NationCard({ f, compact }: { f: number; compact?: boolean }) {
   );
 }
 
-const MOB = ['Peacetime classes', 'Partial mobilisation', 'General mobilisation'];
+const MOB = ['Peacetime classes', 'Extended conscription', 'Total conscription'];
 
 export function NationSheet() {
   const sim = useSim(); if (!sim) return null;
@@ -37,11 +37,11 @@ export function NationSheet() {
         <div><small>War weariness</small><b className={f.ww >= N.unrest ? 'bad' : ''}>{Math.round(f.ww)}%</b><span>unrest at {N.unrest}%</span></div>
         <div><small>Battalion</small><b>{FORMATION.inf.men}</b><span>men from the pool</span></div>
       </div>
-      <div className="lbl"><span>Mobilisation · {MOB[mob]}</span></div>
-      <div className="seg mob" role="group" aria-label="Mobilisation">
-        {MOB.map((m, i) => <button key={m} aria-pressed={mob === i} onClick={() => { click(); ui().order({ t: 'mobilise', level: i }); }}>{['None', 'Partial', 'General'][i]}</button>)}
+      <div className="lbl"><span>Conscription · {MOB[mob]}</span></div>
+      <div className="seg mob" role="group" aria-label="Conscription">
+        {MOB.map((m, i) => <button key={m} aria-pressed={mob === i} onClick={() => { click(); ui().order({ t: 'mobilise', level: i }); }}>{['Peacetime', 'Extended', 'Total'][i]}</button>)}
       </div>
-      <p className="muted small">Each level adds {Math.round(MANPOWER.mobGrowth * 100)}% to the manpower growth and {MANPOWER.mobWW} war weariness per convoy; under general mobilisation the weariness no longer fades. Above {N.unrest}% for {MANPOWER.strikeAfter} convoys, remote home regions go on strike; {MANPOWER.riseAbove} points higher they may rise.</p>
+      <p className="muted small">Each level adds {Math.round(MANPOWER.mobGrowth * 100)}% to the manpower growth and {MANPOWER.mobWW} war weariness per convoy; under total conscription the weariness no longer fades. Above {N.unrest}% for {MANPOWER.strikeAfter} convoys, remote home regions go on strike; {MANPOWER.riseAbove} points higher they may rise.</p>
       {strikes.length > 0 && <p className="notice">On strike: {strikes.map(r => W.regions[r.id].name).join(', ')}. No supply, shells or recruits from there until the weariness eases.</p>}
       {f.unrestT > 0 && !strikes.length && <p className="notice">Unrest is brewing: {f.unrestT} convoy{f.unrestT === 1 ? '' : 's'} above the threshold.</p>}
       <div className="row"><button className="btn primary" onClick={close}>Back to the map</button></div>

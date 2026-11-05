@@ -158,7 +158,7 @@ export class GroundDetail {
       }
     };
     const TR = T.treeRec;
-    for (const t of this.treesIn[k]) {
+    if (!T.hasScenery) for (const t of this.treesIn[k]) {
       const x = TR[t], z = TR[t + 1], s = TR[t + 3], bio = TR[t + 4], ci = TR[t + 5], h = hash2(t, 77);
       tree(x, z, s, bio, ci, h);
       for (let n = 0; n < 2; n++) {

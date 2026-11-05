@@ -7,7 +7,7 @@ import type { UnitType } from '@riskrts/shared';
 import type * as THREE from 'three';
 import type { Pool } from './pools';
 import { DEADC, HELM, K, TANKC, TANKD, TANKL, UNI, UNI2, facCol } from './palette';
-import { HELM_OF, type MeshPools } from './meshPools';
+import { HELM_OF, TANK_OF, type MeshKey, type MeshPools } from './meshPools';
 
 const FLAG = facCol;
 /** Soldier arm poses. */
@@ -21,6 +21,8 @@ export class Models {
   // current model frame: origin, facing (sin/cos) and scale
   private ox = 0; private oy = 0; private oz = 0; private of = 0; private os = 0; private oc = 1; private oS = 1;
 
+  /** Use the detailed baked figures (battle and close bands). */
+  hiMesh = true;
   /** Baked meshes (null or not ready: box models). */
   mesh: MeshPools | null = null;
 
@@ -83,10 +85,13 @@ export class Models {
   /** Infantryman. `pose`: POSE_RIFLE carries the rifle at the ready, GRIP reaches forward to a gun, SHELL carries a shell, HANG lets the arms hang. */
   soldier(x: number, y: number, z: number, face: number, f: number, S: number, crouch: boolean, walk: number, pose = POSE_RIFLE) {
     const sw = walk ? Math.sin(walk) * .018 : 0, bob = walk ? Math.abs(Math.cos(walk)) * .008 : 0;
-    if (this.mesh?.has('soldier')) {
-      const d = crouch ? -.045 : 0, yy = y + bob * S, roll = sw * 2.2;
-      this.mesh.push(crouch ? 'soldier_kneel' : 'soldier', x, yy, z, face, S, UNI[f] ?? K.khaki, roll);
-      this.mesh.push(HELM_OF[f] ?? 'helm_stahl', x - Math.cos(face) * roll * (.19 + d) * S, yy + (.19 + d) * S, z + Math.sin(face) * roll * (.19 + d) * S, face, S, UNI[f] ?? K.khaki);
+    if (this.mesh?.has('soldier_lo')) {
+      // close up: the detailed figure, two stride frames while marching; further out the light figure with a sway
+      const d = crouch ? -.045 : 0, hiRes = this.hiMesh && this.mesh.has('soldier');
+      const key: MeshKey = hiRes ? (crouch ? 'soldier_kneel' : walk ? (Math.sin(walk) > 0 ? 'soldier_walk_a' : 'soldier_walk_b') : 'soldier') : crouch ? 'soldier_kneel_lo' : 'soldier_lo';
+      const yy = y + bob * S, roll = hiRes ? 0 : sw * 2.2, hh = (hiRes && !crouch && walk ? .188 : .19) + d;
+      this.mesh.push(key, x, yy, z, face, S, UNI[f] ?? K.khaki, roll);
+      this.mesh.push(HELM_OF[f] ?? 'helm_stahl', x - Math.cos(face) * roll * hh * S, yy + hh * S, z + Math.sin(face) * roll * hh * S, face, S, UNI[f] ?? K.khaki);
       void pose; return;
     }
     this.at(x, y + bob * S, z, face, S);
@@ -170,7 +175,7 @@ export class Models {
 
   /** WW1-era armour in Command & Conquer detail: tracks with wheels and links, lit top plates, hatches, vision slits, rivets, guns. */
   private tank(x: number, y: number, z: number, face: number, f: number, S: number) {
-    if (this.mesh?.has('tank')) { this.mesh.push('tank', x, y, z, face, S, TANKC[f] ?? K.olive); return; }
+    { const tk = TANK_OF[f] ?? 'tank_mk4'; if (this.mesh?.has(tk)) { this.mesh.push(tk, x, y, z, face, S, TANKC[f] ?? K.olive); return; } }
     const p = this.part.bind(this), c = TANKC[f], d = TANKD[f], l = TANKL[f], hi = this.hi;
     if (f === 1) { // Renault FT: light tank with a rotating turret
       this.track(x, y, z, face, S, .07, .27, .07, .04);
@@ -380,6 +385,7 @@ export class Models {
     if (this.mesh?.has('plane')) {
       this.mesh.push('plane', x, y, z, face, S, c);
       this.mesh.push('prop', x, y, z, face, S, K.wood, this.t * 38 + x * 7);
+      if (f >= 0 && f < 6) this.mesh.push(`mark_${f}` as MeshKey, x, y, z, face, S, K.wood);
       return;
     }
     const b = this.b, hi = this.hi;
@@ -574,9 +580,14 @@ export class Models {
     const p = this.part.bind(this);
     p(x, y, z, face, 0, .002 * S, 0, .16 * S, .004 * S, .9 * S, K.runway);
     for (let k = -3; k <= 3; k++) p(x, y, z, face, 0, .0045 * S, k * .12 * S, .012 * S, .002 * S, .05 * S, K.runway2);
-    p(x, y, z, face, .2 * S, .04 * S, -.2 * S, .16 * S, .08 * S, .2 * S, K.hangar);
-    p(x, y, z, face, .2 * S, .085 * S, -.2 * S, .12 * S, .02 * S, .21 * S, K.roof); p(x, y, z, face, .2 * S, .1 * S, -.2 * S, .07 * S, .014 * S, .21 * S, K.roof);
-    p(x, y, z, face, .118 * S, .03 * S, -.2 * S, .005 * S, .05 * S, .14 * S, K.slit);
+    if (this.mesh?.has('hangar')) {
+      const hx = .2 * S, hz = -.2 * S, co = Math.cos(face), si = Math.sin(face);
+      this.mesh.push('hangar', x + hx * co + hz * si, y, z - hx * si + hz * co, face - Math.PI / 2, S * .75, FLAG[f] ?? K.wing);
+    } else {
+      p(x, y, z, face, .2 * S, .04 * S, -.2 * S, .16 * S, .08 * S, .2 * S, K.hangar);
+      p(x, y, z, face, .2 * S, .085 * S, -.2 * S, .12 * S, .02 * S, .21 * S, K.roof); p(x, y, z, face, .2 * S, .1 * S, -.2 * S, .07 * S, .014 * S, .21 * S, K.roof);
+      p(x, y, z, face, .118 * S, .03 * S, -.2 * S, .005 * S, .05 * S, .14 * S, K.slit);
+    }
     p(x, y, z, face, -.14 * S, .05 * S, .35 * S, .005 * S, .1 * S, .005 * S, K.pole);
     p(x, y, z, face + Math.sin(t * 1.3) * .5, -.14 * S, .095 * S, .35 * S + .02 * S, .012 * S, .012 * S, .04 * S, K.funnel);
     for (let k = 0; k < Math.min(3, planes); k++) this.plane(x + Math.cos(face) * (.2 + k * .14) * S, y + .03 * S, z - Math.sin(face) * (.2 + k * .14) * S + .1 * S, face + Math.PI / 2, FLAG[f] ?? K.wing, .45 * S, f);

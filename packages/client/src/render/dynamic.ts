@@ -43,14 +43,16 @@ export class DynamicDraw {
         P(-.12, .45, -.32, .035, .9, .035, K.pole); P(-.12, .91, -.32, .05, .03, .05, K.flash);
         for (let k = 0; k < 6; k++) { const w = Math.sin(T * 3 + k * .8 + def.id) * .012 * k / 5; m.part(x, y, z, 0, -.095 + k * .03, .4 * B / BLD, -.32 + w, .03 * B / BLD, .11 * B / BLD, .01, k % 2 ? facCol[f] : FLAGD[f]); }
       } else if (t.capitalOf >= 0) P(-.12, .3, -.32, .035, .6, .035, K.pole);
-      if (t.factory && showB) {
+      if (t.factory && showB && m.mesh?.has('factory')) m.mesh.push('factory', x + .5 * O + .1, y, z - .22 * O, 0, B * 1.05, facCol[f] ?? K.pole);
+      else if (t.factory && showB) {
         const fx = .5 * O + .1, fz = -.22 * O;
         P(fx, .15, fz, .5, .3, .38, K.brick);
         for (let k = 0; k < 3; k++) P(fx - .085 * B / BLD + k * .08 * B / BLD, .34, fz, .13, .07, .38, K.brick2);
         P(fx + .08 * B / BLD, .33, fz - .08 * B / BLD, .1, .66, .1, K.brick2); P(fx + .08 * B / BLD, .68, fz - .08 * B / BLD, .12, .04, .12, K.gun);
         for (let k = 0; k < 3; k++) P(fx - .075 * B / BLD + k * .075 * B / BLD, .16, fz + .095 * B / BLD, .07, .08, .01, K.flash, m.glowPool);
       }
-      if (t.barracks && showB) {
+      if (t.barracks && showB && m.mesh?.has('barracks')) m.mesh.push('barracks', x - .5 * O - .1, y, z - .18 * O, 0, B * 1.05, facCol[f] ?? K.pole);
+      else if (t.barracks && showB) {
         const bx = -.5 * O - .1, bz = -.18 * O;
         P(bx, .08, bz, .6, .16, .3, K.bar); P(bx, .19, bz, .64, .06, .34, K.roof); P(bx, .235, bz, .4, .04, .2, K.roof);
         for (let k = 0; k < 4; k++) P(bx - .11 * B / BLD + k * .075 * B / BLD, .09, bz + .076 * B / BLD, .05, .05, .01, K.flash, m.glowPool);

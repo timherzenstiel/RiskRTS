@@ -5,12 +5,23 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { uChrome } from './pools';
 
-export type MeshKey = 'soldier' | 'soldier_kneel' | 'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
-  'mg' | 'art' | 'tank' | 'plane' | 'prop' | 'pill' | 'bunk';
+export type MeshKey = 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
+  'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
+  'mg' | 'art' | 'tank_mk4' | 'tank_ft' | 'tank_a7v' | 'plane' | 'prop' | 'mark_0' | 'mark_1' | 'mark_2' | 'mark_3' | 'mark_4' | 'mark_5' |
+  'pill' | 'bunk' | 'factory' | 'barracks' | 'hangar' |
+  'tree_broad' | 'tree_pine' | 'tree_palm' | 'tree_acacia' | 'shrub' | 'house_a' | 'house_b' | 'church';
 const CAP: Record<MeshKey, number> = {
-  soldier: 14000, soldier_kneel: 6000, helm_brodie: 6000, helm_adrian: 6000, helm_cap: 6000, helm_stahl: 12000, helm_kabalak: 6000,
-  mg: 2500, art: 2500, tank: 1500, plane: 800, prop: 800, pill: 1500, bunk: 1000,
+  soldier: 3000, soldier_walk_a: 3000, soldier_walk_b: 3000, soldier_kneel: 3000, soldier_lo: 14000, soldier_kneel_lo: 6000,
+  helm_brodie: 6000, helm_adrian: 6000, helm_cap: 6000, helm_stahl: 12000, helm_kabalak: 6000,
+  mg: 2500, art: 2500, tank_mk4: 800, tank_ft: 800, tank_a7v: 800, plane: 600, prop: 600,
+  mark_0: 200, mark_1: 200, mark_2: 200, mark_3: 200, mark_4: 200, mark_5: 200,
+  pill: 1500, bunk: 1000, factory: 200, barracks: 200, hangar: 200,
+  tree_broad: 1, tree_pine: 1, tree_palm: 1, tree_acacia: 1, shrub: 1, house_a: 1, house_b: 1, church: 1,
 };
+/** Static scenery: placed once by the terrain (no per-frame pool). */
+const STATIC = new Set<MeshKey>(['tree_broad', 'tree_pine', 'tree_palm', 'tree_acacia', 'shrub', 'house_a', 'house_b', 'church']);
+/** Tank of each faction: Mark IV (Britain, Russia, Ottomans), Renault FT (France), A7V (Germany, Austria-Hungary). */
+export const TANK_OF: MeshKey[] = ['tank_mk4', 'tank_ft', 'tank_mk4', 'tank_a7v', 'tank_a7v', 'tank_mk4'];
 /** Headgear of each faction (index = faction id), as in models.ts. */
 export const HELM_OF: MeshKey[] = ['helm_brodie', 'helm_adrian', 'helm_cap', 'helm_stahl', 'helm_stahl', 'helm_kabalak'];
 
@@ -19,11 +30,19 @@ function unitMaterial(): THREE.MeshPhongMaterial {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uChrome = uChrome;
     // keep the vertex colour and the instance tint apart: the tint only applies where the house mask (alpha) is set
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTint;')
-      .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor = color;\n  #ifdef USE_INSTANCING_COLOR\n  vTint = instanceColor;\n  #else\n  vTint = vec3(1.);\n  #endif');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTint; uniform float uChrome;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTint; varying vec3 vObj;')
+      .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor = color; vObj = position;\n  #ifdef USE_INSTANCING_COLOR\n  vTint = instanceColor;\n  #else\n  vTint = vec3(1.);\n  #endif');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vTint; varying vec3 vObj; uniform float uChrome;
+float _gh(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
+float _gn(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(mix(_gh(i),_gh(i+vec3(1,0,0)),f.x),mix(_gh(i+vec3(0,1,0)),_gh(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(_gh(i+vec3(0,0,1)),_gh(i+vec3(1,0,1)),f.x),mix(_gh(i+vec3(0,1,1)),_gh(i+vec3(1,1,1)),f.x),f.y),f.z); }`)
       .replace('#include <color_fragment>', `float _l = dot(vColor.rgb, vec3(.3,.59,.11));
   diffuseColor.rgb *= mix(vColor.rgb, vTint * clamp(_l * 4.2, .55, 1.35), vColor.a);
+  // painted grime: soft blotches and fine speckle in model space, darker low down (mud splashed up from the ground)
+  float _g = _gn(vObj*90.)*.6 + _gn(vObj*260.)*.4;
+  diffuseColor.rgb *= (.86 + .24*_g) * mix(.82, 1., smoothstep(.0, .05, vObj.y));
   diffuseColor.a = 1.;`)
       .replace('#include <specularmap_fragment>', 'float specularStrength = (1. - vColor.a) * smoothstep(.02,.2,dot(vColor.rgb,vec3(.33))) * uChrome * 2.;');
   };
@@ -67,8 +86,11 @@ class MeshPool {
 
 export class MeshPools {
   private readonly pools = new Map<MeshKey, MeshPool>();
-  private readonly mat = unitMaterial();
+  readonly mat = unitMaterial();
   ready = false;
+  private readonly geos = new Map<MeshKey, THREE.BufferGeometry>();
+  /** Geometry of a model (for static instancing elsewhere, e.g. trees and houses in terrain.ts). */
+  geometry(k: MeshKey) { return this.geos.get(k) ?? null; }
 
   constructor(private readonly parent: THREE.Object3D, url = `${import.meta.env.BASE_URL ?? '/'}art/units.glb`) {
     new GLTFLoader().load(url, (gltf) => {
@@ -76,10 +98,10 @@ export class MeshPools {
         const m = o as THREE.Mesh; if (!m.isMesh) return;
         const key = (m.geometry.name || m.name) as MeshKey, name = (Object.keys(CAP) as MeshKey[]).find(k => k === key || k === m.name);
         if (!name || this.pools.has(name)) return;
-        const geo = m.geometry.clone(); geo.applyMatrix4(m.matrixWorld);
-        this.pools.set(name, new MeshPool(this.parent, geo, this.mat, CAP[name]));
+        const geo = m.geometry.clone(); geo.applyMatrix4(m.matrixWorld); this.geos.set(name, geo);
+        if (!STATIC.has(name)) this.pools.set(name, new MeshPool(this.parent, geo, this.mat, CAP[name]));
       });
-      this.ready = this.pools.has('soldier');
+      this.ready = this.pools.has('soldier_lo');
     }, undefined, (e) => console.warn('Unit models could not be loaded; drawing the box models', e));
   }
 
@@ -87,5 +109,5 @@ export class MeshPools {
   push(k: MeshKey, x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0) { this.pools.get(k)?.push(x, y, z, face, s, c, roll); }
   begin() { for (const p of this.pools.values()) p.begin(); }
   end() { for (const p of this.pools.values()) p.end(); }
-  dispose() { for (const p of this.pools.values()) { p.dispose(); p.mesh.geometry.dispose(); } this.mat.dispose(); }
+  dispose() { for (const p of this.pools.values()) p.dispose(); for (const g of this.geos.values()) g.dispose(); this.mat.dispose(); }
 }

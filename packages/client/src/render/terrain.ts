@@ -8,6 +8,7 @@ import {
 import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
+import type { MeshKey, MeshPools } from './meshPools';
 
 /** Tiles per side of a close-up detail chunk (see detail.ts). */
 export const DETAIL_CH = 12;
@@ -142,6 +143,13 @@ export class Terrain {
   /** Sea tiles that copy a land tile's colours (land tile -> sea tiles). */
   private readonly shoreOf = new Map<number, number[]>();
   private readonly farMeshes: THREE.Mesh[] = [];
+  /** Village and town houses (x, y, z, width, height, depth, wall colour) and churches (x, y, z, size), for the modelled scenery. */
+  private readonly homes: [number, number, number, number, number, number, THREE.Color][] = [];
+  private readonly churches: [number, number, number, number][] = [];
+  /** Modelled trees and houses (built once the baked models load), chunked so off-screen chunks are culled. */
+  private readonly sceneryMeshes: THREE.InstancedMesh[] = [];
+  private sceneryOn = false;
+  hasScenery = false;
   private readonly treeMesh: THREE.InstancedMesh;
   private readonly houseMesh: THREE.InstancedMesh;
   private readonly treeBase: Float32Array;
@@ -265,10 +273,10 @@ export class Terrain {
         const ti = tileAtW(x, z); if (ti < 0 || !land[ti]) continue;
         for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const j = ti + dr * COLS + dc; if (j >= 0 && j < N && land[j]) this.cityT[j] = 1; }
         const y = tileH[ti], w = .05 + rng.next() * .05, d = .05 + rng.next() * .05, h = .04 + rng.next() * .05 + (size === 3 && r < .12 ? .05 : 0), rot = rng.next() < .5, ww = rot ? d : w, dd = rot ? w : d;
-        houses.push([x, y + h / 2, z, ww, h, dd, WALLS[Math.floor(rng.next() * 4)]]);
+        const wc = WALLS[Math.floor(rng.next() * 4)]; houses.push([x, y + h / 2, z, ww, h, dd, wc]); this.homes.push([x, y, z, ww, h, dd, wc]);
         const rc = ROOFS[Math.floor(rng.next() * 5)]; houses.push([x, y + h + .008, z, ww + .012, .016, dd + .012, rc]); houses.push([x, y + h + .022, z, ww * .55, .014, dd + .006, rc]);
       }
-      if (size >= 2) { const y = tileH[ci]; houses.push([cx, y + .12, cz, .045, .24, .045, WALLS[3]]); houses.push([cx, y + .27, cz, .024, .07, .024, ROOFS[2]]); }
+      if (size >= 2) { const y = tileH[ci]; houses.push([cx, y + .12, cz, .045, .24, .045, WALLS[3]]); houses.push([cx, y + .27, cz, .024, .07, .024, ROOFS[2]]); this.churches.push([cx, y, cz, size]); }
       if (size === 3) { const y = tileH[ci]; houses.push([cx + .1, y + .05, cz + .08, .16, .1, .1, WALLS[1]]); houses.push([cx + .1, y + .12, cz + .08, .06, .05, .06, col('#5f7a6e')]); }
     }
     for (const t of world.regions) {
@@ -280,7 +288,7 @@ export class Terrain {
         for (let q = 0; q < n; q++) {
           const a = rng.next() * 6.283, r = Math.sqrt(rng.next()) * .11, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, ti = tileAtW(x, z); if (ti < 0 || !land[ti] || river[ti]) continue;
           const y = tileH[ti], w = .04 + rng.next() * .03, d = .04 + rng.next() * .035, h = .03 + rng.next() * .03, rot = rng.next() < .5, ww = rot ? d : w, dd = rot ? w : d;
-          houses.push([x, y + h / 2, z, ww, h, dd, WALLS[Math.floor(rng.next() * 4)]]); const rc = ROOFS[Math.floor(rng.next() * 5)];
+          const wc = WALLS[Math.floor(rng.next() * 4)]; houses.push([x, y + h / 2, z, ww, h, dd, wc]); this.homes.push([x, y, z, ww, h, dd, wc]); const rc = ROOFS[Math.floor(rng.next() * 5)];
           houses.push([x, y + h + .007, z, ww + .01, .013, dd + .01, rc]); houses.push([x, y + h + .018, z, ww * .5, .011, dd + .004, rc]);
         }
         if (rng.next() < .45) { const y = tileH[i]; houses.push([cx + .07, y + .05, cz - .06, .018, .1, .018, WALLS[3]]); houses.push([cx + .07, y + .11, cz - .06, .02, .025, .02, ROOFS[2]]); }
@@ -340,6 +348,43 @@ export class Terrain {
   }
 
   private add(o: THREE.Object3D) { this.scene.add(o); this.objects.push(o); }
+
+  /** Swap the box trees and houses for the baked models (trees by biome, houses by size), in culled chunks. */
+  useModels(mp: MeshPools) {
+    if (this.hasScenery) return; this.hasScenery = true;
+    const groups = new Map<string, { key: MeshKey; m: number[]; c: number[] }>();
+    const put = (key: MeshKey, x: number, z: number, mat: THREE.Matrix4, c: THREE.Color) => {
+      const ck = key + ':' + Math.floor((x + HW) / (FAR_CH * TS)) + ':' + Math.floor((z + HH) / (FAR_CH * TS));
+      let g = groups.get(ck); if (!g) groups.set(ck, g = { key, m: [], c: [] });
+      g.m.push(...mat.elements); g.c.push(c.r, c.g, c.b);
+    };
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), sc = new THREE.Vector3(), tc = new THREE.Color();
+    const R = this.treeRec;
+    for (let k = 0; k < R.length; k += 7) {
+      const x = R[k], z = R[k + 1], y = this.surfaceAt(x, z), s = R[k + 3], bio = BIOME_KEYS[R[k + 4]], ci = R[k + 5], h = hash2(k, 31);
+      const key: MeshKey = bio === 'taiga' ? 'tree_pine' : bio === 'jungle' ? (h < .35 ? 'tree_palm' : 'tree_broad') : bio === 'savanna' ? 'tree_acacia' : bio === 'tundra' ? 'shrub' : (h < .25 ? 'tree_pine' : 'tree_broad');
+      const cc = (TREEC[bio] ?? TREEC.temperate!)[ci % (TREEC[bio] ?? TREEC.temperate!).length];
+      const size = key === 'shrub' ? .2 * s : key === 'tree_pine' ? .17 * s : .18 * s;
+      q.setFromAxisAngle(up, h * 6.283); m4.compose(v.set(x, y - .004, z), q, sc.set(size, size * (.9 + hash2(k, 7) * .25), size));
+      put(key, x, z, m4, tc.copy(cc).multiplyScalar(1.15));
+    }
+    for (const [x, y, z, w, h, d, wc] of this.homes) {
+      const big = h > .07, key: MeshKey = big ? 'house_b' : 'house_a', yaw = w >= d ? 0 : Math.PI / 2;
+      q.setFromAxisAngle(up, yaw); m4.compose(v.set(x, this.surfaceAt(x, z) - .002, z), q, sc.set(yaw ? d : w, h * .85, yaw ? w : d));
+      put(key, x, z, m4, tc.copy(wc).multiplyScalar(.75));
+    }
+    for (const [x, y, z, size] of this.churches) {
+      q.setFromAxisAngle(up, 0); const S = size === 3 ? .16 : .12; m4.compose(v.set(x, y, z), q, sc.set(S, S * 1.1, S));
+      put('church', x, z, m4, tc.setRGB(1, 1, 1));
+    }
+    for (const g of groups.values()) {
+      const geo = mp.geometry(g.key); if (!geo) continue;
+      const n = g.c.length / 3, im = new THREE.InstancedMesh(geo, mp.mat, n);
+      im.instanceMatrix.array.set(g.m); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(g.c), 3);
+      im.castShadow = im.receiveShadow = true; im.computeBoundingSphere(); im.visible = false;
+      this.sceneryMeshes.push(im); this.add(im);
+    }
+  }
 
   /** Heightfield chunks over every tile that is land or touches land; corners with no land sink under the sea (shore slope). */
   private buildFarGround(mat: THREE.Material) {
@@ -439,6 +484,9 @@ export class Terrain {
   }
 
   setCameraDistance(dist: number) {
+    // modelled trees and houses up to the front band; the light box versions further out
+    const on = this.hasScenery && dist < 40;
+    if (on !== this.sceneryOn) { this.sceneryOn = on; for (const m of this.sceneryMeshes) m.visible = on; this.treeMesh.visible = !on; this.houseMesh.visible = !on; }
     uNear.value = 1 - clamp((dist - 9) / 14, 0, 1);
     // line railways on the strategic map; up close the painted ground draws them (groundPaint.ts)
     const o = (1 - clamp((dist - 22) / 18, 0, 1)) * clamp((dist - 13) / 4, 0, 1);

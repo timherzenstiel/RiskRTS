@@ -211,6 +211,7 @@ class WorldRenderer implements WorldRendererApi {
 
     const [px, pz] = this.input.pan();
     this.rig.update(dt, px, pz);
+    if (!this.terrain.hasScenery && this.meshes.ready) this.terrain.useModels(this.meshes);
     this.terrain.setCameraDistance(this.rig.dist);
     this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
     this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.labels.setBand(bandOf(this.rig.dist)); this.dyn.sel = ui.sel;
@@ -411,7 +412,7 @@ class WorldRenderer implements WorldRendererApi {
     lit.begin(); glow.begin(); lines.begin(); sprites.begin(); this.meshes.begin();
     const near = rig.dist < 26;
     // fine model detail (rivets, faces, spokes, markings) only where it can be seen
-    this.models.hi = rig.dist < 7; this.models.t = T;
+    this.models.hi = rig.dist < 7; this.models.hiMesh = rig.dist < 12; this.models.t = T;
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
       this.net.draw(lines, g, this.session?.me ?? -1, rig);

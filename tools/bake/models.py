@@ -11,8 +11,9 @@ Conventions (match render/models.ts):
 Run inside Blender (or with the bpy module):
     blender -b -P tools/bake/models.py          or          python3 tools/bake/models.py
 """
-import math, os
+import math, os, random
 import bpy, bmesh
+import numpy as np
 from mathutils import Matrix, Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -33,11 +34,13 @@ HOUSE = 1.0
 
 class Kit:
     """Accumulates primitives into one bmesh with per-loop RGBA colours."""
-    def __init__(self, name):
+    def __init__(self, name, jitter=.05):
         self.name = name; self.bm = bmesh.new(); self.col = self.bm.loops.layers.color.new('Col')
+        self.rng = random.Random(name); self.jitter = jitter
 
     def _paint(self, faces, c, house):
-        rgba = (c[0], c[1], c[2], HOUSE if house else 0.0)
+        j = 1 + (self.rng.random() - .5) * 2 * self.jitter   # each part a touch lighter or darker: hand-painted variation
+        rgba = (min(1, c[0] * j), min(1, c[1] * j), min(1, c[2] * j), HOUSE if house else 0.0)
         for f in faces:
             for l in f.loops: l[self.col] = rgba
 
@@ -46,10 +49,58 @@ class Kit:
         for f in faces: f.smooth = smooth
         self._paint(faces, c, house)
 
-    def box(self, x, y, z, sx, sy, sz, c, house=False, rz=0.0, rx=0.0, ry=0.0):
-        """Box centred at game coords (x right, y up, z forward), sizes in game units."""
+    def box(self, x, y, z, sx, sy, sz, c, house=False, rz=0.0, rx=0.0, ry=0.0, bevel=0.0):
+        """Box centred at game coords (x right, y up, z forward), sizes in game units. `bevel` chamfers the edges (catches the light)."""
         m = Matrix.Translation((x, -z, y)) @ Matrix.Rotation(rz, 4, 'Z') @ Matrix.Rotation(rx, 4, 'X') @ Matrix.Rotation(ry, 4, 'Y') @ Matrix.Diagonal((sx, sz, sy, 1))
-        r = bmesh.ops.create_cube(self.bm, size=1.0, matrix=m); self._add(r['verts'], c, house)
+        r = bmesh.ops.create_cube(self.bm, size=1.0, matrix=m); vs = r['verts']
+        if bevel > 0:
+            es = list({e for v in vs for e in v.link_edges})
+            b = bmesh.ops.bevel(self.bm, geom=vs + es, offset=min(bevel, sx * .45, sy * .45, sz * .45), segments=1, affect='EDGES', profile=.5)
+            vs = [v for v in ({v for f in b['faces'] for v in f.verts} | set(vs)) if v.is_valid]
+        self._add(vs, c, house)
+
+    def limb(self, p0, p1, r0, r1, c, house=False, seg=7, cap=True):
+        """Tapered cylinder between two game-space points (arms, legs, barrels, struts)."""
+        a, b = Vector((p0[0], -p0[2], p0[1])), Vector((p1[0], -p1[2], p1[1])); d = b - a; L = d.length
+        if L < 1e-6: return
+        q = Vector((0, 0, 1)).rotation_difference(d.normalized())
+        m = Matrix.Translation((a + b) / 2) @ q.to_matrix().to_4x4()
+        r = bmesh.ops.create_cone(self.bm, cap_ends=cap, segments=seg, radius1=r0, radius2=r1, depth=L, matrix=m); self._add(r['verts'], c, house, True)
+
+    def ring(self, x, y, z, R, r, c, house=False, axis='x', seg=16, seg2=4):
+        """Torus (wheel rims, cowlings, helmet brims)."""
+        rot = {'y': Matrix.Identity(4), 'x': Matrix.Rotation(math.pi / 2, 4, 'Y'), 'z': Matrix.Rotation(math.pi / 2, 4, 'X')}[axis]
+        m = Matrix.Translation((x, -z, y)) @ rot; vs = []; grid = []
+        for i in range(seg):
+            a = i / seg * math.tau; row = []
+            for j in range(seg2):
+                t = j / seg2 * math.tau; rr = R + r * math.cos(t)
+                row.append(self.bm.verts.new(m @ Vector((rr * math.cos(a), rr * math.sin(a), r * math.sin(t))))); vs.append(row[-1])
+            grid.append(row)
+        for i in range(seg):
+            for j in range(seg2):
+                self.bm.faces.new((grid[i][j], grid[(i + 1) % seg][j], grid[(i + 1) % seg][(j + 1) % seg2], grid[i][(j + 1) % seg2]))
+        self._add(vs, c, house, True)
+
+    def poly(self, pts, c, house=False, thick=0.0, smooth=False):
+        """A face from game-space points; with `thick`, extruded along its normal into a slab (roof panels, side plates)."""
+        vs = [self.bm.verts.new((p[0], -p[2], p[1])) for p in pts]; f = self.bm.faces.new(vs); allv = list(vs)
+        if thick:
+            r = bmesh.ops.extrude_face_region(self.bm, geom=[f]); nv = [e for e in r['geom'] if isinstance(e, bmesh.types.BMVert)]
+            f.normal_update(); bmesh.ops.translate(self.bm, verts=nv, vec=-f.normal * thick); allv += nv
+            bmesh.ops.recalc_face_normals(self.bm, faces=list({fc for v in allv for fc in v.link_faces}))
+        self._add(allv, c, house, smooth)
+
+    def roof(self, x, y, z, w, h, l, c, house=False, axis='z', thick=.004):
+        """Pitched roof: ridge along `axis`, eaves `w` wide at height y, ridge h above, l long."""
+        if axis == 'z':
+            A, B = (x - w / 2, y, z - l / 2), (x + w / 2, y, z - l / 2); R0, R1 = (x, y + h, z - l / 2), (x, y + h, z + l / 2)
+            A2, B2 = (x - w / 2, y, z + l / 2), (x + w / 2, y, z + l / 2)
+        else:
+            A, B = (x - l / 2, y, z - w / 2), (x - l / 2, y, z + w / 2); R0, R1 = (x - l / 2, y + h, z), (x + l / 2, y + h, z)
+            A2, B2 = (x + l / 2, y, z - w / 2), (x + l / 2, y, z + w / 2)
+        self.poly([A, R0, R1, A2], c, house, thick); self.poly([B2, R1, R0, B], c, house, thick)
+        self.poly([A, B, R0], c, house); self.poly([A2, R1, B2], c, house)
 
     def cyl(self, x, y, z, r1, r2, h, c, house=False, axis='y', seg=8, smooth=True, cap=True):
         """Cylinder (cone if r1 != r2) centred at game coords, along a game axis."""
@@ -62,6 +113,7 @@ class Kit:
         res = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=max(4, seg // 2 + 1), radius=r, matrix=m); self._add(res['verts'], c, house, True)
 
     def done(self):
+        bmesh.ops.remove_doubles(self.bm, verts=self.bm.verts, dist=1e-6)
         me = bpy.data.meshes.new(self.name); self.bm.to_mesh(me); self.bm.free()
         me.color_attributes.active_color = me.color_attributes['Col']; me.color_attributes.render_color_index = 0
         ob = bpy.data.objects.new(self.name, me); bpy.context.scene.collection.objects.link(ob)
@@ -225,9 +277,37 @@ def bunker():
     k.box(0, .03, -.09, .05, .04, .03, C['slit'])
     return k.done()
 
+def bake_ao(objs, ground_for=lambda o: True, dist=.03, strength=.62):
+    """Bake ambient occlusion (with a ground plane under ground models) and multiply it into the paint: the pre-rendered depth."""
+    sc = bpy.context.scene; sc.render.engine = 'CYCLES'; sc.cycles.samples = 24; sc.cycles.device = 'CPU'
+    sc.render.bake.target = 'VERTEX_COLORS'; sc.world = sc.world or bpy.data.worlds.new('w')
+    sc.world.light_settings.distance = dist
+    bpy.ops.mesh.primitive_plane_add(size=6); ground = bpy.context.object
+    for o in objs:
+        for other in objs: other.hide_render = other is not o
+        ground.hide_render = not ground_for(o)
+        me = o.data; ao = me.color_attributes.new('AO', 'BYTE_COLOR', 'CORNER'); me.color_attributes.active_color = ao
+        bpy.ops.object.select_all(action='DESELECT'); o.select_set(True); bpy.context.view_layer.objects.active = o
+        bpy.ops.object.bake(type='AO')
+        n = len(me.loops); a = np.empty(n * 4, np.float32); c = np.empty(n * 4, np.float32)
+        ao.data.foreach_get('color', a); col = me.color_attributes['Col']; col.data.foreach_get('color', c)
+        a = a.reshape(-1, 4)[:, 0]; c = c.reshape(-1, 4)
+        c[:, :3] *= (1 - strength + strength * np.power(a, .8))[:, None]
+        col.data.foreach_set('color', c.reshape(-1)); me.color_attributes.remove(ao)
+        me.color_attributes.active_color = me.color_attributes['Col']; me.color_attributes.render_color_index = 0
+    bpy.data.objects.remove(ground, do_unlink=True)
+    for o in objs: o.hide_render = False
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    objs = [soldier('soldier'), soldier('soldier_kneel', True), *helmets(), mg(), field_gun(), tank(), plane(), prop(), pillbox(), bunker()]
+    import importlib.util, sys
+    spec = importlib.util.spec_from_file_location('hires', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hires.py'))
+    hires = importlib.util.module_from_spec(spec); sys.modules['models'] = sys.modules[__name__]; spec.loader.exec_module(hires)
+    lo = [soldier('soldier_lo'), soldier('soldier_kneel_lo', True)]
+    hi = hires.build()
+    objs = lo + hi
+    print('baking ambient occlusion ...')
+    bake_ao(objs, ground_for=lambda o: not (o.name.startswith(('helm', 'plane', 'prop', 'mark'))))  # scenery bakes with the ground too
     for o in objs:
         o.select_set(True)
         tris = sum(len(p.vertices) - 2 for p in o.data.polygons)

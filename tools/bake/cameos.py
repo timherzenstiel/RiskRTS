@@ -13,6 +13,7 @@ GLB = os.path.join(ROOT, 'packages', 'client', 'public', 'art', 'units.glb')
 OUT = os.path.join(ROOT, 'packages', 'client', 'public', 'art', 'cameo')
 FACTIONS_TS = os.path.join(ROOT, 'packages', 'shared', 'src', 'data', 'factions.ts')
 HELM_OF = ['helm_brodie', 'helm_adrian', 'helm_cap', 'helm_stahl', 'helm_stahl', 'helm_kabalak']
+TANK_OF = ['tank_mk4', 'tank_ft', 'tank_mk4', 'tank_a7v', 'tank_a7v', 'tank_mk4']
 SAMPLES = int(os.environ.get('CAMEO_SAMPLES', '24'))
 
 def lin(h):
@@ -95,8 +96,8 @@ def main():
                    + [(lib[HELM_OF[f]], x, z, .3, 1, U, .19) for x, z in ((-.07, .05), (.06, .07), (0, -.06), (-.1, -.09), (.1, -.05))],
             'mg': [(lib['mg'], 0, .03, .25, 1.1, T)] + crew(((-.03, -.06, .25), (.09, -.02, -.4))),
             'art': [(lib['art'], 0, .02, .35, 1.25, T)] + crew(((.13, -.06, .35), (-.12, -.1, .7))),
-            'tank': [(lib['tank'], 0, 0, .45, 1, T)],
-            'plane': [(lib['plane'], 0, 0, .55, 1.15, F), (lib['prop'], 0, 0, .55, 1.15, None)],
+            'tank': [(lib[TANK_OF[f]], 0, 0, .45, 1.05 if f == 1 else 1, T)],
+            'plane': [(lib['plane'], 0, 0, .55, 1.15, F), (lib['prop'], 0, 0, .55, 1.15, None), (lib[f'mark_{f}'], 0, 0, .55, 1.15, None)],
         }
         span = {'inf': .5, 'mg': .44, 'art': .56, 'tank': .56, 'plane': .56}
         for key, parts in groups.items():

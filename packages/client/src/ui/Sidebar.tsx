@@ -2,6 +2,7 @@
 // file (header, tabs, cameo grids), and a supply gauge along the inner edge. On phones it becomes a bottom tray.
 import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
+import { BANDS, bandOf } from '../render/camera';
 import { click } from './actions';
 import { Drawer } from './Drawer';
 import { Minimap } from './Minimap';
@@ -15,6 +16,17 @@ export function LayerPicker() {
       <button aria-pressed={layer === 0} title="Show everything" onClick={() => { click(); set(0); }}>Map</button>
       <button aria-pressed={layer === 1} title="Troops first: corps on the borders, front lines, columns on the move (T)" onClick={() => { click(); set(layer === 1 ? 0 : 1); }}>Troops<kbd>T</kbd></button>
       <button aria-pressed={layer === 2} title="Industry: factories, barracks, airfields, rails and supply (B)" onClick={() => { click(); set(layer === 2 ? 0 : 2); }}>Industry<kbd>B</kbd></button>
+    </div>
+  );
+}
+
+/** Zoom bands: theatre, front, battle, close (keys Z X C V). Lights the band the camera is in. */
+function ZoomPicker() {
+  useSim(); // re-render with the game clock so the lit band follows the wheel
+  const d = rendererRef.current?.cameraDistance() ?? 55, cur = bandOf(d);
+  return (
+    <div className="seg zoom-seg" role="group" aria-label="Zoom">
+      {BANDS.map((b, i) => <button key={b.name} aria-pressed={cur === i} title={`${b.name} view (${b.key.toUpperCase()})`} onClick={() => { click(); rendererRef.current?.zoomBand(i); }}>{b.name}<kbd>{b.key.toUpperCase()}</kbd></button>)}
     </div>
   );
 }
@@ -70,6 +82,7 @@ export function Sidebar() {
       <div className="radar">
         <div className="crt"><Minimap /></div>
         <LayerPicker />
+        <ZoomPicker />
       </div>
       <div className="side-body">{sel >= 0 ? <Drawer /> : <Idle />}</div>
       <SupplyGauge />

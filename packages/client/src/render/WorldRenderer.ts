@@ -8,7 +8,7 @@ import { Sfx } from '../audio/sfx';
 import type { CreateRenderer, PixelScale, RendererCallbacks, WorldRendererApi } from './api';
 import { Ambient } from './ambient';
 import { AIR_Y, BS, BattleView } from './battleView';
-import { CameraRig } from './camera';
+import { CameraRig, bandOf } from './camera';
 import { DynamicDraw } from './dynamic';
 import { GroundDetail } from './detail';
 import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, FxSystem } from './fxSystem';
@@ -23,6 +23,7 @@ import { Post } from './post';
 import { LineBatch, Pool, litMaterial, uChrome } from './pools';
 import { Terrain } from './terrain';
 import { Water } from './water';
+import { Shroud } from './shroud';
 import { battleAnchor, sectorPoint } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
@@ -43,6 +44,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly rig: CameraRig;
   private readonly terrain: Terrain;
   private readonly water: Water;
+  private readonly shroud: Shroud;
   private readonly lit: Pool; private readonly glow: Pool;
   private readonly detail: GroundDetail;
   private readonly lines: LineBatch;
@@ -92,6 +94,7 @@ class WorldRenderer implements WorldRendererApi {
       this.rig = new CameraRig(this.scene, SM);
       this.terrain = new Terrain(this.scene, this.world);
       this.water = new Water(this.scene, this.world);
+      this.shroud = new Shroud(this.scene, this.world);
       this.lit = new Pool(this.scene, 120000, litMaterial(), true);
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);
       this.detail = new GroundDetail(this.scene, this.world, this.terrain);
@@ -187,6 +190,8 @@ class WorldRenderer implements WorldRendererApi {
     return best;
   }
 
+  zoomBand(b: number) { this.input.zoomBand(b); }
+
   watchedBattles(): number[] {
     const g = this.session?.state, out: number[] = []; if (!g || this.rig.dist >= 40) return out;
     for (const b of g.battles) if (!b.ended && this.distTo(b) < 22) out.push(b.id);
@@ -205,9 +210,10 @@ class WorldRenderer implements WorldRendererApi {
     this.rig.update(dt, px, pz);
     this.terrain.setCameraDistance(this.rig.dist);
     this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
-    this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.dyn.sel = ui.sel;
+    this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.labels.setBand(bandOf(this.rig.dist)); this.dyn.sel = ui.sel;
 
     this.syncPaint(g, ui.sel, ui.hover);
+    this.shroud.update(g, this.now);
     const speed = s ? s.speed : 1, fdt = dt * (speed > 0 ? Math.min(speed, 4) : .5);
     this.updateBattles(g, dt, fdt);
     if (s) this.processFx(s);
@@ -235,7 +241,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input.dispose(); this.labels.dispose();
     for (const v of this.views.values()) v.dispose();
     this.views.clear();
-    this.terrain.dispose(); this.water.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
+    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
     this.post.dispose(); this.rig.dispose();
     this.canvas.classList.remove('order', 'drag', 'smooth');
     // The context is deliberately not force-lost: the page may mount a new renderer on the same canvas.

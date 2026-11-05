@@ -4,7 +4,17 @@ import * as THREE from 'three';
 import { HH, HW } from '@riskrts/shared';
 import { clamp, lerp } from './util';
 
-export const MIN_DIST = 1.1, MAX_DIST = 170;
+export const MIN_DIST = 1.1, MAX_DIST = 260;
+
+/** Zoom bands (design §2): what the world draws at each distance. `at` is where a band key flies to. */
+export const BANDS = [
+  { key: 'z', name: 'Theatre', min: 90, max: MAX_DIST, at: 150 },
+  { key: 'x', name: 'Front', min: 30, max: 90, at: 55 },
+  { key: 'c', name: 'Battle', min: 8, max: 30, at: 15 },
+  { key: 'v', name: 'Close', min: MIN_DIST, max: 8, at: 4.5 },
+] as const;
+export type Band = 0 | 1 | 2 | 3;
+export const bandOf = (dist: number): Band => dist >= 90 ? 0 : dist >= 30 ? 1 : dist >= 8 ? 2 : 3;
 export const SUN_DIR = new THREE.Vector3(-.62, 1, -.42).normalize();
 /** Camera elevation (radians above the horizon): steep three-quarter top-down view. */
 export const PITCH = .8;
@@ -37,15 +47,17 @@ export class CameraRig {
   update(dt: number, panX: number, panZ: number) {
     const sp = this.dist * .9 * dt;
     this.gx = clamp(this.gx + panX * sp, -HW, HW); this.gz = clamp(this.gz + panZ * sp, -HH, HH);
+    // keep the view on the map: the visible ground half-height is hh / sin(pitch); a map smaller than the view stays centred
+    { const vz = this.gdist * HALF / Math.sin(PITCH), lim = HH + 2 - vz; this.gz = lim > 0 ? clamp(this.gz, -lim - .5, lim + .5) : 0; }
     const k = 1 - Math.exp(-dt * 7);
     this.tx = lerp(this.tx, this.gx, k); this.tz = lerp(this.tz, this.gz, k); this.dist = lerp(this.dist, this.gdist, k);
     const cam = this.camera, hh = this.dist * HALF, hw = hh * this.aspect;
     cam.left = -hw; cam.right = hw; cam.top = hh; cam.bottom = -hh; cam.updateProjectionMatrix();
     cam.position.set(this.tx, .5 + BACK * Math.sin(PITCH), this.tz + BACK * Math.cos(PITCH));
     cam.lookAt(this.tx, .5, this.tz); cam.updateMatrixWorld();
-    const S = clamp(this.dist * .8, 3, 95), sc = this.sun.shadow.camera, texel = 2 * S / this.shadowSize;
+    const S = clamp(this.dist * .8, 3, 120), sc = this.sun.shadow.camera, texel = 2 * S / this.shadowSize;
     const fx = Math.round(this.tx / texel) * texel, fz = Math.round(this.tz / texel) * texel;
-    sc.left = -S; sc.right = S; sc.top = S; sc.bottom = -S; sc.near = 1; sc.far = 140; sc.updateProjectionMatrix();
+    sc.left = -S; sc.right = S; sc.top = S; sc.bottom = -S; sc.near = 1; sc.far = 200; sc.updateProjectionMatrix();
     this.sun.target.position.set(fx, 0, fz); this.sun.position.set(fx + SUN_DIR.x * 70, SUN_DIR.y * 70, fz + SUN_DIR.z * 70); this.sun.target.updateMatrixWorld();
     this.sun.shadow.normalBias = texel * 1.2;
   }

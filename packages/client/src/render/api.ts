@@ -31,6 +31,8 @@ export interface WorldRendererApi {
   panTo(x: number, z: number): void;
   /** World-space corners of the visible map area, for drawing the minimap viewport. */
   viewPolygon(): [number, number][] | null;
+  /** Fly to a zoom band: 0 theatre, 1 front, 2 battle, 3 close. */
+  zoomBand(b: number): void;
   /** Distance from the camera to the map; small values mean the player is zoomed into the fighting. */
   cameraDistance(): number;
   /** Id of the battle closest to the screen centre when zoomed in, else null. */

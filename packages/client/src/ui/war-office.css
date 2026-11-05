@@ -378,3 +378,13 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
   #side .gt b{font-size:18px}
   #side .works.str-row{padding-top:0;padding-bottom:4px}
 }
+
+/* zoom bands */
+.radar .zoom-seg{display:grid;grid-template-columns:repeat(4,1fr)}
+.radar .zoom-seg button{min-height:24px;padding:0 2px;font-size:11px}
+.radar .zoom-seg button[aria-pressed=true]{background:linear-gradient(180deg,#2c4a1e,#1a2c12);color:var(--lcd);box-shadow:inset 0 0 0 1px var(--lcd-dim),0 0 6px rgba(159,224,112,.25)}
+/* theatre band: the staff map. Corps merge into the region marker, city names go, region names grow. */
+#labels.band0 .tl.cp,#labels.band0 .cl{display:none!important}
+#labels.band0 .tl .nm{font-size:12.5px;letter-spacing:.12em}
+#labels.band0 .tl .bd{display:none}
+@media (max-width:760px){ .radar .zoom-seg{display:none} }

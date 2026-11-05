@@ -7,8 +7,8 @@ import { lerp } from './util';
 import { battleAnchor } from '@riskrts/shared';
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
-function garrisonLabel(r: GameState['regions'][number]) {
-  const v = r.vis ?? 3, n = r.fr ? totalUnits(mainOf(r)) : totalUnits(r.units);
+function garrisonLabel(r: GameState['regions'][number], merged = false) {
+  const v = r.vis ?? 3, n = r.fr && !merged ? totalUnits(mainOf(r)) : totalUnits(r.units);
   if (v >= 3) return String(n);
   if (r.est) return r.est[1] > 0 ? `~${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '~0';
   if (v === 2) return `${n}?`;
@@ -52,6 +52,9 @@ export class Labels {
   private readonly battles = new Map<number, BattleLabel>();
   private readonly corps = new Map<string, CorpsLabel>();
   private layer = 0;
+  private band = -1;
+  /** Zoom band (camera.ts): the theatre band merges each region's corps into one marker and drops city names. */
+  setBand(b: number) { if (b === this.band) return; this.band = b; for (let k = 0; k < 4; k++) this.root.classList.toggle('band' + k, k === b); }
   /** Map layer: 0 everything, 1 troops, 2 industry (set as a class on the label layer; the stylesheet does the rest). */
   setLayer(l: number) { if (l === this.layer) return; this.layer = l; this.root.classList.toggle('ly1', l === 1); this.root.classList.toggle('ly2', l === 2); }
 
@@ -84,7 +87,7 @@ export class Labels {
       if (!rs || rs.battle >= 0) { this.hide(l); return; }
       const color = FACTIONS[rs.owner]?.color ?? '#888';
       if (color !== l.color) { l.color = color; l.el.style.setProperty('--c', color); }
-      const s = garrisonLabel(rs); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; }
       const names = showNames || i === ctx.sel || i === ctx.hover; if (names !== l.names) { l.names = names; l.nm.style.display = names ? '' : 'none'; }
       const isSel = i === ctx.sel, tg = ctx.isTarget(i);
       if (isSel !== l.sel) { l.sel = isSel; l.el.classList.toggle('sel', isSel); }

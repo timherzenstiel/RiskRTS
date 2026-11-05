@@ -1,6 +1,6 @@
 // Mouse, touch and keyboard input for the map. Space/Escape/1-4 belong to the React app and are deliberately not handled here.
 import * as THREE from 'three';
-import { CameraRig, MAX_DIST, MIN_DIST } from './camera';
+import { BANDS, CameraRig, MAX_DIST, MIN_DIST } from './camera';
 import { clamp } from './util';
 
 export interface InputHost {
@@ -55,9 +55,26 @@ export class Input {
     onWin('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || this.typing()) return;
       const k = e.key.toLowerCase(); if (PAN_KEYS.has(k)) this.keys.add(k);
+      // zoom bands: Z theatre, X front, C battle, V close (at the cursor when it is over the map)
+      const b = BANDS.findIndex(x => x.key === k);
+      if (b >= 0) { this.zoomBand(b); return; }
+      if (k === '+' || k === '=' || k === '-') { const r = h.rig; r.gdist = clamp(r.gdist * (k === '-' ? 1.5 : 1 / 1.5), MIN_DIST, MAX_DIST); }
     });
+    on(c, 'pointermove', (e) => { this.hoverAt = { x: e.clientX, y: e.clientY }; });
+    on(c, 'pointerleave', () => { this.hoverAt = null; });
     onWin('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     onWin('blur', () => this.keys.clear());
+  }
+
+  private hoverAt: { x: number; y: number } | null = null;
+
+  /** Fly to a zoom band, keeping the point under the cursor (or the screen centre) in place. */
+  zoomBand(b: number) {
+    const rig = this.h.rig, nd = BANDS[b].at, ff = nd / rig.gdist;
+    if (this.hoverAt && rig.screenToWorld(this.hoverAt.x, this.hoverAt.y, this.h.canvas.getBoundingClientRect(), this.b)) {
+      rig.gx = this.b.x + (rig.gx - this.b.x) * ff; rig.gz = this.b.z + (rig.gz - this.b.z) * ff;
+    }
+    rig.gdist = nd;
   }
 
   private typing() {

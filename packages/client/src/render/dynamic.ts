@@ -4,7 +4,7 @@
 import { DEF_KINDS, HW, armyPos, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { FxSystem } from './fxSystem';
-import { F_MAP } from './fxSystem';
+import { F_DUST, F_MAP } from './fxSystem';
 import type { Models } from './models';
 import type { LineBatch } from './pools';
 import { FLAGD, K, facCol } from './palette';
@@ -180,6 +180,11 @@ export class DynamicDraw {
     const nT = Math.min(8, u.tank), nI = Math.min(45, u.inf), nM = Math.min(6, u.mg), nA = Math.min(5, u.art);
     const TS = .15, IS = .055, MS = .085, AS = .14;
     const len = Math.ceil(nT / 2) * TS + Math.ceil(nI / 3) * IS + Math.ceil(nM / 2) * MS + nA * AS;
+    // a dust trail kicked up behind a column on the march (not for troops waiting at the start line or going by sea)
+    if (!a.sea && !a.wait && a.t > 0 && a.t < 1 && Math.random() < .35 + nT * .05) {
+      const r = Math.random(), bx = x - s * len * (.5 + r * .6), bz = z - c * len * (.5 + r * .6);
+      this.fx.spawn(bx + (Math.random() - .5) * .08, y0 + .03, bz + (Math.random() - .5) * .08, (Math.random() - .5) * .03, .03, (Math.random() - .5) * .03, 0, 1.8, .05, .16, K.dust, F_DUST);
+    }
     let fwd = len / 2;
     // one helper places a figure `fwd` along the march and `side` to the right, standing on the ground
     const P = (side: number) => { const px = x + s * fwd + c * side, pz = z + c * fwd - s * side; return [px, this.hAt(px, pz, y0), pz] as const; };

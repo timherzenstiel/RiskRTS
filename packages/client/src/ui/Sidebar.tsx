@@ -4,6 +4,7 @@ import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income } from '@riskrts/s
 import { useSim, useUi } from '../game/store';
 import { BANDS, bandOf } from '../render/camera';
 import { click } from './actions';
+import { Sfx } from '../audio/sfx';
 import { Drawer } from './Drawer';
 import { Minimap } from './Minimap';
 import { rendererRef } from './refs';
@@ -26,7 +27,7 @@ function ZoomPicker() {
   const d = rendererRef.current?.cameraDistance() ?? 55, cur = bandOf(d);
   return (
     <div className="seg zoom-seg" role="group" aria-label="Zoom">
-      {BANDS.map((b, i) => <button key={b.name} aria-pressed={cur === i} title={`${b.name} view (${b.key.toUpperCase()})`} onClick={() => { click(); rendererRef.current?.zoomBand(i); }}>{b.name}<kbd>{b.key.toUpperCase()}</kbd></button>)}
+      {BANDS.map((b, i) => <button key={b.name} aria-pressed={cur === i} title={`${b.name} view (${b.key.toUpperCase()})`} onClick={() => { Sfx.clunk(); rendererRef.current?.zoomBand(i); }}>{b.name}<kbd>{b.key.toUpperCase()}</kbd></button>)}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 import { BARRAGES, SHELLS, STANCES, buildWorld, groundUnits, autoGoIn, moveK, shellsFor, type Barrage, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { click } from './actions';
+import { Sfx } from '../audio/sfx';
 
 const SHORT_STANCE = ['Balanced', 'Aggressive', 'Defensive', 'Hold'] as const;
 const STANCE_TIP = [
@@ -72,7 +73,7 @@ export function FrontControls({ g, me, b, compact }: { g: GameState; me: number;
           {BARRAGES.map((n, i) => (
             <button key={n} aria-pressed={lvl === i} disabled={i === 2 && shells < SHELLS.shot}
               title={i === 0 ? 'Guns hold fire: saves shells and hides your strength' : i === 1 ? 'Steady fire · about one shell per battery every 10 s' : 'Heavy barrage · 80% more fire and suppression, twice the shells'}
-              onClick={() => send({ t: 'barrage', battle: b.id, level: i as Barrage })}>{i === 0 ? 'Off' : n}</button>
+              onClick={() => { Sfx.ratchet(); useUi.getState().order({ t: 'barrage', battle: b.id, level: i as Barrage }); }}>{i === 0 ? 'Off' : n}</button>
           ))}
         </div>
         {att && !b.go && <button className="btn sm primary otop" onClick={() => send({ t: 'charge', battle: b.id })} title="The attackers leave the start line now"><span className="cover" aria-hidden="true" /><span className="otop-l">Over the top</span>{goIn > 0 ? <small> · auto {goIn}s</small> : null}</button>}

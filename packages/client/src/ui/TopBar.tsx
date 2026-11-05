@@ -5,6 +5,7 @@ import { dateStr, useSim, useUi } from '../game/store';
 import { buildWorld } from '@riskrts/shared';
 import { GuestSession } from '../game/session';
 import { click } from './actions';
+import { Sfx } from '../audio/sfx';
 import { Scoreboard } from './Scoreboard';
 import { rendererRef } from './refs';
 import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
@@ -33,6 +34,7 @@ function Needle({ v, unrest }: { v: number; unrest: number }) {
 /** Radio dispatch ticker: the newest event, typed out. Clicking it opens the event's region or report. */
 function Ticker() {
   const last = useUi(s => s.log[0]);
+  useEffect(() => { if (last) Sfx.teletype(); }, [last?.id]);
   if (!last) return <div className="ticker"><span className="tk-t">Awaiting dispatches…</span></div>;
   const open = () => {
     if (last.report !== undefined) { useUi.setState({ reportId: last.report }); useUi.getState().setOverlay('reports'); return; }

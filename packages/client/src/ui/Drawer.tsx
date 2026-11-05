@@ -4,6 +4,7 @@ import { WEATHER, TREATY_NAMES, railOpen, railsOf, weatherAt, activeSpies, techO
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useSim, useUi, dateStr, type Tab } from '../game/store';
 import { click } from './actions';
+import { Sfx } from '../audio/sfx';
 import { CloseIcon, Icon, SupplyIcon } from './icons';
 import { rendererRef } from './refs';
 import { AttackBudget, BuildTab, FortifyTab, MarchTab, RecruitTab, SharePicker, NeighbourRow, knownTroops, reportAge } from './DrawerTabs';
@@ -136,7 +137,7 @@ export function Drawer() {
       {own ? (
         <>
           <div className="tabs" role="tablist" aria-label="Orders">
-            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { click(); ui().setTab(k); }}>{l}</button>)}
+            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l}</button>)}
           </div>
           <div className="tb-body" role="tabpanel">
             {tab === 'rec' && <RecruitTab region={r} id={sel} />}

@@ -282,6 +282,12 @@ class SfxEngine {
 
   /** Relay click for buttons and selection. */
   click() { if (!this.ok('click', 40)) return; const t = this.ctx!.currentTime, o = this.out(.1, undefined, undefined, 0, 'ui'); this.hit(o, t, .008, 3800, .8, .25, 'highpass'); this.tone(o, t, 1700, 900, .02, .1, 'triangle'); }
+  /** Metal clunk of a sidebar tab or switch plate. */
+  clunk() { if (!this.ok('clunk', 60)) return; const t = this.ctx!.currentTime, o = this.out(.25, undefined, undefined, .04, 'ui', .8); this.hit(o, t, .05, 420, 1.4, .5, 'bandpass', this.brown); this.tone(o, t, 210, 150, .06, .14, 'square'); this.hit(o, t + .012, .01, 3200, 1, .12, 'highpass'); }
+  /** Ratchet of the barrage lever: a few quick clicks. */
+  ratchet() { if (!this.ok('ratchet', 120)) return; const t = this.ctx!.currentTime, o = this.out(.35, undefined, undefined, .03, 'ui', .8); for (let k = 0; k < 4; k++) this.hit(o, t + k * .028, .006, 2600 - k * 200, 2, .3, 'bandpass'); this.tone(o, t + .1, 180, 120, .05, .12, 'square'); }
+  /** Teletype chatter for a new dispatch on the ticker. */
+  teletype() { if (!this.ok('teletype', 900)) return; const t = this.ctx!.currentTime, o = this.out(.6, undefined, undefined, .02, 'ui', .45); for (let k = 0; k < 7; k++) this.hit(o, t + k * .045 + Math.random() * .015, .005, 3000 + Math.random() * 1500, 1.5, .18, 'bandpass'); }
   /** Rubber stamp on an order: march, air strike, assault. */
   order() { if (!this.ok('order', 90)) return; const t = this.ctx!.currentTime, o = this.out(.3, undefined, undefined, .05, 'ui'); this.hit(o, t, .09, 260, .7, .9, 'lowpass', this.brown); this.hit(o, t, .012, 2600, .8, .25, 'highpass'); this.tone(o, t, 130, 70, .08, .3); }
   /** Field-telephone buzzer: the order was refused. */

@@ -3,7 +3,7 @@
 // keeps its procedural colours, so `uGOn` fades them in.
 import * as THREE from 'three';
 
-export const GROUND_LAYERS = ['grass', 'dirt', 'mud', 'rock', 'sand', 'field'] as const;
+export const GROUND_LAYERS = ['grass', 'dirt', 'mud', 'rock', 'sand', 'field', 'sandbags', 'planks'] as const;
 const SIZE = 1024;
 
 export const uGTex: { value: THREE.Texture } = { value: placeholder() };

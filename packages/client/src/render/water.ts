@@ -19,12 +19,12 @@ export class Water {
   float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
   float vn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }
   void main(){
-    vec3 deep=vec3(.075,.11,.135);
+    vec3 deep=vec3(.06,.12,.19);
     vec2 wp=(vMap-uSize*.5)*uTS;
     if(vMap.x<0.||vMap.y<0.||vMap.x>uSize.x||vMap.y>uSize.y){ gl_FragColor=vec4(pow(deep*.6,vec3(2.2)),1.); return; }
     vec2 q=floor(wp*48.)/48.;
     float d=max(0.,(texture2D(uCoast,vMap/uSize).r*255.-40.)/12.);
-    vec3 c=mix(vec3(.2,.29,.28),vec3(.13,.21,.24),smoothstep(.3,4.,d)); c=mix(c,deep,smoothstep(5.,18.,d));
+    vec3 c=mix(vec3(.24,.36,.42),vec3(.12,.22,.31),smoothstep(.3,4.,d)); c=mix(c,deep,smoothstep(5.,18.,d));
     float n=vn(q*1.6+vec2(uTime*.07,uTime*.05))*.6+vn(q*4.+vec2(-uTime*.11,uTime*.09))*.4;
     c*=.93+.14*n;
     float w=sin((q.x*1.3+q.y*.8)*3.1+uTime*.9+n*6.)*.5+.5;

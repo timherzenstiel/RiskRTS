@@ -7,6 +7,7 @@ import { HH, HW, TS, type GameState } from '@riskrts/shared';
 import { BF_SS, type BorderField } from './borderField';
 import type { Terrain } from './terrain';
 import { col } from './util';
+import { uGOn, uGTex } from './groundTex';
 
 /** Distance of each line from the border (tiles), and the half width of the cut (tiles) for trench level lv. */
 export const TR_D = [.42, 1.12];
@@ -29,7 +30,7 @@ type Seg = [number, number, number, number];
 
 export class Trenches {
   private readonly group = new THREE.Group();
-  private readonly mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  private readonly mat = trenchMaterial();
   private readonly meshes = new Map<string, THREE.Mesh>();
   /** Candidate cells per (region pair, line): indices of field cells whose corners all lie on that pair's side near the line. */
   private readonly cells = new Map<string, Int32Array>();
@@ -92,39 +93,47 @@ export class Trenches {
       return (dist[i] * (1 - tx) + dist[i + 1] * tx) * (1 - ty) + (dist[i + W] * (1 - tx) + dist[i + W + 1] * tx) * ty;
     };
     const hw = trHalf(L, lv) * TS, pw = .075 * TS, dep = (L === 0 ? .03 + .004 * lv : .024), ter = this.terrain;
-    // cross-section: offset across (towards the interior = +), height above ground, colour
-    const prof: [number, number, THREE.Color][] = [
-      [-(hw + pw), 0, C.grass], [-(hw + pw * .5), .011 + .002 * lv, C.bag], [-hw * 1.02, .006, C.bag2], [-hw * .82, -dep, C.wall], [-hw * .55, -dep, C.floor],
-      [hw * .55, -dep, C.floor], [hw * .82, -dep, C.wall], [hw * 1.02, .004, C.earth], [hw + pw * .5, .007, C.earth], [hw + pw, 0, C.grass],
+    // cross-section: offset across (towards the interior = +), height above ground, colour, texture layer of the band to the next point
+    // (0 grass, 1 dirt, 2 mud, 6 sandbags, 7 planks; groundTex.ts)
+    const prof: [number, number, THREE.Color, number][] = [
+      [-(hw + pw), 0, C.grass, 6], [-(hw + pw * .5), .011 + .002 * lv, C.bag, 6], [-hw * 1.02, .006, C.bag2, 7], [-hw * .82, -dep, C.wall, 2], [-hw * .55, -dep, C.floor, 7],
+      [hw * .55, -dep, C.floor, 2], [hw * .82, -dep, C.wall, 7], [hw * 1.02, .004, C.earth, 1], [hw + pw * .5, .007, C.earth, 1], [hw + pw, 0, C.grass, 0],
     ];
-    const pos: number[] = [], colr: number[] = [], idx: number[] = [];
+    const pos: number[] = [], colr: number[] = [], uvs: number[] = [], lay: number[] = [], idx: number[] = [];
     for (const ln of lines) {
       // resample the centre line evenly, push each point out by the fire-bay offset
       const pts = resample(ln.map(([x, y]) => [wx(x), wz(y)] as [number, number]), .008);
       if (pts.length < 2) continue;
-      const base = pos.length / 3;
+      const ring: [number, number, number][][] = [];
+      let arc = 0;
       for (let q = 0; q < pts.length; q++) {
         const [x, z] = pts[q], [xa, za] = pts[Math.max(0, q - 1)], [xb, zb] = pts[Math.min(pts.length - 1, q + 1)];
         let tx = xb - xa, tz = zb - za; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
         let nx = -tz, nz = tx; if (distAt(x + nx * .02, z + nz * .02) < distAt(x - nx * .02, z - nz * .02)) { nx = -nx; nz = -nz; }
         let o = 0; for (let it = 0; it < 3; it++) o = zig(x + nx * o, z + nz * o, L) * TS;
         const cx = x + nx * o, cz = z + nz * o;
-        for (const [off, h, c] of prof) {
-          const px = cx + nx * off, pz = cz + nz * off;
-          pos.push(px, ter.surfaceAt(px, pz) + h + .002, pz);
-          const sh = .9 + .2 * hashf(Math.floor(q / 3) * 7 + off * 1e3);
-          colr.push(c.r * sh, c.g * sh, c.b * sh);
-        }
+        ring.push(prof.map(([off]) => { const px = cx + nx * off, pz = cz + nz * off; return [px, 0, pz]; }));
+        for (let j = 0; j < prof.length; j++) { const r = ring[q][j]; r[1] = ter.surfaceAt(r[0], r[2]) + prof[j][1] + .002; }
       }
-      const NP = prof.length;
-      for (let q = 0; q < pts.length - 1; q++) for (let j = 0; j < NP - 1; j++) {
-        const a = base + q * NP + j, b = a + 1, c = a + NP, d = c + 1;
-        idx.push(a, c, b, b, c, d);
+      // each band gets its own vertices so its texture layer does not blend into the next
+      for (let j = 0; j < prof.length - 1; j++) {
+        const base = pos.length / 3, [o0, , c0, ly] = prof[j], [o1, , c1] = prof[j + 1];
+        arc = 0;
+        for (let q = 0; q < ring.length; q++) {
+          if (q) { const a0 = ring[q - 1][j], a1 = ring[q][j]; arc += Math.hypot(a1[0] - a0[0], a1[2] - a0[2]); }
+          const sh = .9 + .2 * hashf(Math.floor(q / 3) * 7 + j);
+          for (const [r, off, c] of [[ring[q][j], o0, c0], [ring[q][j + 1], o1, c1]] as [[number, number, number], number, THREE.Color][]) {
+            pos.push(r[0], r[1], r[2]); colr.push(c.r * sh, c.g * sh, c.b * sh);
+            uvs.push(arc * 9, (off + r[1] * 1.5) * 9); lay.push(ly);
+          }
+        }
+        for (let q = 0; q < ring.length - 1; q++) { const a = base + q * 2, b2 = a + 1, c = a + 2, d = a + 3; idx.push(a, c, b2, b2, c, d); }
       }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+    geo.setAttribute('tuv', new THREE.Float32BufferAttribute(uvs, 2)); geo.setAttribute('lay', new THREE.Float32BufferAttribute(lay, 1));
     geo.setIndex(idx); geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, this.mat); m.receiveShadow = true; m.castShadow = true; m.frustumCulled = true;
     geo.computeBoundingSphere();
@@ -132,6 +141,19 @@ export class Trenches {
   }
 
   dispose() { for (const m of this.meshes.values()) m.geometry.dispose(); this.mat.dispose(); this.group.removeFromParent(); }
+}
+
+/** Lambert with vertex colours, replaced by the painted texture layer of each band once the textures have loaded. */
+function trenchMaterial() {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, { uGTex, uGOn });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float lay; attribute vec2 tuv; varying float vLay; varying vec2 vTUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLay=lay; vTUv=tuv;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform highp sampler2DArray uGTex; uniform float uGOn; varying float vLay; varying vec2 vTUv;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  { vec3 t=texture(uGTex,vec3(vTUv,floor(vLay+.5))).rgb; diffuseColor.rgb=mix(diffuseColor.rgb,t,uGOn); }');
+  };
+  return m;
 }
 
 function hashf(n: number) { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }

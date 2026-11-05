@@ -190,8 +190,6 @@ export class GroundDetail {
       }
       if (T.cityT[i]) continue;
       if (T.fieldT[i]) {
-        // a few bushes along the field's edge (the painted fields have soft, irregular edges, so no straight hedgerows)
-        for (let n = 0; n < 2; n++) if (hs(20 + n) < .35) { const bx = jx(21 + n), bz = jz(22 + n), s0 = .018 + hs(23 + n) * .016; add(bx, yAt(bx, bz), bz, s0, s0 * .9, s0, shade(C.hedge, .85 + hs(24 + n) * .35)); }
         if (hs(3) < .035) { // farmstead
           const fx = jx(4), fz = jz(4), h = yAt(fx, fz);
           add(fx, h, fz, .055, .035, .045, C.wall); add(fx, h + .035, fz - .011, .062, .012, .026, shade(C.roof, 1.2)); add(fx, h + .035, fz + .011, .062, .012, .026, shade(C.roof, .8)); add(fx, h + .047, fz, .062, .006, .008, C.roof);

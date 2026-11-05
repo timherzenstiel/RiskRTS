@@ -87,7 +87,13 @@ vec3 groundPaint(vec3 wp, vec3 wn){
   if(uGOn>0.&&!snowy){
     vec3 bc=dec(nat.rgb);
     float wd=smoothstep(.5,.66,m2+(m-.5)*.35)+(green?0.:.55);
-    vec3 tc=field?gt(5.,p):sandy?gt(4.,p):mix(gt(0.,p),gt(1.,p),clamp(wd,0.,1.));
+    vec3 tg0=mix(gt(0.,p),gt(1.,p),clamp(wd,0.,1.)), tc=tg0;
+    if(field){
+      // patchwork: pasture, green or ripening crops, fresh ploughland; furrows turn from field to field
+      float fk=h1(floor(floor(q/uTS+uGrid*.5)/2.)+.37); vec2 fp=bit(flW,32.)?p:p.yx;
+      vec3 crop=mix(gt(0.,p),gt(5.,fp),.45);
+      tc=fk<.35?gt(0.,p)*vec3(1.05,1.08,.9):fk<.55?crop*vec3(1.,1.12,.85):fk<.72?crop*vec3(1.45,1.3,.75):gt(5.,fp);
+    } else if(sandy) tc=gt(4.,p);
     tc=mix(tc, tc*bc/max(.02,lum(bc))*lum(tc), field?.25:.4);
     c=mix(c,tc,uGOn);
   }
@@ -118,8 +124,14 @@ vec3 groundPaint(vec3 wp, vec3 wn){
   }
   if(river){
     float d=netDist(t,f,8.);
-    if(d<.19){ c=vec3(.03,.05,.055)*(.9+.3*m); if(px>.95) c+=.05; if(d>.15) c=mix(c,vec3(.12,.13,.11),.6); }
-    else if(d<.28){ c=mix(c,vec3(.06,.05,.035),.65); if(px>.8) c=dec(vec3(.33,.4,.2)); }
+    if(d<.19){
+      // water: deep blue in the channel, lighter over the shallows, ripples, glints and a thin foam line at the bank
+      float k=d/.19; vec3 deep=dec(vec3(.17,.29,.37)), shal=dec(vec3(.33,.45,.46));
+      c=mix(deep,shal,smoothstep(.35,1.,k))*(.88+.24*n1(p*vec2(38.,22.)+n1(p*9.)*2.));
+      if(h1(floor(p*110.))>.988) c+=dec(vec3(.55));
+      c=mix(c,dec(vec3(.66,.68,.6)),smoothstep(.82,.95,k)*smoothstep(.35,.7,n1(p*70.))*.7);
+    }
+    else if(d<.28){ float k=(d-.19)/.09; c=mix(dec(vec3(.27,.21,.14))*(.8+.3*m),c,smoothstep(.2,1.,k)); if(px>.86&&k>.3) c=dec(vec3(.33,.4,.2)); }
   }
   // rock faces on steep ground: orange-brown strata
   float slope=1.-wn.y;

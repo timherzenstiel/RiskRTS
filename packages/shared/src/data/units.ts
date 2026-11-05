@@ -66,5 +66,12 @@ export const SLOT_USE: Record<DefKind | 'sand' | 'wire', number> = { pill: 1, fo
 export const WIRE_HP = 30;
 /** Aircraft reach: regions this many borders away. */
 export const AIR_RANGE = 2;
+/**
+ * Shells: production per convoy (base, per factory, per capital), what one supply buys, what one gun shot uses, the stock a
+ * power starts with, and the local dump each gun brings into a battle (used when the side is cut off from its stockpile).
+ */
+export const SHELLS = { base: 2, factory: 3, capital: 1, perSupply: 4, shot: 1 / 3, start: 40, dump: 10 } as const;
+/** Barrage: rate of fire of the guns at light/heavy, suppression per shell landing, its half-life, and the counter-battery share. */
+export const BARRAGE = { heavy: 1.8, rationed: 4, supp: 2.5, half: 20, cb: .3, cbAir: .2, cbRange: 1.5 } as const;
 /** Seconds between supply convoys. Every power receives supply at the same instant. */
 export const TICK_SECONDS = 20;

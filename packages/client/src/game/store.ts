@@ -8,8 +8,8 @@ import { Radio } from '../audio/radio';
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
 export type Tab = 'rec' | 'build' | 'fort' | 'march';
 export type OrderKind = 'march' | 'air';
-export type Overlay = null | 'menu' | 'orders' | 'help' | 'end';
-export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number }
+export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports';
+export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 interface Ui {
   screen: Screen;
@@ -20,6 +20,8 @@ interface Ui {
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
   fortMarker: [number, number] | null;
   overlay: Overlay; scoreOpen: boolean;
+  /** After-action report shown in the reports sheet. */
+  reportId: number;
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
   tut: number; tips: boolean; quality: 0 | 1 | 2; sound: boolean;
@@ -71,7 +73,7 @@ let feedId = 1;
 Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
   sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -124,7 +126,7 @@ export const useUi = create<Ui>((set, get) => ({
       Radio.event(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
-      items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region });
+      items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region, report: d.report });
     }
     set(st => ({ rev: st.rev + 1, feed: items.length ? [...st.feed, ...items].slice(-4) : st.feed, log: items.length ? [...items.reverse(), ...st.log].slice(0, 60) : st.log }));
     if (items.length) for (const it of items) setTimeout(() => set(st => ({ feed: st.feed.filter(f => f.id !== it.id) })), 10000);

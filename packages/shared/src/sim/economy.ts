@@ -1,6 +1,6 @@
 // Supply income, convoys, supply lines, reinforcement of battered formations and war weariness.
 import { CONT, CONT_KEYS } from '../data/regions';
-import { DT, FORMATION, TICK_SECONDS, UNIT_TYPES } from '../data/units';
+import { DT, FORMATION, SHELLS, TICK_SECONDS, UNIT_TYPES } from '../data/units';
 import { consolidate, controls, emit, updateContested, world } from './core';
 import { addUnits } from './commands';
 import { moraleCap } from './battle';
@@ -33,6 +33,13 @@ export function income(g: GameState, fid: number): number {
   return Math.max(1, Math.round(v * (1 - WW_INCOME * ww / 100)));
 }
 
+/** Shells per convoy: a base output plus every supplied factory and the capital. */
+export function shellIncome(g: GameState, fid: number): number {
+  let v = SHELLS.base;
+  for (const r of g.regions) if (controls(r, fid) && !r.cut) { if (r.factory) v += SHELLS.factory; if (r.capitalOf === fid) v += SHELLS.capital; }
+  return v;
+}
+
 /**
  * Supply lines: a region is supplied when an unbroken chain of the power's own regions (land borders or sea lanes between
  * two of its own regions) leads back to its capital, a factory region or its home territory. Recomputes `cut` for every region.
@@ -59,7 +66,7 @@ export function supplyTick(g: GameState) {
   g.day += 7;
   updateSupplyLines(g, true);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
-  for (const f of g.factions) { if (!f.alive) continue; const inc = income(g, f.id); f.supply += f.ai ? Math.round(inc * d.inc) : inc; }
+  for (const f of g.factions) { if (!f.alive) continue; const inc = income(g, f.id); f.supply += f.ai ? Math.round(inc * d.inc) : inc; f.shells = (f.shells ?? 0) + shellIncome(g, f.id); }
   for (const r of g.regions) if (r.barracks && r.contested < 0 && !r.cut && g.factions[r.owner].alive && g.factions[r.owner].ww < WW_NO_VOLUNTEERS) addUnits(g, r, 'inf', 1);
   for (const r of g.regions) {
     if (r.owner < 0 || r.battle >= 0) continue;

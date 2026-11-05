@@ -11,7 +11,7 @@ import { stepBattle } from './battle';
 import { buildMissions } from './missions';
 import { TICK_SECONDS } from '../data/units';
 import { DEFAULT_SETTINGS, type GameSettings, type GameState } from './types';
-import { DT } from '../data/units';
+import { DT, SHELLS } from '../data/units';
 
 export interface GameOptions {
   seed?: number;
@@ -27,10 +27,10 @@ export interface GameOptions {
 export function createGame(opt: GameOptions): GameState {
   const W = world(), seed = (opt.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0, R = new Rng(seed);
   const g: GameState = {
-    v: 3, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
+    v: 4, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
-    factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0 })),
-    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], over: false, winner: null, nextId: 1,
+    factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start })),
+    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], over: false, winner: null, nextId: 1,
     stats: { won: Array(NUM_FACTIONS).fill(0), lost: Array(NUM_FACTIONS).fill(0) },
     events: [], fx: opt.fx === false ? null : [],
   };
@@ -56,7 +56,8 @@ const fullStrength = (u: Units) => { const m = emptyUnits(); for (const k of UNI
 /** Bring a saved game from an older version up to date. Returns null if it cannot be read. */
 export function migrateState(s: GameState & { v: number }): GameState | null {
   if (!s || !Array.isArray(s.regions)) return null;
-  if (s.v === 3) return s;
+  if (s.v === 4) return s;
+  if (s.v === 3) return migrate3(s);
   if (s.v !== 2) return null;
   const W = world();
   type Old = GameState['regions'][number] & { trench?: number };
@@ -69,7 +70,23 @@ export function migrateState(s: GameState & { v: number }): GameState | null {
   for (const a of s.armies) { a.men ??= fullStrength(a.units); a.mor ??= 75; }
   for (const b of s.battles) { b.tr ??= 0; b.sand ??= 0; b.wire ??= 0; b.wire0 ??= 0; b.mor ??= {}; b.lost ??= {}; b.lastJoin ??= b.age; }
   s.intel = s.factions.map(() => []); s.spies = [];
-  s.v = 3; updateSupplyLines(s);
+  (s as { v: number }).v = 3; updateSupplyLines(s);
+  return migrate3(s);
+}
+
+/** Version 3 → 4: battle levers and shells. Stockpiles start from the guns each power has; battles in progress get default levers. */
+function migrate3(s: GameState): GameState {
+  for (const f of s.factions) {
+    let guns = 0; for (const r of s.regions) if (r.owner === f.id) guns += r.units.art + r.defs.filter(d => d.k === 'fort' && d.f === f.id).length;
+    f.shells ??= SHELLS.start + guns * SHELLS.dump;
+  }
+  for (const r of s.regions) r.stance ??= 0;
+  for (const b of s.battles) {
+    b.bar ??= {}; b.st ??= {}; b.supp ??= {}; b.ammo ??= {}; b.used ??= {}; b.lostT ??= {}; b.mor0 ??= { ...b.mor }; b.reach ??= 99; b.craters ??= 0;
+    b.go ??= b.age > 30;
+  }
+  s.reports ??= [];
+  s.v = 4;
   return s;
 }
 

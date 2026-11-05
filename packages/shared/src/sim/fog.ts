@@ -85,7 +85,7 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   return {
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
     factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false,
-    defs, works, mor: 70, home: r.home, cut: false, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1,
+    defs, works, mor: 70, home: r.home, cut: false, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
     vis, seen: known ? known.day : undefined, est: vis >= 1 ? estimate(g, r) : undefined,
   };
 }
@@ -103,6 +103,7 @@ export function fogView(g: GameState, fid: number): GameState {
     battles: g.battles.filter(seeBattle),
     intel: g.intel.map((row, i) => i === fid ? row : []),
     spies: g.spies.filter(s => s.f === fid),
+    reports: (g.reports ?? []).filter(r => g.over || r.sides.some(s => s.f === fid)).slice(-20),
     viewer: fid,
   };
 }

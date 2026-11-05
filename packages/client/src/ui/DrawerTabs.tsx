@@ -1,6 +1,6 @@
 // The order tabs of the region drawer: Recruit, Build, Fortify, March (with air strikes and reconnaissance).
 import {
-  AIR_RANGE, COST, DT, FACTIONS, FORMATION, MAX_SAND, MAX_TRENCH, MAX_WIRE, SLOT_USE, UNIT_TYPES, UT, buildWorld, fortCost, groundUnits, hops, offensives, slotsMax, slotsUsed, worksAt,
+  AIR_RANGE, COST, DT, FACTIONS, FORMATION, MAX_SAND, MAX_TRENCH, MAX_WIRE, SHELLS, SLOT_USE, UNIT_TYPES, UT, buildWorld, fortCost, groundUnits, hops, offensives, slotsMax, slotsUsed, worksAt,
   type FortKind, type RegionState, type UnitType,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -62,6 +62,15 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
       <BuildRow icon="factory" name="Factory" desc="+2 supply per convoy · unlocks tanks · a supply depot" label={region.factory ? 'Built' : <><SupplyIcon />{COST.factory}</>} disabled={region.factory || supply < COST.factory} onBuy={() => build(id, 'factory')} />
       <BuildRow icon="barracks" name="Barracks" desc="One volunteer battalion per convoy (stops when the war weariness is high)" label={region.barracks ? 'Built' : <><SupplyIcon />{COST.barracks}</>} disabled={region.barracks || supply < COST.barracks} onBuy={() => build(id, 'barracks')} />
       <BuildRow icon="airfield" name="Airfield" desc="Unlocks squadrons and reconnaissance flights here" label={region.airfield ? 'Built' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || supply < COST.airfield} onBuy={() => build(id, 'airfield')} />
+      <div className="lbl"><span>Munitions · {Math.floor(sim.g.factions[sim.me].shells ?? 0)} shells in stock</span></div>
+      <div className="it">
+        <span className="ic"><Icon k="art" /></span>
+        <div className="tx"><b>Shell production</b><small>Turn supply into shells for the guns · 1 supply = {SHELLS.perSupply} shells</small></div>
+        <div className="buys">
+          <button className="buy" disabled={supply < 1} onClick={() => useUi.getState().order({ t: 'produce', kind: 'shells', n: 1 })}>+{SHELLS.perSupply} <SupplyIcon />1</button>
+          <button className="buy five" disabled={supply < 5} aria-label={`Buy ${SHELLS.perSupply * 5} shells for 5 supply`} onClick={() => useUi.getState().order({ t: 'produce', kind: 'shells', n: 5 })}>×5</button>
+        </div>
+      </div>
       <p className="note">Trenches, sandbags, wire and fixed defences are dug on a specific border in the <b>Fortify</b> tab.</p>
     </>
   );

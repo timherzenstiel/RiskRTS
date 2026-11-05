@@ -1,6 +1,6 @@
 // Top zone: sealed-orders chip, supply ring + powers pills, clock / speed / menu.
 import { useEffect, useRef, useState } from 'react';
-import { FACTIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText } from '@riskrts/shared';
+import { FACTIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText, shellIncome } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
@@ -33,6 +33,8 @@ export function TopBar() {
           <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next convoy in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
           <div className="rv"><small>Supply</small><b>{f.supply}</b></div>
           <div className="ri"><span>+{income(g, me)}</span><small>per convoy</small></div>
+          <div className="ww sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab.">
+            <small>Shells</small><b>{Math.floor(f.shells ?? 0)}<i>+{shellIncome(g, me)}</i></b></div>
           <div className={'ww' + (f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
             <small>Weariness</small><b>{Math.round(f.ww)}%</b></div>
         </div>

@@ -14,7 +14,16 @@ export interface FactionState {
   ww: number;
   /** Wounded men who return to under-strength formations with the next convoys. */
   wounded: number;
+  /** Artillery shells in the national stockpile. */
+  shells: number;
 }
+
+/** Battle stance of a garrison or an attacking army: balanced, aggressive, defensive, hold at all costs. */
+export type Stance = 0 | 1 | 2 | 3;
+export const STANCES = ['Balanced', 'Aggressive', 'Defensive', 'Hold at all costs'] as const;
+/** Barrage level of one side's guns in a battle: off, light, heavy. */
+export type Barrage = 0 | 1 | 2;
+export const BARRAGES = ['Hold fire', 'Light', 'Heavy'] as const;
 
 /** Field works on one border sector: trench depth (0..3), sandbag rows (0..2), barbed wire belts (0..2). */
 export interface Works { tr: number; sand: number; wire: number }
@@ -48,6 +57,12 @@ export interface RegionState {
   capitalOf: number;
   /** Id of the battle fought here, or -1. */
   battle: number;
+  /** Stance of the garrison (armies marching out take it with them). */
+  stance: Stance;
+  /** Fatigue bookkeeping: when marching troops last arrived, after how many borders in a row, and when a battle here last ended. */
+  arrT?: number; legs?: number; foughtT?: number;
+  /** Shell craters per border sector, left by past battles (visual). */
+  cr?: Record<number, number>;
 }
 
 export interface Army {
@@ -60,6 +75,12 @@ export interface Army {
   air?: boolean; ret?: boolean;
   /** Start position and travel vector in world units (wrapping the date line). */
   ax: number; az: number; dx: number; dz: number;
+  /** Stance the troops fight with. */
+  stance?: Stance;
+  /** Reinforcements: the battle (front) to join on arrival, if it still burns. */
+  front?: number;
+  /** Fatigue: borders marched in a row, and whether the troops come straight out of a battle. */
+  legs?: number; tired?: boolean;
 }
 
 export interface Agent {
@@ -68,6 +89,8 @@ export interface Agent {
   face: number; phase: number; moving: boolean; trench: boolean;
   /** Men in this formation at full health (hp tracks the share still fighting). */
   men?: number;
+  /** Guns: the current target is an enemy gun (counter-battery fire reaches further). */
+  cb?: boolean;
   /** Defence agents: the Defence they came from (they return to the region when the battle ends). */
   defId?: number; sector?: number;
   /** Aircraft: remaining time over the battlefield, home region, and whether it has left. */
@@ -96,6 +119,25 @@ export interface Battle {
   seen?: Record<number, number>; broke?: Record<number, number>;
   /** Per-side [faction, alive, total] when agents are not streamed (network mirrors only). */
   counts?: [number, number, number][];
+  /** Battle levers per faction: barrage level, stance. `go`: the attackers have gone over the top. */
+  bar: Record<number, Barrage>; st: Record<number, Stance>; go: boolean;
+  /** Suppression per faction 0..100: how pinned down that side is by the shells landing on it. */
+  supp: Record<number, number>;
+  /** Shells per faction: a local dump for a side cut off from its stockpile, and shells spent here. */
+  ammo: Record<number, number>; used: Record<number, number>;
+  /** After-action bookkeeping: men lost per unit type, morale at the start, closest the attackers got (along the axis), craters. */
+  lostT: Record<number, Units>; mor0: Record<number, number>; reach: number; craters: number;
+  /** Second line already used (elastic defence) per faction. */
+  fell?: Record<number, number>;
+}
+
+/** After-action report of a finished battle. */
+export interface Report {
+  id: number; region: number; from: number; day: number; dur: number;
+  attacker: number; def: number; winner: number | null;
+  /** How far the attackers got: 0 never left the start line, 1 no-man's-land, 2 the wire, 3 the enemy trench. */
+  reach: number;
+  sides: { f: number; lost: Units; shells: number; mor0: number; mor1: number }[];
 }
 
 /** Visual-only effects. Collected only when GameState.fx is an array; never affects the outcome. */
@@ -122,6 +164,9 @@ export type GameEvent =
   | { k: 'cut'; faction: number; region: number }
   | { k: 'surrender'; faction: number; region: number; n: number }
   | { k: 'breakthrough'; faction: number; region: number; from: number }
+  | { k: 'report'; id: number; region: number; sides: number[] }
+  | { k: 'overTop'; faction: number; region: number }
+  | { k: 'withdraw'; faction: number; region: number; to: number }
   | { k: 'over'; winner: number | null; reason?: string };
 
 export interface GameStats { won: number[]; lost: number[] }
@@ -136,9 +181,9 @@ export interface GameSettings {
 export const DEFAULT_SETTINGS: GameSettings = { attackCap: 3, pace: 1 };
 export const ATTACK_CAPS = [1, 2, 3, 5, 0] as const;
 export const PACES = [
-  { name: 'Fast', rof: .65, charge: 110, fuel: 30, desc: 'Short, bloody battles' },
-  { name: 'Normal', rof: 1, charge: 180, fuel: 40, desc: 'Length follows army size' },
-  { name: 'Long', rof: 1.6, charge: 300, fuel: 60, desc: 'Drawn-out sieges, time to reinforce' },
+  { name: 'Fast', rof: .65, charge: 110, go: 40, fuel: 30, desc: 'Short, bloody battles' },
+  { name: 'Normal', rof: 1, charge: 180, go: 75, fuel: 40, desc: 'Length follows army size' },
+  { name: 'Long', rof: 1.6, charge: 300, go: 120, fuel: 60, desc: 'Drawn-out sieges, time to reinforce' },
 ] as const;
 
 /** What a power last learned about a region from reconnaissance. */
@@ -150,7 +195,7 @@ export interface Intel {
 export interface Spy { id: number; f: number; region: number; eta: number }
 
 export interface GameState {
-  v: 3; seed: number; rng: number;
+  v: 4; seed: number; rng: number;
   time: number; day: number; supplyT: number; diff: number;
   cfg: GameSettings;
   regions: RegionState[]; factions: FactionState[];
@@ -158,6 +203,8 @@ export interface GameState {
   /** intel[faction][region]: the last reconnaissance report, or null. */
   intel: (Intel | null)[][];
   spies: Spy[];
+  /** After-action reports of the last battles (each power sees those it fought in). */
+  reports: Report[];
   /** Fog-of-war views only: the faction this view was made for. */
   viewer?: number;
   over: boolean; winner: number | null;
@@ -183,4 +230,12 @@ export type Command =
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */
   | { t: 'air'; from: number; to: number; frac: number }
   /** Storm the holdout defences in one of your own contested regions with its garrison. */
-  | { t: 'assault'; region: number };
+  | { t: 'assault'; region: number }
+  /** Battle levers: barrage level of your guns, send the attackers over the top, stance, reinforce a front, withdraw. */
+  | { t: 'barrage'; battle: number; level: Barrage }
+  | { t: 'charge'; battle: number }
+  | { t: 'stance'; region: number; s: Stance; battle?: number }
+  | { t: 'reinforce'; from: number; battle: number; frac: number }
+  | { t: 'withdraw'; battle: number }
+  /** Turn supply into shells (1 supply buys SHELLS_PER_SUPPLY shells). */
+  | { t: 'produce'; kind: 'shells'; n: number };

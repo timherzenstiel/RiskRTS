@@ -1,11 +1,13 @@
 // Computer-controlled powers. Uses exactly the same commands as human players, and (below Marshal) sees the map through the
 // same fog of war: it judges enemy regions by the estimate across its borders and by its own reconnaissance reports.
-import { COST, DT, MAX_TRENCH, TRENCH_COST, UT, groundUnits, unitPower, type FortKind, type UnitType } from '../data/units';
+import { COST, DT, MAX_TRENCH, SHELLS, TRENCH_COST, UT, groundUnits, isDef, unitPower, type FortKind, type UnitType } from '../data/units';
 import { forcePower, frontsOf, hops, offensives, rnd, worksAt, world } from './core';
 import { assault, build, fortify, patrol, recon, recruit, sendAir, sendArmy, shift, spy } from './commands';
+import { charge, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
+import { paceOf } from './battle';
 import { fogView, guessedUnits } from './fog';
 import { missionWants } from './missions';
-import type { FactionState, GameState, RegionState } from './types';
+import type { Battle, FactionState, GameState, RegionState } from './types';
 
 type R = RegionState & { _th?: number };
 const pw = (k: keyof typeof UT) => UT[k].power;
@@ -38,6 +40,7 @@ export function aiThink(g: GameState, f: FactionState) {
       if (cand) spy(g, f.id, cand.id);
     }
   }
+  levers(g, f, mine);
   const cap = g.cfg?.attackCap ?? 0;
   let guard = 50;
   while (f.supply >= 1 && guard-- > 0 && border.length) {
@@ -116,5 +119,48 @@ export function aiThink(g: GameState, f: FactionState) {
     if (t.battle >= 0 || !dist[t.id] || groundUnits(t.units) < 2) continue;
     const n = world().regions[t.id].adj.map(j => g.regions[j]).filter(n => n.owner === f.id && dist[n.id] < dist[t.id])[0];
     if (n) sendArmy(g, f.id, t.id, n.id, 1);
+  }
+}
+
+/** Strength of each side on a front: [ours, theirs] in unit power, weighted by the hit points left. */
+function sidePower(b: Battle, fid: number): [number, number] {
+  let me = 0, foe = 0;
+  for (const a of b.agents) {
+    if (a.dead || a.out) continue;
+    const p = (isDef(a.type) ? DT[a.type].power : UT[a.type as UnitType].power) * Math.max(.2, a.hp / (isDef(a.type) ? DT[a.type].hp : UT[a.type as UnitType].hp));
+    if (a.f === fid) me += p; else foe += p;
+  }
+  return [me, foe];
+}
+
+/** Shells to keep in stock: 30 plus 10 per battery and gun emplacement. */
+export const shellTarget = (g: GameState, fid: number) => {
+  let guns = 0; for (const r of g.regions) if (r.owner === fid) guns += r.units.art + r.defs.filter(d => d.k === 'fort' && d.f === fid).length;
+  return 30 + 10 * guns;
+};
+
+/** Battle levers: shells, barrage, when to go over the top, reinforcing, withdrawing, stance of the capital. */
+function levers(g: GameState, f: FactionState, mine: RegionState[]) {
+  const fid = f.id, target = shellTarget(g, fid), P = paceOf(g);
+  if (f.shells < target && f.supply >= 6 && rnd(g) < .5) produce(g, fid, 'shells', Math.min(Math.ceil((target - f.shells) / SHELLS.perSupply), Math.floor(f.supply / 3)));
+  const capital = mine.find(r => r.capitalOf === fid);
+  if (capital && capital.stance !== 3) setStance(g, fid, capital.id, 3);
+  for (const b of g.battles) {
+    if (b.ended || !(b.def === fid || b.sides.includes(fid))) continue;
+    const att = b.def !== fid, [me, foe] = sidePower(b, fid);
+    // heavy barrage against dug-in defenders while shells last; light otherwise
+    const dug = att ? (b.tr > 0 || b.wire > 0 || b.agents.some(a => !a.dead && !a.out && a.f === b.def && isDef(a.type))) : !b.go;
+    const want = f.shells > target * .5 && dug ? 2 : f.shells > 4 ? 1 : (att ? 1 : 0);
+    if ((b.bar[fid] ?? 1) !== want) setBarrage(g, fid, b.id, want as 0 | 1 | 2);
+    if (att && !b.go) {
+      const supp = b.supp[b.def] ?? 0, cut = b.wire0 > 0 ? b.wire / b.wire0 : 0;
+      if (supp > 55 || (cut < .4 && supp > 35) || b.age > P.go * .8 || me > foe * 3) charge(g, fid, b.id);
+    }
+    // a hopeless attack is called off; a front that is losing gets fresh troops from next door
+    if (att && b.go && me < foe * .35 && (b.mor[fid] ?? 70) < 30 && rnd(g) < .3) { withdraw(g, fid, b.id); continue; }
+    if (me < foe * 1.1 && rnd(g) < .25) {
+      const from = world().regions[b.region].adj.map(i => g.regions[i]).filter(r => r.owner === fid && r.battle < 0 && groundUnits(r.units) >= 3).sort((x, y) => groundUnits(y.units) - groundUnits(x.units))[0];
+      if (from) reinforce(g, fid, from.id, b.id, .6);
+    }
   }
 }

@@ -3,7 +3,7 @@
 import type { Command, GameEvent, GameSettings } from './sim/types';
 import type { Snapshot } from './sim/snapshot';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export interface Seat { faction: number; player: string | null; name: string | null; ai: boolean }
 export interface LobbyState {

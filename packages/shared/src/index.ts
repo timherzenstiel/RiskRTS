@@ -11,6 +11,8 @@ export * from './sim/commands';
 export * from './sim/economy';
 export * from './sim/missions';
 export * from './sim/battle';
+export * from './sim/levers';
+export * from './sim/rules';
 export * from './sim/fog';
 export * from './sim/events';
 export * from './sim/snapshot';

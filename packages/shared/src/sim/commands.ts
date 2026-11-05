@@ -5,8 +5,9 @@ import {
   type FortKind, type UnitType,
 } from '../data/units';
 import { HW, wrapDx } from '../world/build';
-import { addForce, approachSector, emit, frontsOf, hops, offensives, rnd, slotsMax, slotsUsed, takeForce, world, worksAt, worksFor } from './core';
+import { MARCH_MIN, MARCH_SPEED, addForce, approachSector, emit, frontsOf, hops, mkArmy, offensives, rnd, slotsMax, slotsUsed, takeForce, world, worksAt, worksFor } from './core';
 import { joinBattle, launch, startAssault, startBattle, transferAgents } from './battle';
+import { charge, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
 import { recordIntel, MAX_SPIES } from './fog';
 import type { Army, Battle, BuildKind, Command, GameState, RegionState } from './types';
 
@@ -93,29 +94,39 @@ function capCheck(g: GameState, fid: number, to: number): string | null {
   return `You already run ${now.size} attack${now.size === 1 ? '' : 's'} at once (limit ${cap}). Wait for one to finish.`;
 }
 
-function mkArmy(g: GameState, fid: number, fromId: number, toId: number, speed: number, min: number): Army {
-  const W = world(), WA = W.regions[fromId], WB = W.regions[toId];
-  const dx = wrapDx(WA.cx, WB.cx), dz = WB.cz - WA.cz, dist = Math.hypot(dx, dz);
-  return { id: g.nextId++, owner: fid, units: emptyUnits(), men: emptyUnits(), mor: 75, from: fromId, to: toId, t: 0, dur: Math.max(min, dist / speed), sea: W.seaLane.has(fromId + '|' + toId), ax: WA.cx, az: WA.cz, dx, dz };
-}
+/** Seconds after arriving within which marching on counts as a forced march, and after a battle within which troops are tired. */
+export const FORCED_MARCH = 45, BATTLE_REST = 60, FATIGUE_MORALE = 15;
 
-export function sendArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number): string | null {
+/**
+ * Form a marching army of a share of a region's ground troops (one formation always stays behind). Checks ownership, battle,
+ * border and size; the caller adds it to the game. Returns the army or an error text.
+ */
+export function formArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number): Army | string {
   const W = world(), A = g.regions[fromId], B = g.regions[toId], WA = W.regions[fromId], WB = W.regions[toId];
   if (!A || !B) return 'Unknown region.';
   if (A.owner !== fid) return 'Select one of your own regions first.';
   if (A.battle >= 0) return `${WA.name} is under attack. Its troops cannot leave.`;
   if (!WA.adj.includes(toId)) return `${WB.name} does not border ${WA.name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
   const tot = groundUnits(A.units); if (tot < 2) return `${WA.name} needs at least 2 ground formations to march. One always stays behind.`;
-  const cap = capCheck(g, fid, toId); if (cap) return cap;
   frac = Math.max(.05, Math.min(1, frac));
   const n: Record<string, number> = {}; let sent = 0;
   for (const k of GROUND_TYPES) { n[k] = Math.round(A.units[k] * frac); sent += n[k]; }
   if (sent >= tot) { for (const k of GROUND_TYPES) if (n[k] > 0) { n[k]--; sent--; break; } }
   if (sent <= 0) { for (const k of GROUND_TYPES) if (A.units[k] > 0) { n[k] = 1; sent = 1; break; } }
-  const a = mkArmy(g, fid, fromId, toId, 2.4, 2.5); a.mor = A.mor;
+  const a = mkArmy(g, fid, fromId, toId, MARCH_SPEED, MARCH_MIN); a.mor = A.mor; a.stance = A.stance ?? 0;
   for (const k of GROUND_TYPES) { const men = takeForce(A.units, A.men, k, n[k]); a.units[k] += n[k]; a.men[k] += men; }
+  // fatigue: marching on right after arriving, or straight out of a battle
+  a.legs = (A.arrT !== undefined && g.time - A.arrT < FORCED_MARCH ? (A.legs ?? 1) : 0) + 1;
+  if (A.foughtT !== undefined && g.time - A.foughtT < BATTLE_REST) a.tired = true;
+  return a;
+}
+
+export function sendArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number): string | null {
+  const B = g.regions[toId];
+  if (B) { const cap = capCheck(g, fid, toId); if (cap) return cap; }
+  const a = formArmy(g, fid, fromId, toId, frac); if (typeof a === 'string') return a;
   g.armies.push(a);
-  emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: sent });
+  emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(a.units) });
   return null;
 }
 
@@ -223,6 +234,13 @@ function scoutArrives(g: GameState, a: Army) {
 export function arrive(g: GameState, a: Army) {
   if (a.scout) { scoutArrives(g, a); return; }
   const t = g.regions[a.to], len = Math.hypot(a.dx, a.dz) || 1, dir = { x: -a.dx / len, z: -a.dz / len };
+  // fatigue: more than two borders in a row, or straight out of a battle, costs morale when the troops have to fight
+  if (!a.air && ((a.legs ?? 1) > 2 || a.tired) && (frontsOf(g, t.id).length || t.owner !== a.owner)) a.mor = Math.max(5, a.mor - FATIGUE_MORALE);
+  // reinforcements sent to one front join it directly while it still burns
+  if (a.front !== undefined) {
+    const fb = g.battles.find(b => b.id === a.front && !b.ended && b.region === a.to);
+    if (fb && (fb.def === a.owner ? t.owner === a.owner : fb.sides.includes(a.owner))) { joinBattle(g, fb, a.owner, a.units, dir, fb.def === a.owner, a.to, a.men, a.mor, a.stance); return; }
+  }
   const sector = a.air ? approachSector(a.from, a.to) : a.from;
   if (a.ret) {
     // returning aircraft land at home, or join its defence; a lost home means a lost squadron
@@ -238,15 +256,15 @@ export function arrive(g: GameState, a: Army) {
     else {
       const before = groundUnits(t.units), add = groundUnits(a.units);
       for (const k of UNIT_TYPES) { t.units[k] += a.units[k]; t.men[k] += a.men[k]; }
-      if (add) t.mor = (t.mor * before + a.mor * add) / (before + add);
+      if (add) { t.mor = (t.mor * before + a.mor * add) / (before + add); t.arrT = g.time; t.legs = a.legs ?? 1; }
     }
     return;
   }
   // attacking: join the front over the same border, aircraft support any front, otherwise open a new front
   const same = fronts.find(b => b.from === sector) ?? (a.air ? fronts.find(b => b.sides.includes(a.owner)) ?? fronts[0] : undefined);
-  if (same) { joinBattle(g, same, a.owner, a.units, dir, same.def === a.owner, a.air ? a.from : a.to, a.men, a.mor); return; }
+  if (same) { joinBattle(g, same, a.owner, a.units, dir, same.def === a.owner, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance); return; }
   const nb = startBattle(g, t, dir, a.owner, sector);
-  joinBattle(g, nb, a.owner, a.units, dir, false, a.air ? a.from : a.to, a.men, a.mor);
+  joinBattle(g, nb, a.owner, a.units, dir, false, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance);
 }
 
 /** Validate and apply a player command. Returns an error message, or null on success. */
@@ -269,6 +287,12 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'spy': return spy(g, fid, c.to);
     case 'shift': { const r = g.regions[c.region]; if (!r) return 'Invalid order.'; return shift(g, fid, r, c.battle); }
     case 'assault': { const r = g.regions[c.region]; if (!r) return 'Invalid order.'; return assault(g, fid, r); }
+    case 'barrage': return setBarrage(g, fid, c.battle, c.level);
+    case 'charge': return charge(g, fid, c.battle);
+    case 'stance': return setStance(g, fid, c.region, c.s, c.battle);
+    case 'reinforce': return reinforce(g, fid, c.from, c.battle, c.frac);
+    case 'withdraw': return withdraw(g, fid, c.battle);
+    case 'produce': return produce(g, fid, c.kind, c.n);
     default: return 'Unknown command.';
   }
 }

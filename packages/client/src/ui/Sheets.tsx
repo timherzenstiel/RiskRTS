@@ -49,6 +49,7 @@ export function HelpSheet({ onBack }: { onBack: () => void }) {
         <dt>Space · Esc</dt><dd>Pause. Esc steps back: cancels a march, closes the scoreboard, deselects, then opens the menu.</dd>
       </dl>
       <p className="lede small">Every {TICK_SECONDS} seconds a convoy arrives with supply for every region linked by your own land (or sea lanes between your regions) to your capital, a factory or your home territory, plus continent bonuses and +2 per factory. One infantry unit is a battalion of 100 men; losses thin formations out and wounded return with later convoys. Battles are fought on the border the attack comes over, against that border's trench, sandbags, wire and defences. You see rivals only across your borders, as an estimate: patrols, reconnaissance flights and spies tell you more. Heavy losses raise war weariness, which cuts income and morale; broken troops surrender.</p>
+      <p className="lede small">Every front has its own levers. Your guns fire light, heavy or not at all; each shot uses shells from the national stockpile (factories and the capital make more, or buy them with supply). Shells landing on a trench <b>suppress</b> it: suppressed troops fire less and their machine guns fall silent. Attackers wait at the start line while the guns work; send them <b>over the top</b> when the enemy is pinned down, or they go on their own after a while. Set a stance, reinforce a front straight from a neighbouring region, or withdraw. Every battle files an after-action report.</p>
       <div className="row"><button className="btn primary" onClick={() => { click(); onBack(); }}>Back</button></div>
     </Modal>
   );
@@ -76,6 +77,7 @@ export function MenuSheet({ onHelp }: { onHelp: () => void }) {
         <button className="btn primary wide" onClick={close}>Resume</button>
         <div className="row">
           <button className="btn" onClick={() => { click(); ui().setOverlay('orders'); }}>Sealed orders</button>
+          <button className="btn" onClick={() => { click(); ui().setOverlay('reports'); }}>Battle reports</button>
           <button className="btn" onClick={() => { click(); onHelp(); }}>How to play</button>
           {session.kind === 'local' && !g.over && <button className="btn" onClick={() => { click(); ui().say(writeSave(session) ? 'Game saved.' : 'Saving is not available here.'); }}>Save game</button>}
         </div>

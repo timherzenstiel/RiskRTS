@@ -1,5 +1,6 @@
 // Right-hand region file: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
-import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState } from '@riskrts/shared';
+import { useState } from 'react';
+import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useSim, useUi, dateStr, type Tab } from '../game/store';
 import { click } from './actions';
 import { CloseIcon, Icon, SupplyIcon } from './icons';
@@ -7,6 +8,8 @@ import { rendererRef } from './refs';
 import { AttackBudget, BuildTab, FortifyTab, MarchTab, RecruitTab, SharePicker, NeighbourRow, knownTroops, reportAge } from './DrawerTabs';
 import { forceOf } from './garrison';
 import { menOf, menStr, strengthOf } from './format';
+import { FrontControls } from './FrontCard';
+import { Briefing } from './Briefing';
 
 const TABS: [Tab, string][] = [['rec', 'Recruit'], ['build', 'Build'], ['fort', 'Fortify'], ['march', 'March']];
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
@@ -14,6 +17,9 @@ const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 /** One line per front: where the attack comes from, who is left, morale, and (for the defender) a reserves button. */
 function Fronts({ g, me, fronts, own }: { g: GameState; me: number; fronts: Battle[]; own: boolean }) {
   const W = buildWorld(), ui = useUi.getState;
+  const mineF = fronts.filter(b => b.def === me || b.sides.includes(me));
+  const [open, setOpen] = useState<number | null>(null);
+  const shown = open ?? (mineF.length === 1 ? mineF[0].id : null);
   return (
     <div className="alert fronts">
       <span><b>{fronts.length > 1 ? `${fronts.length} fronts` : 'Battle in progress'}</b></span>
@@ -25,7 +31,9 @@ function Fronts({ g, me, fronts, own }: { g: GameState; me: number; fronts: Batt
           <div className="front" key={b.id}>
             <span className="fl"><b>{where}</b><small>{b.sides.includes(me) ? `ours ${mine} · enemy ${foe}` : `${foe + mine} engaged`}{mor !== undefined ? ` · morale ${Math.round(mor)}%` : ''}{quiet ? ' · trench warfare' : ''}{b.tr ? ` · trench ${roman(b.tr)}` : ''}{b.wire > 0 ? ' · wire' : ''}</small></span>
             {own && fronts.length > 1 && b.def === me && <button className="btn sm" title="Move about a third of the defenders of the other fronts here" onClick={() => { click(); ui().order({ t: 'shift', region: b.region, battle: b.id }); }}>Reserves</button>}
+            {(b.def === me || b.sides.includes(me)) && mineF.length > 1 && <button className="btn sm" aria-expanded={shown === b.id} onClick={() => { click(); setOpen(shown === b.id ? -1 : b.id); }}>Orders</button>}
             <button className="btn sm" onClick={() => { click(); rendererRef.current?.flyToBattle(b.id, 6); }}>Watch</button>
+            {shown === b.id && <FrontControls g={g} me={me} b={b} compact />}
           </div>
         );
       })}
@@ -95,6 +103,14 @@ export function Drawer() {
           <span className="str">Power <b>{Math.round(unitPower(gar) * (.3 + .7 * str) + defPow)}</b></span>
         </div>
       )}
+      {own && (
+        <div className="stance-row">
+          <span className="lv-l" title="How the garrison fights when attacked; armies marching out take the stance with them">Stance</span>
+          <div className="seg" role="group" aria-label="Garrison stance">
+            {STANCES.map((n, i) => <button key={n} aria-pressed={(r.stance ?? 0) === i} title={n} onClick={() => { click(); ui().order({ t: 'stance', region: sel, s: i as Stance }); }}>{['Balanced', 'Aggressive', 'Defensive', 'Hold'][i]}</button>)}
+          </div>
+        </div>
+      )}
       {borders.length > 0 && (
         <div className="pad borders">
           {borders.map(({ n, w, d }) => (
@@ -118,6 +134,7 @@ export function Drawer() {
       ) : (
         <div className="tb-body">
           {(myNb.length > 0 || airBases.length > 0) && <><AttackBudget /><SharePicker /></>}
+          {myNb.length > 0 && <Briefing g={g} me={me} target={sel} from={myNb} />}
           {myNb.length > 0 && <div className="lbl"><span>Attack from</span></div>}
           {myNb.map(i => <NeighbourRow key={i} from={i} to={sel} list={i} label="Attack" />)}
           {airBases.length > 0 && <div className="lbl"><span>Air strike from</span></div>}

@@ -3,7 +3,7 @@ import { FACTIONS, cap } from '../data/factions';
 import { world } from './core';
 import type { GameEvent, GameState } from './types';
 
-export interface Described { text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number }
+export interface Described { text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 export function describeEvent(g: GameState, e: GameEvent, me: number): Described | null {
   const R = (i: number) => world().regions[i].name, F = (i: number) => FACTIONS[i];
@@ -29,6 +29,15 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (e.faction === me) return { text: `Breakthrough at ${R(e.region)}! Our troops fall on the defenders of the other front from behind.`, cls: 'good', region: e.region };
       if (g.regions[e.region].owner === me) return { text: `The ${e.from >= 0 ? R(e.from) + ' ' : ''}front of ${R(e.region)} has broken. The enemy is behind our lines.`, cls: 'bad', region: e.region };
       return null;
+    case 'overTop':
+      if (e.faction === me) return { text: `Whistles blow at ${R(e.region)}: our men go over the top.`, cls: 'me', region: e.region };
+      if (g.regions[e.region].owner === me) return { text: `The enemy leaves his trenches at ${R(e.region)}. Stand to!`, cls: 'bad', region: e.region };
+      return null;
+    case 'withdraw':
+      if (e.faction === me) return { text: `Our troops fall back from ${R(e.region)} to ${R(e.to)}.`, cls: 'me', region: e.to };
+      if (g.regions[e.region].owner === me || g.battles.some(b => b.region === e.region && b.sides.includes(me))) return { text: `The enemy pulls back from ${R(e.region)}.`, cls: 'good', region: e.region };
+      return null;
+    case 'report': return e.sides.includes(me) ? { text: `After-action report: battle of ${R(e.region)}.`, cls: '', region: e.region, report: e.id } : null;
     case 'air':
       if (e.faction === me) return { text: `${e.units} squadron${e.units === 1 ? '' : 's'} take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };
       if (g.regions[e.to].owner === me) return { text: `Enemy aircraft spotted heading for ${R(e.to)}!`, cls: 'bad', region: e.to };

@@ -8,6 +8,7 @@ import { Feed } from './Feed';
 import { Hint } from './Hint';
 import { Minimap } from './Minimap';
 import { Overlays } from './Overlays';
+import { OfferBanner } from './Diplomacy';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -66,12 +67,16 @@ export function Game() {
     return () => clearInterval(t);
   }, [session]);
   useEffect(() => { if (over && session?.kind === 'local') lsDel(SAVE_KEY); }, [over, session]);
+  // a new war year: the General Staff asks for a doctrine (opens once per offer, when no other sheet is up)
+  const offer = useSim()?.g.factions[session?.me ?? 0]?.docOffer;
+  useEffect(() => { if (offer && !useUi.getState().overlay) useUi.getState().setOverlay('doctrine'); }, [offer]);
 
   return (
     <div id="app" className={hasDrawer ? 'has-drawer' : ''}>
       <Stage />
       <TopBar />
       <Drawer />
+      <OfferBanner />
       <div id="leftcol"><Feed /><Minimap /></div>
       <div id="bottom"><BattleCard /><Hint /></div>
       <Connection />

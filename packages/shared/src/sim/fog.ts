@@ -5,6 +5,7 @@
 import { emptyUnits, type Units } from '../data/units';
 import { emit, menTotal, rnd, world } from './core';
 import type { Army, Battle, Defence, GameState, Intel, RegionState, Works } from './types';
+import { allied } from './diplomacy';
 
 export const MAX_SPIES = 3;
 /** Days after which a report is shown as out of date. */
@@ -47,7 +48,8 @@ export function spiesOnConvoy(g: GameState) {
   for (let i = g.spies.length - 1; i >= 0; i--) {
     const s = g.spies[i], r = g.regions[s.region]; if (s.eta > g.time) continue;
     recordIntel(g, s.f, s.region);
-    const p = .1 + (r.capitalOf === r.owner ? .1 : 0) + (r.barracks ? .06 : 0) + (r.battle >= 0 ? .04 : 0);
+    let p = .1 + (r.capitalOf === r.owner ? .1 : 0) + (r.barracks ? .06 : 0) + (r.battle >= 0 ? .04 : 0);
+    if ((s.hot ?? -1) > g.day) p *= 2;
     if (rnd(g) < p) { g.spies.splice(i, 1); emit(g, { k: 'spyFound', faction: s.f, region: s.region, owner: r.owner }); }
   }
 }
@@ -56,17 +58,20 @@ export function spiesOnConvoy(g: GameState) {
 export function visibility(g: GameState, fid: number): Uint8Array {
   const W = world(), v = new Uint8Array(g.regions.length);
   if (fid < 0 || !g.factions[fid]?.alive || g.over) { v.fill(3); return v; }
-  for (const r of g.regions) if (r.owner === fid) { v[r.id] = 3; for (const j of W.regions[r.id].adj) if (v[j] < 1) v[j] = 1; }
+  // own and allied regions are seen in full, and across their borders
+  for (const r of g.regions) if (r.owner === fid || (r.owner >= 0 && allied(g, fid, r.owner))) { v[r.id] = 3; for (const j of W.regions[r.id].adj) if (v[j] < 1) v[j] = 1; }
   for (const s of activeSpies(g, fid)) v[s.region] = 3;
-  for (const b of g.battles) if (!b.ended && b.sides.includes(fid)) v[b.region] = 3;
+  for (const b of g.battles) if (!b.ended && b.sides.some(s => allied(g, fid, s))) v[b.region] = 3;
   const it = g.intel[fid] ?? [];
   for (let i = 0; i < v.length; i++) if (v[i] === 0 && it[i]) v[i] = 2;
   return v;
 }
 
 /** Estimated men in a region seen from across the border: a range around a noisy guess, in hundreds. */
-export function estimate(g: GameState, r: RegionState): [number, number] {
-  const m = menTotal(r.men); if (m <= 0) return [0, 0];
+export function estimate(g: GameState, r: RegionState, reportDay = -1): [number, number] {
+  // a fake concentration inflates the estimate until a newer report shows the truth
+  const fake = r.fake && r.fake.until > g.day && reportDay < r.fake.day ? r.fake.men : 0;
+  const m = menTotal(r.men) + fake; if (m <= 0) return [0, 0];
   let h = (r.id * 2654435761 + Math.floor(g.day / 7) * 40503) >>> 0; h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
   const c = m * (.85 + (h % 1000) / 1000 * .3);
   return [Math.max(100, Math.floor(c * .7 / 100) * 100), Math.max(100, Math.ceil(c * 1.3 / 100) * 100)];
@@ -85,8 +90,8 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   return {
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
     factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false,
-    defs, works, mor: 70, home: r.home, cut: false, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1,
-    vis, seen: known ? known.day : undefined, est: vis >= 1 ? estimate(g, r) : undefined,
+    supplyQ: undefined, bombed: vis >= 1 ? r.bombed : undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
+    vis, seen: known ? known.day : undefined, est: vis >= 1 ? estimate(g, r, it?.day ?? -1) : undefined,
   };
 }
 
@@ -99,10 +104,12 @@ export function fogView(g: GameState, fid: number): GameState {
     ...g,
     regions: g.regions.map(r => regionView(g, fid, r, vis[r.id], it[r.id] ?? null, spied.has(r.id))),
     factions: g.factions.map(f => (f.id === fid || g.over) ? f : { ...f, mission: null }),
-    armies: g.armies.filter(seeArmy),
+    // a decoy looks like the real thing to everyone but its owner
+    armies: g.armies.filter(seeArmy).map(a => !a.decoy || a.owner === fid ? a : { ...a, decoy: undefined, fake: undefined, units: { ...a.units, inf: a.fake ?? 8 }, men: { ...a.men, inf: (a.fake ?? 8) * 100 } }),
     battles: g.battles.filter(seeBattle),
     intel: g.intel.map((row, i) => i === fid ? row : []),
     spies: g.spies.filter(s => s.f === fid),
+    reports: (g.reports ?? []).filter(r => g.over || r.sides.some(s => s.f === fid)).slice(-20),
     viewer: fid,
   };
 }

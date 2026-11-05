@@ -299,7 +299,11 @@ export class Models {
     b(0, .04, -.1, .036, .02, .17, K.olive); b(0, .022, -.185, .052, .03, .012, K.gun);
     // cradle, barrel, breech
     b(0, .088, .05 - rb, .03, .022, .15, K.olive);
-    b(0, .108, .1 - rb, .022, .022, .22, K.gun); b(0, .108, .21 - rb, .026, .026, .014, K.gun);
+    if (f === 1) { // Canon de 75: long slim barrel with its recuperator underneath
+      b(0, .108, .13 - rb, .018, .018, .28, K.gun); b(0, .108, .27 - rb, .022, .022, .012, K.gun); b(0, .092, .08 - rb, .02, .014, .16, K.hatch);
+    } else if (f === 4) { // Škoda siege howitzer: short fat barrel and a heavy breech
+      b(0, .116, .08 - rb, .042, .042, .17, K.gun); b(0, .116, .165 - rb, .048, .048, .016, K.gun); b(0, .112, -.02 - rb, .05, .05, .05, K.hatch);
+    } else { b(0, .108, .1 - rb, .022, .022, .22, K.gun); b(0, .108, .21 - rb, .026, .026, .014, K.gun); }
     b(0, .106, -.015 - rb, .036, .034, .04, K.hatch);
     // shield
     b(0, .11, .03, .15, .075, .008, K.olive); b(0, .044, .032, .12, .04, .006, K.olive);

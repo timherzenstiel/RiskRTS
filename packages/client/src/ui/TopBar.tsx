@@ -1,10 +1,12 @@
 // Top zone: sealed-orders chip, supply ring + powers pills, clock / speed / menu.
 import { useEffect, useRef, useState } from 'react';
-import { FACTIONS, TICK_SECONDS, convoyIn, income, missionFrac, missionText } from '@riskrts/shared';
+import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome, weatherAt } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
+import { buildWorld } from '@riskrts/shared';
+import { GuestSession } from '../game/session';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
-import { MenuIcon, PauseIcon } from './icons';
+import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
 
 const SPEEDS = [1, 2, 4];
 
@@ -33,7 +35,11 @@ export function TopBar() {
           <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next convoy in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
           <div className="rv"><small>Supply</small><b>{f.supply}</b></div>
           <div className="ri"><span>+{income(g, me)}</span><small>per convoy</small></div>
-          <div className={'ww' + (f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
+          <div className="ww sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab.">
+            <small>Shells</small><b>{Math.floor(f.shells ?? 0)}<i>+{shellIncome(g, me)}</i></b></div>
+          <button className={'ww men' + ((f.men ?? 0) < 300 ? ' hi' : '')} title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for mobilisation." onClick={() => { click(); ui().setOverlay('nation'); }}>
+            <small>Men</small><b>{(f.men ?? 0) >= 10000 ? `${Math.round((f.men ?? 0) / 1000)}k` : Math.floor(f.men ?? 0).toLocaleString('en-GB')}<i>+{poolGrowth(g, me)}</i></b></button>
+          <div className={'ww' + (f.ww >= NATIONS[me].unrest ? ' hi' : f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
             <small>Weariness</small><b>{Math.round(f.ww)}%</b></div>
         </div>
         <div className="glass pills" role="group" aria-label="Powers">
@@ -49,15 +55,18 @@ export function TopBar() {
 
       <div className="right">
         <div className="glass clock">
-          <span id="date">{dateStr(g.day)}</span>
+          <button id="date" className="datebtn" title="War calendar: unlocks, rushes and doctrines" onClick={() => { click(); ui().setOverlay('calendar'); }}>{dateStr(g.day)}</button>
+          {(() => { const sel = useUi.getState().sel, at = sel >= 0 ? sel : g.regions.find(r => r.capitalOf === me)?.id ?? 0, w = weatherAt(at, g.day);
+            return <span className={'wx w' + w} title={`Weather in ${buildWorld().regions[at].name}: ${WEATHER[w]}${w === 1 ? ' · marches and assaults 30% slower, shells sink into the mud' : w === 2 ? ' · marches 40% slower, cut-off troops wear down twice as fast' : w === 3 ? ' · cut-off troops wear down 50% faster' : ''}`}>{WEATHER[w]}</span>; })()}
           {session.canControlTime ? (
             <div className="seg" role="group" aria-label="Game speed">
               <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
               {SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)}
             </div>
           ) : (
-            <span className="speedro" title="The host controls the game speed">{speed === 0 ? 'Paused' : `${speed}×`}</span>
+            <span className="speedro" title={session instanceof GuestSession && session.spectator ? 'Watching with full vision, a little delayed' : 'The host controls the game speed'}>{session instanceof GuestSession && session.spectator ? 'Spectating' : speed === 0 ? 'Paused' : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ranked' : ''}</span>
           )}
+          <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
           <button className="ico" aria-label="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
         </div>
       </div>

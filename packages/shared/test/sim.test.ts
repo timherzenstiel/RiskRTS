@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGame, run, step, applyCommand, buildWorld, makeSnapshot, createMirror, applySnapshot, initMirrorCapitals, income, FACTIONS, totalUnits, missionText, fogView } from '../src';
+import { dayOf, createGame, run, step, applyCommand, buildWorld, makeSnapshot, createMirror, applySnapshot, initMirrorCapitals, income, FACTIONS, totalUnits, missionText, fogView } from '../src';
 
 describe('world', () => {
   const W = buildWorld();
@@ -45,6 +45,8 @@ describe('commands', () => {
     expect(g.factions[0].supply).toBe(s - 2); expect(totalUnits(mine.units)).toBe(n + 2);
   });
   it('refuses foreign regions, tanks without factory, and broke players', () => {
+    expect(applyCommand(g, 0, { t: 'recruit', region: mine.id, unit: 'tank' })).toMatch(/not available yet/);
+    g.day = dayOf(1918, 6);
     expect(applyCommand(g, 0, { t: 'recruit', region: other.id, unit: 'inf' })).toMatch(/own regions/);
     const noFac = g.regions.find(r => r.owner === 0 && !r.factory)!;
     expect(applyCommand(g, 0, { t: 'recruit', region: noFac.id, unit: 'tank' })).toMatch(/factory/);

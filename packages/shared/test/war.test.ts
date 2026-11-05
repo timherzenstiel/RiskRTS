@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATION, UNIT_TYPES, WIRE_HP, applyCommand, buildWorld, consolidate, createGame, emptyUnits, fogView, frontsOf, migrateState, run, slotsUsed, startBattle, step,
-  updateSupplyLines, visibility, worksAt, income, type GameState,
+  updateSupplyLines, visibility, worksAt, income, dayOf, type GameState,
 } from '../src';
 
 const W = buildWorld();
@@ -15,6 +15,7 @@ function setup(seed = 21) {
   const A = id('France'), B = id('Germany');
   g.regions[A].owner = 0; g.regions[A].home = 0; g.regions[B].owner = 1; g.regions[B].home = 1;
   g.factions.forEach(f => { f.supply = 100; f.mission = null; });
+  g.day = dayOf(1918, 6); // everything unlocked, fair weather
   updateSupplyLines(g);
   return { g, A, B };
 }
@@ -166,7 +167,7 @@ describe('saves', () => {
     old.v = 2; for (const r of old.regions) { r.trench = r.capitalOf >= 0 ? 2 : 0; delete r.works; delete r.men; delete r.mor; delete r.cut; delete r.home; }
     for (const f of old.factions) { delete f.ww; delete f.wounded; } delete old.intel; delete old.spies;
     const m = migrateState(old)!;
-    expect(m.v).toBe(3); expect(m.intel.length).toBe(6);
+    expect(m.v).toBe(4); expect(m.intel.length).toBe(6); expect(m.factions[0].shells).toBeGreaterThan(0);
     const cap = m.regions.find(r => r.capitalOf === 1)!;
     expect(Object.values(cap.works).some(w => w.tr === 2)).toBe(true);
     expect(cap.men.inf).toBe(cap.units.inf * 100);

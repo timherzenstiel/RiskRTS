@@ -5,6 +5,7 @@ import { HostSession } from '../game/session';
 import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
 import { click } from './actions';
+import { NationCard } from './Nation';
 
 export function SoloSetup() {
   const [pick, setPick] = useState(-1); const [diff, setDiff] = useState(1); const [rules, setRules] = useState<GameSettings>({ ...DEFAULT_SETTINGS });
@@ -25,6 +26,7 @@ export function SoloSetup() {
             </button>
           ))}
         </div>
+        {pick >= 0 && <NationCard f={pick} />}
         <RulesPicker value={rules} onChange={p => setRules(r => ({ ...r, ...p }))} />
         <div className="row spread">
           <div><div className="lbl"><span>Difficulty · {DIFFICULTIES[diff].desc}</span></div>

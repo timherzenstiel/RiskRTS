@@ -9,6 +9,7 @@ import { netSet, useNet } from './netStore';
 import { playerName } from './storage';
 import { Players, Seats } from './Seats';
 import { RulesPicker } from './Rules';
+import { NationCard } from './Nation';
 
 export const inviteLink = (code: string) => `${location.origin}${location.pathname}#join=${code}`;
 
@@ -53,6 +54,7 @@ export function HostLobby() {
       </div>
       <div><div className="lbl"><span>Seats · pick yours, computers fill the rest</span></div>
         <Seats lobby={s} you="host" onPick={f => { click(); l.claim('host', null, f); }} /></div>
+      {(() => { const mine = s.seats.find(x => x.player === 'host'); return mine ? <NationCard f={mine.faction} /> : null; })()}
       <RulesPicker value={s.settings} onChange={p => l.setSettings(p)} />
       <div className="row spread">
         <div><div className="lbl"><span>Difficulty of the computer powers · {DIFFICULTIES[s.difficulty].desc}</span></div>

@@ -1,7 +1,7 @@
 // A Session is the client's view of one running game. The UI and renderer only talk to this interface,
 // so single player, hosting and joining all look the same to them.
 import {
-  applyCommand, applySnapshot, createGame, createMirror, drainEvents, fogView, initMirrorCapitals, makeSnapshot, migrateState, step, TICK_DT,
+  applyCommand, applySnapshot, createGame, eventsFor, createMirror, drainEvents, fogView, initMirrorCapitals, makeSnapshot, migrateState, step, TICK_DT,
   type Command, type Fx, type GameEvent, type GameSettings, type GameState, type ServerMsg, type ClientMsg,
 } from '@riskrts/shared';
 import type { Channel } from '../net/channel';
@@ -99,7 +99,7 @@ export class HostSession implements Session {
 
   private sendSnap(p: PeerSlot, full: boolean) {
     const fx = this.fxNet.filter(f => p.watch.has(f.b));
-    const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : this.evNet, speed: this.speed };
+    const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: this.speed };
     try { p.ch.send(msg); } catch { /* peer went away; onClose will clean up */ }
   }
 
@@ -113,6 +113,8 @@ export class HostSession implements Session {
 /** Mirrors a host's game over a Channel. Never simulates; only displays what the host sends. */
 export class GuestSession implements Session {
   readonly kind = 'guest' as const;
+  /** Dedicated server: watching with full vision (orders are refused), or a ranked war. */
+  spectator = false; ranked = false;
   readonly state: GameState = createMirror();
   speed = 1;
   readonly canControlTime = false;

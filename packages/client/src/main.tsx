@@ -8,4 +8,7 @@ import './ui/styles.css';
 // Service worker: auto-updates in the background and tells the player once the app works offline.
 registerSW({ immediate: true, onOfflineReady() { useUi.getState().say('Ready to play offline.'); } });
 
+// Dev builds expose the UI store for automated screenshots.
+if (import.meta.env.DEV) (window as unknown as { __ui: typeof useUi }).__ui = useUi;
+
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

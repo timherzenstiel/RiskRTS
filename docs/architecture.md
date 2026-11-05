@@ -10,9 +10,9 @@
             └───────────────▲───────────────────────────────▲────────────────────┘
                             │ imports                        │ imports
         ┌───────────────────┴────────────┐     ┌─────────────┴───────────────────┐
-        │ client/game  Session           │     │ future: packages/server          │
-        │   HostSession  (local + host)  │     │   Node + WebSocket Channel,      │
-        │   GuestSession (mirror)        │     │   runs the same step()/commands  │
+        │ client/game  Session           │     │ packages/server                  │
+        │   HostSession  (local + host)  │     │   Node + ws: persistent worlds,  │
+        │   GuestSession (mirror)        │     │   ranked ladder, spectators      │
         │ client/net   Channel · PeerJS  │     └──────────────────────────────────┘
         │              LobbyHost/Guest   │
         │ client/render WorldRenderer    │  Three.js, reads session.state each frame
@@ -40,4 +40,6 @@
 - **Unit models:** `client/render/models.ts` builds every unit from instanced boxes in a local frame (`at` + `b`). Base boxes always draw; fine detail (faces, webbing, rivets, wheel spokes, ammo belts, national markings, ship fittings) is gated on `Models.hi`, set when the camera is closer than distance 7. `dev/harness.ts` `showcase()` lines up every unit for every faction for screenshots.
 - **Close-up map detail:** `client/render/detail.ts` builds, per 12×12-tile chunk near the camera, a smooth surface mesh over the voxel tiles plus fine props (trees, rocks, hedges, farms). `render/groundPaint.ts` paints that surface procedurally in its shader (grass, dirt, pebbles, fields, roads and railways, rivers, cliffs, ownership borders) from two per-tile textures kept by `terrain.ts`. `render/sectors.ts` places defences on their border.
 - **The look:** `render/camera.ts` is an orthographic, fixed-pitch Command & Conquer camera with the sun at the top-left of the screen. `render/post.ts` grades the frame (Tiberian = muddy brown/grey, Red Alert = industrial chrome; the player picks one in the menu), adds grain and an ordered dither. `pools.ts` `litMaterial` gives steel parts a specular sheen.
-- **A dedicated server:** create `packages/server`, import `createGame/step/applyCommand/makeSnapshot` from `@riskrts/shared`, implement `Channel` over `ws`, and reuse the host logic from `client/game/session.ts` (move `HostSession` into shared if you want to share it verbatim).
+- **Rule modifiers:** `shared/sim/rules.ts` is the one place battle and economy code ask about national units (`statsOf(g, faction, type)`), national traits, stance, suppression, terrain, weather, technologies and doctrines. Data lives in `data/nations.ts`, `data/rails.ts`, `data/terrain.ts`, `data/tech.ts`, `data/calendar.ts`.
+- **Great War systems:** `sim/levers.ts` (barrage, over the top, stance, reinforce, withdraw, shells, mobilisation, decoys, raids), `sim/rails.ts` (rail network, supply quality, sabotage, building), `sim/tech.ts` (unlocks, rushes, doctrines), `sim/diplomacy.ts` (treaties, offers, AI interest). Save/snapshot format v4; `migrateState` upgrades v2 and v3 saves.
+- **The dedicated server:** `packages/server` (`world.ts` one persistent war, `server.ts` connections, lobby and persistence, `ladder.ts` Elo). See [multiplayer.md](multiplayer.md).

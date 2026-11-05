@@ -15,7 +15,7 @@ function garrisonLabel(r: GameState['regions'][number]) {
   return '?';
 }
 
-interface RegionLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string }
+interface RegionLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string; st?: boolean }
 interface CityLabel { el: HTMLDivElement; shown: boolean; tf: string }
 interface ArmyLabel { el: HTMLDivElement; n: HTMLSpanElement; count: string; shown: boolean; tf: string; seen: number }
 interface BattleLabel { el: HTMLButtonElement; text: HTMLSpanElement; label: string; shown: boolean; tf: string; seen: number; nextText: number }
@@ -68,6 +68,7 @@ export class Labels {
       if (isSel !== l.sel) { l.sel = isSel; l.el.classList.toggle('sel', isSel); }
       if (tg !== l.tg) { l.tg = tg; l.el.classList.toggle('tg', tg); }
       if (sm !== l.sm) { l.sm = sm; l.el.classList.toggle('sm', sm); }
+      const st = !!rs.strike; if (st !== !!l.st) { l.st = st; l.el.classList.toggle('st', st); }
       this.place(l, ctx, def.cx, ctx.anchorH(i) + 1.05, def.cz);
     });
     this.cities.forEach((c, i) => {
@@ -85,7 +86,7 @@ export class Labels {
         this.root.appendChild(el); l = { el, n: el.firstChild as HTMLSpanElement, count: '', shown: true, tf: '', seen: 0 }; this.armies.set(a.id, l);
       }
       l.seen = ctx.frame;
-      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : a.decoy ? 'Feint' : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
       const [x, z] = armyPos(a), [y0, y1] = ctx.armyH(a);
       this.place(l, ctx, x, lerp(y0, y1, a.t) + Math.sin(a.t * Math.PI) * .4 + .85, z);
     }

@@ -5,11 +5,11 @@ import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
 
-export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
+export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
 export type Tab = 'rec' | 'build' | 'fort' | 'march';
 export type OrderKind = 'march' | 'air';
-export type Overlay = null | 'menu' | 'orders' | 'help' | 'end';
-export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number }
+export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy';
+export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 interface Ui {
   screen: Screen;
@@ -20,6 +20,8 @@ interface Ui {
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
   fortMarker: [number, number] | null;
   overlay: Overlay; scoreOpen: boolean;
+  /** After-action report shown in the reports sheet. */
+  reportId: number;
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
   tut: number; tips: boolean; quality: 0 | 1 | 2; sound: boolean;
@@ -56,7 +58,7 @@ interface Ui {
   fortify(region: number, kind: FortKind, sector: number): void;
   /** Send any command; errors become toasts. */
   order(cmd: Command): boolean;
-  march(from: number, to: number): void;
+  march(from: number, to: number, brk?: boolean): void;
   air(from: number, to: number): void;
   assault(region: number): void;
   /** Called by the game loop ~5×/s: pulls events from the session into the feed and bumps rev. */
@@ -71,7 +73,7 @@ let feedId = 1;
 Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
   sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -111,8 +113,8 @@ export const useUi = create<Ui>((set, get) => ({
   },
   order: (cmd) => { const s = get().session; if (!s) return false; const err = s.send(cmd); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); return !err; },
   assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); },
-  march: (from, to) => {
-    const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac });
+  march: (from, to, brk) => {
+    const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac, brk });
     if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(3); Sfx.order(); } set({ orderMode: false }); get().bump();
   },
 
@@ -124,7 +126,7 @@ export const useUi = create<Ui>((set, get) => ({
       Radio.event(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
-      items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region });
+      items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region, report: d.report });
     }
     set(st => ({ rev: st.rev + 1, feed: items.length ? [...st.feed, ...items].slice(-4) : st.feed, log: items.length ? [...items.reverse(), ...st.log].slice(0, 60) : st.log }));
     if (items.length) for (const it of items) setTimeout(() => set(st => ({ feed: st.feed.filter(f => f.id !== it.id) })), 10000);

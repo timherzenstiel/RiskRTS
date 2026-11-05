@@ -9,6 +9,7 @@ import { click } from './actions';
 import { closeNet, netSet, useNet } from './netStore';
 import { NAME_KEY, lsSet, playerName } from './storage';
 import { Players, Seats } from './Seats';
+import { NationCard } from './Nation';
 import { Shell } from './HostLobby';
 import { RulesPicker } from './Rules';
 
@@ -72,6 +73,7 @@ export function GuestLobby() {
     <Shell title={`Room ${lobby.room}`} kicker="Multiplayer · waiting for the host to start">
       <div><div className="lbl"><span>Seats · click a computer seat to take it</span></div>
         <Seats lobby={lobby} you={guest.you} onPick={f => { click(); guest.pick(f); }} /></div>
+      {(() => { const mine = lobby.seats.find(x => x.player === guest.you); return mine ? <NationCard f={mine.faction} /> : null; })()}
       {lobby.settings && <RulesPicker value={lobby.settings} />}
       <div className="row spread">
         <div><div className="lbl"><span>Difficulty</span></div><p className="muted" style={{ margin: 0 }}>{DIFFICULTIES[lobby.difficulty]?.name} · {DIFFICULTIES[lobby.difficulty]?.desc}</p></div>

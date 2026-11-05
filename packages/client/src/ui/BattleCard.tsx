@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { rendererRef } from './refs';
+import { FrontControls } from './FrontCard';
 
 export function BattleCard() {
   const sim = useSim();
@@ -25,6 +26,7 @@ export function BattleCard() {
           <span className="n">{alive}/{all}{b.mor?.[f] !== undefined ? <small> · {Math.round(b.mor[f])}%</small> : null}</span>
         </div>
       ))}
+      {!b.ended && <FrontControls g={sim.g} me={sim.me} b={b} />}
     </div>
   );
 }

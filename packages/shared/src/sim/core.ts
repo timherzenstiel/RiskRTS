@@ -1,6 +1,6 @@
 // Small helpers shared by the simulation modules.
-import { buildWorld } from '../world/build';
-import type { Battle, GameEvent, GameState, RegionState, Works } from './types';
+import { buildWorld, wrapDx } from '../world/build';
+import type { Army, Battle, GameEvent, GameState, RegionState, Works } from './types';
 import { FORMATION, SLOTS_INTERIOR, SLOTS_LAND, SLOTS_SEA, SLOT_USE, UNIT_TYPES, emptyUnits, totalUnits, type Units } from '../data/units';
 
 export const TICK_DT = .05;
@@ -41,7 +41,7 @@ export function approachSector(from: number, to: number): number {
 /** Regions a power is currently attacking (armies on the way to a foreign region, or battles it fights as the attacker). */
 export function offensives(g: GameState, fid: number): Set<number> {
   const s = new Set<number>();
-  for (const a of g.armies) if (a.owner === fid && !a.ret && g.regions[a.to].owner !== fid) s.add(a.to);
+  for (const a of g.armies) if (a.owner === fid && !a.ret && !a.decoy && g.regions[a.to].owner !== fid) s.add(a.to);
   for (const b of g.battles) {
     if (b.ended || b.def === fid) continue;
     const inIt = b.agents.length ? b.agents.some(x => x.f === fid && !x.dead && !x.out) : (b.counts ?? []).some(([f, al]) => f === fid && al > 0);
@@ -58,7 +58,7 @@ export function updateContested(r: RegionState) {
 
 /** A fresh, empty region record. */
 export const newRegion = (id: number): RegionState => ({
-  id, owner: -1, units: emptyUnits(), men: emptyUnits(), factory: false, barracks: false, airfield: false, defs: [], works: {}, mor: 80, home: -1, cut: false, contested: -1, capitalOf: -1, battle: -1,
+  id, owner: -1, units: emptyUnits(), men: emptyUnits(), factory: false, barracks: false, airfield: false, defs: [], works: {}, mor: 80, home: -1, cut: false, contested: -1, capitalOf: -1, battle: -1, stance: 0,
 });
 
 const NONE: Works = { tr: 0, sand: 0, wire: 0 };
@@ -104,6 +104,15 @@ export function consolidate(u: Units, m: Units): number {
 }
 /** Combat value of a garrison, weighted by strength. */
 export function forcePower(u: Units, m: Units, power: (k: keyof Units) => number) { let p = 0; for (const k of UNIT_TYPES) p += u[k] * power(k) * (.3 + .7 * strengthOf(u, m, k)); return p; }
+
+/** A new army record travelling from one region to another (not yet added to the game). */
+export function mkArmy(g: GameState, fid: number, fromId: number, toId: number, speed: number, min: number): Army {
+  const W = world(), WA = W.regions[fromId], WB = W.regions[toId];
+  const dx = wrapDx(WA.cx, WB.cx), dz = WB.cz - WA.cz, dist = Math.hypot(dx, dz);
+  return { id: g.nextId++, owner: fid, units: emptyUnits(), men: emptyUnits(), mor: 75, from: fromId, to: toId, t: 0, dur: Math.max(min, dist / speed), sea: W.seaLane.has(fromId + '|' + toId), ax: WA.cx, az: WA.cz, dx, dz };
+}
+/** Marching speed of ground troops (world units per second) and the shortest march. */
+export const MARCH_SPEED = 2.4, MARCH_MIN = 2.5;
 
 /** Battles still raging in a region (one per front). */
 export const frontsOf = (g: GameState, region: number) => g.battles.filter(b => b.region === region && !b.ended);

@@ -9,7 +9,7 @@ import { click } from './actions';
 export function Title() {
   const [name, setName] = useState(() => lsGet(NAME_KEY) ?? '');
   const install = useInstall(); const caps = useMemo(capabilities, []);
-  const go = (s: 'solo' | 'host' | 'join') => { click(); useUi.getState().setScreen(s); };
+  const go = (s: 'solo' | 'host' | 'join' | 'server') => { click(); useUi.getState().setScreen(s); };
   const cont = () => {
     Sfx.init(); const raw = lsGet(SAVE_KEY); const s = raw ? HostSession.restore(raw) : null; const ui = useUi.getState();
     if (!s) { lsDel(SAVE_KEY); ui.say('That save could not be loaded.'); ui.bump(); return; }
@@ -34,6 +34,7 @@ export function Title() {
             <button className="btn" disabled={!caps.webrtc} onClick={() => go('host')}>Host multiplayer</button>
             <button className="btn" disabled={!caps.webrtc} onClick={() => go('join')}>Join with code</button>
           </div>
+          <button className="btn wide" onClick={() => go('server')}>Online server · persistent wars</button>
           {install && <button className="btn sm" onClick={() => { void install(); }}>Install app</button>}
         </div>
         {!caps.webgl && <p className="notice" role="alert">This browser does not seem to support WebGL, so the 3D map may not start. Try a current Chrome, Edge, Firefox or Safari.</p>}

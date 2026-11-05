@@ -1,6 +1,7 @@
 // Per-frame drawing of everything that changes: garrisons, buildings, defences, flags, marching armies, ships and flights.
 // Everything is drawn at map scale: a soldier is about the height of a village house, a tank about a house long.
 // All of it is pushed into instanced pools; nothing here allocates.
+import * as THREE from 'three';
 import { DEF_KINDS, HW, armyPos, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { FxSystem } from './fxSystem';
@@ -175,16 +176,39 @@ export class DynamicDraw {
         const tot = a.units.inf + a.units.mg + a.units.art + a.units.tank, n = Math.min(4, 1 + Math.floor(tot / 10));
         for (let k = 0; k < n; k++) { const back = k * .55, side = k === 0 ? 0 : (k % 2 ? .3 : -.3); m.ship(x - s * back + c * side, z - c * back - s * side, face, facCol[a.owner], k === 0 ? 1.1 : .8, T + k * .7); }
       } else this.column(a, x, z, face, T);
-      const fc = facCol[a.owner], rem = 1 - a.t, steps = Math.ceil(rem * Math.hypot(a.dx, a.dz) / .6), ly = a.air ? 1.2 : .62;
-      for (let st = 0; st < steps; st++) {
-        if (a.ret && st % 2) continue;
-        const t0 = a.t + (st / steps) * rem, t1 = a.t + ((st + .5) / steps) * rem;
-        let x0 = a.ax + a.dx * t0, x1 = a.ax + a.dx * t1;
-        if (x0 < -HW) x0 += 2 * HW; if (x0 > HW) x0 -= 2 * HW; if (x1 < -HW) x1 += 2 * HW; if (x1 > HW) x1 -= 2 * HW;
-        if (Math.abs(x1 - x0) < 5) this.lines.add(x0, ly, a.az + a.dz * t0, x1, ly, a.az + a.dz * t1, fc);
-      }
+      this.route(a, T);
     }
   }
+
+  /**
+   * The route ahead of a moving army, C&C style: chevrons in its colour marching along the ground (or at altitude for aircraft)
+   * from the column to the destination, which gets a pulsing ring. Your own routes glow; others' are dimmer. A retreat is gapped.
+   */
+  private route(a: GameState["armies"][number], T: number) {
+    const m = this.m, own = a.owner === this.me, len = Math.hypot(a.dx, a.dz), rem = (1 - a.t) * len;
+    if (rem < .05) return;
+    const face = Math.atan2(a.dx, a.dz), ux = a.dx / len, uz = a.dz / len;
+    const col = own ? facCol[a.owner] : this.dimCol(a.owner), K2 = this.zoomK, SP = .32 * K2, L = .12 * K2, W = .03 * K2;
+    const groundY = (x: number, z: number) => a.air ? 1.2 : Math.max(.34, this.hAt(x, z, .2) + .1);
+    const wrap = (x: number) => x < -HW ? x + 2 * HW : x > HW ? x - 2 * HW : x;
+    const x0 = a.ax + a.dx * a.t, z0 = a.az + a.dz * a.t, phase = (T * .45 * K2) % SP;
+    const n = Math.min(60, Math.floor(rem / SP));
+    for (let k = 0; k <= n; k++) {
+      if (a.ret && k % 2) continue;
+      const d = .2 * K2 + k * SP + phase; if (d > rem - .06) break;
+      const x = wrap(x0 + ux * d), z = z0 + uz * d, y = groundY(x, z);
+      for (const sgn of [-1, 1]) m.part(x, y, z, face + Math.PI + sgn * .75, 0, 0, L / 2, W, .01, L, col, m.glowPool);
+    }
+    // destination: a pulsing ring of ticks
+    const tx = wrap(a.ax + a.dx), tz = a.az + a.dz, ty = groundY(tx, tz), r = (.14 + Math.sin(T * 4) * .02) * K2;
+    for (let k = 0; k < 10; k++) { const an = k / 10 * Math.PI * 2; m.part(tx, ty, tz, -an, 0, 0, r, .05 * K2, .01, .02 * K2, col, m.glowPool); }
+  }
+  private readonly dimC = new Map<number, THREE.Color>();
+  private dimCol(f: number) { let c = this.dimC.get(f); if (!c) { c = facCol[f].clone().multiplyScalar(.75); this.dimC.set(f, c); } return c; }
+  /** The local player (set by the renderer each frame; -1 when spectating). */
+  me = -1;
+  /** Size factor for route marks so they stay readable when zoomed out (set from the camera distance). */
+  zoomK = 1;
 
   /**
    * A marching column, front to back: tanks in pairs, a block of riflemen three abreast, machine-gun teams, then towed guns.

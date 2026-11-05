@@ -244,6 +244,7 @@ class WorldRenderer implements WorldRendererApi {
     this.post.render();
 
     const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
+    this.dyn.me = c.me; this.dyn.zoomK = Math.max(1, this.rig.dist / 10);
     this.labels.update(c);
     let active = 0; if (g) for (const b of g.battles) if (!b.ended) active++;
     const hh = .344 * this.rig.dist;

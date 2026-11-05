@@ -287,11 +287,11 @@ def tree_broad():
     k.limb((0, 0, 0), (.02, .34, 0), .05, .034, B['timber2'], seg=6)
     for a, h, l in ((.6, .3, .2), (2.4, .34, .18), (4.3, .28, .2), (5.5, .4, .14)):
         k.limb((.02, h, 0), (math.cos(a) * l, h + .22, math.sin(a) * l), .022, .012, B['timber2'], seg=4)
-    for i in range(26):
+    for i in range(17):
         u = rng.random() * math.tau; t = rng.random() * .85 + .15
         x, z = math.cos(u) * .26 * t, math.sin(u) * .24 * t; y = .48 + rng.random() * .36 - t * .1
         lit = (-x - z) * 1.1 + (y - .5) * 1.2
-        clump(k, x, y, z, .075 + rng.random() * .045, .46 + lit * .35 + (rng.random() - .5) * .08)
+        clump(k, x, y, z, .09 + rng.random() * .05, .46 + lit * .35 + (rng.random() - .5) * .08)
     return k.done()
 
 def tree_pine():
@@ -300,12 +300,12 @@ def tree_pine():
     k.limb((0, 0, 0), (0, .28, 0), .035, .028, B['timber2'], seg=5)
     tiers = 7
     for i in range(tiers):
-        y = .18 + i * .12; R = .3 * (1 - i / tiers) + .04; n = 12 - i
+        y = .18 + i * .12; R = .3 * (1 - i / tiers) + .04; n = 9 - i // 2
         for j in range(n):
             a = (j + (i % 2) * .5) / n * math.tau + rng.random() * .3
             tip = (math.cos(a) * R, y - .07, math.sin(a) * R)
             v = .44 + (-(tip[0] + tip[2]) * .5 + i / tiers * .12) + (rng.random() - .5) * .06
-            k.limb((0, y + .03, 0), tip, .075 * (1 - i / tiers * .5), .01, leaf(k, v), house=True, seg=3)
+            k.limb((0, y + .03, 0), tip, .085 * (1 - i / tiers * .5), .01, leaf(k, v), house=True, seg=3, cap=False)
         k.cyl(0, y, 0, R * .75, R * .25, .12, leaf(k, .38), True, seg=6, smooth=False)
     k.cyl(0, .18 + tiers * .12, 0, .05, 0, .16, leaf(k, .5), True, seg=4, smooth=False)
     return k.done()

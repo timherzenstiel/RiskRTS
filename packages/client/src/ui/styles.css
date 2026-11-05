@@ -687,7 +687,7 @@ button.ww:hover b{color:var(--accent)}
 .post-a .seg.ord button{min-height:28px;font-size:12px;padding:0 7px}
 .post .note{margin:0}
 .it.col{grid-template-columns:34px minmax(0,1fr)}
-.lv-row.stage{flex-wrap:wrap}
+.lv-row.lv-stage{flex-wrap:wrap}
 .stages{display:flex;gap:4px;margin:0;padding:0;list-style:none;flex:1;min-width:0}
 .stages li{flex:1;text-align:center;font:600 11px/1 var(--f-body);padding:6px 4px;border-radius:6px;background:rgba(0,0,0,.28);color:var(--dim);white-space:nowrap}
 .stages li.done{color:var(--mute)}

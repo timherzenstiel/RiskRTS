@@ -1,14 +1,13 @@
-// The in-game screen: stage plus the four calm HUD zones, overlays and connection state.
+// The in-game screen: map, top strip, War Office sidebar (docked right), dispatches, front command bar, overlays.
 import { useEffect } from 'react';
 import { useSim, useUi } from '../game/store';
 import { GuestSession } from '../game/session';
 import { BattleCard } from './BattleCard';
-import { Drawer } from './Drawer';
 import { Feed } from './Feed';
 import { Hint } from './Hint';
-import { Minimap } from './Minimap';
 import { Overlays } from './Overlays';
 import { OfferBanner } from './Diplomacy';
+import { Sidebar } from './Sidebar';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -26,7 +25,7 @@ function Connection() {
   return (
     <>
       {s instanceof GuestSession && !lost && (
-        <div className="conn glass" role="status" title="Round-trip time to the host">
+        <div className="conn plate" role="status" title="Round-trip time to the host">
           <i className={'led' + (s.latency > 250 ? ' slow' : '')} />{s.latency ? `${s.latency} ms` : 'Connected'}
         </div>
       )}
@@ -46,7 +45,7 @@ function Fatal() {
   if (!fatal) return null;
   return (
     <div className="fatal" role="alert">
-      <div className="glass sheet narrow">
+      <div className="plate sheet narrow">
         <div className="kicker">Cannot draw the map</div><h2>The 3D view could not start</h2>
         <p className="lede small">Your browser or graphics driver refused WebGL. Try reloading, turning on hardware acceleration, or using a recent Chrome, Edge, Firefox or Safari.</p>
         <p className="muted tiny">{fatal}</p>
@@ -75,9 +74,9 @@ export function Game() {
     <div id="app" className={hasDrawer ? 'has-drawer' : ''}>
       <Stage />
       <TopBar />
-      <Drawer />
+      <Sidebar />
       <OfferBanner />
-      <div id="leftcol"><Feed /><Minimap /></div>
+      <div id="leftcol"><Feed /></div>
       <div id="bottom"><BattleCard /><Hint /></div>
       <Connection />
       <Overlays />

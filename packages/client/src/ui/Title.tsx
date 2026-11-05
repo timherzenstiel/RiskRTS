@@ -17,11 +17,13 @@ export function Title() {
   };
   return (
     <main className="screen title">
-      <div className="bgfx" aria-hidden="true" />
-      <div className="sheet glass">
+      <div className="bgfx" aria-hidden="true" style={{ '--title-art': `url(${import.meta.env.BASE_URL}art/title/front-dusk.webp)` } as React.CSSProperties} />
+      <div className="titleplate plate">
+        <div className="kicker">The world at war · August 1914</div><h1>Fronts<br />of 1914</h1>
+      </div>
+      <div className="sheet plate">
         <div className="tgrid">
           <div className="tcol">
-        <div><div className="kicker">The world at war · August 1914</div><h1>Fronts<br />of 1914</h1></div>
         <p className="lede">Six empires, one map. Supply convoys reach every power at the same instant, so everybody builds and marches at once. Claim regions, dig in, and finish your sealed orders before anyone else finishes theirs. Battles fight themselves. Zoom in and watch.</p>
           </div>
           <div className="tcol">

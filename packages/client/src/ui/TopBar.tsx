@@ -1,4 +1,4 @@
-// Top zone: sealed-orders chip, supply ring + powers pills, clock / speed / menu.
+// Top strip: sealed orders, radio dispatch ticker, phosphor counters (supply, shells, men, weariness), powers, date, speed, menu.
 import { useEffect, useRef, useState } from 'react';
 import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome, weatherAt } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
@@ -6,19 +6,42 @@ import { buildWorld } from '@riskrts/shared';
 import { GuestSession } from '../game/session';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
+import { rendererRef } from './refs';
 import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
 
 const SPEEDS = [1, 2, 4];
 
-/** Map layer: everything, troops first (markers, front lines), or industry (buildings, rails, supply). */
-function LayerPicker() {
-  const layer = useUi(s => s.layer), set = useUi.getState().setLayer;
+/** Phosphor counter; the value rolls in when it changes. */
+function Lcd({ label, value, plus, cls, title, onClick }: { label: string; value: string | number; plus?: string | number; cls?: string; title: string; onClick?: () => void }) {
+  const body = <><small>{label}</small><span className="lcd-w"><b key={String(value)}>{value}</b>{plus !== undefined && <i>+{plus}</i>}</span></>;
+  return onClick
+    ? <button className={'lcd ' + (cls ?? '')} title={title} onClick={onClick}>{body}</button>
+    : <div className={'lcd ' + (cls ?? '')} title={title}>{body}</div>;
+}
+
+/** War weariness as a needle gauge: 0 % left, 100 % right. */
+function Needle({ v, unrest }: { v: number; unrest: number }) {
+  const a = -60 + Math.min(100, Math.max(0, v)) * 1.2;
   return (
-    <div className="seg layer-seg" role="group" aria-label="Map layer">
-      <button aria-pressed={layer === 0} title="Show everything" onClick={() => { click(); set(0); }}>Map</button>
-      <button aria-pressed={layer === 1} title="Troops first: corps on the borders, front lines, columns on the move (T)" onClick={() => { click(); set(layer === 1 ? 0 : 1); }}>Troops</button>
-      <button aria-pressed={layer === 2} title="Industry: factories, barracks, airfields, rails and supply (B)" onClick={() => { click(); set(layer === 2 ? 0 : 2); }}>Industry</button>
+    <div className={'needle' + (v >= unrest || v >= 60 ? ' hi' : v >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times." role="img" aria-label={`War weariness ${Math.round(v)}%`}>
+      <svg viewBox="0 0 44 26" aria-hidden="true"><path d="M4 24A18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeOpacity=".35" strokeWidth="3" /><path d="M29 8.4A18 18 0 0 1 40 24" fill="none" stroke="#c8402e" strokeWidth="3" /><line x1="22" y1="24" x2="22" y2="9" stroke="#e8e0c4" strokeWidth="2" strokeLinecap="round" style={{ transform: `rotate(${a}deg)`, transformOrigin: '22px 24px' }} /></svg>
+      <span><small>Weariness</small><b>{Math.round(v)}%</b></span>
     </div>
+  );
+}
+
+/** Radio dispatch ticker: the newest event, typed out. Clicking it opens the event's region or report. */
+function Ticker() {
+  const last = useUi(s => s.log[0]);
+  if (!last) return <div className="ticker"><span className="tk-t">Awaiting dispatches…</span></div>;
+  const open = () => {
+    if (last.report !== undefined) { useUi.setState({ reportId: last.report }); useUi.getState().setOverlay('reports'); return; }
+    if (last.region !== undefined) { rendererRef.current?.flyTo(last.region, 16); useUi.getState().select(last.region); }
+  };
+  return (
+    <button className={'ticker ' + last.cls} onClick={open} title="Latest dispatch · open the menu for earlier ones">
+      <time>{last.day}</time><span key={last.id} className="tk-t">{last.text}</span>
+    </button>
   );
 }
 
@@ -33,28 +56,28 @@ export function TopBar() {
   const ui = useUi.getState;
   const orders = f.mission ? missionText(f.mission)[0] : 'Awaiting orders';
   const speed = session.speed;
+  const men = f.men ?? 0;
+  const sel = useUi.getState().sel, at = sel >= 0 ? sel : g.regions.find(r => r.capitalOf === me)?.id ?? 0, w = weatherAt(at, g.day);
 
   return (
-    <header id="top">
-      <button className="glass mission" aria-label={g.over ? 'Show the result of the war' : 'Show sealed orders'} onClick={() => { click(); ui().setOverlay(g.over ? 'end' : 'orders'); }}>
+    <header id="top" className="strip">
+      <button className="mission" aria-label={g.over ? 'Show the result of the war' : 'Show sealed orders'} onClick={() => { click(); ui().setOverlay(g.over ? 'end' : 'orders'); }}>
         <span className="crest" style={{ '--c': F.color } as React.CSSProperties}>{F.key}</span>
         <span className="mtx"><small>Sealed orders</small><b>{orders}</b>
           <span className="mbar"><i style={{ width: `${(f.mission ? missionFrac(g, f) * 100 : 0).toFixed(1)}%` }} /></span></span>
       </button>
+      <Ticker />
 
-      <div className="center">
-        <div key={pulse} className={'glass res' + (pulse ? ' pulse' : '')} title="Supply arrives for every power at the same moment">
+      <div className="counters">
+        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title="Supply arrives for every power at the same moment">
           <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next convoy in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
-          <div className="rv"><small>Supply</small><b>{f.supply}</b></div>
-          <div className="ri"><span>+{income(g, me)}</span><small>per convoy</small></div>
-          <div className="ww sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab.">
-            <small>Shells</small><b>{Math.floor(f.shells ?? 0)}<i>+{shellIncome(g, me)}</i></b></div>
-          <button className={'ww men' + ((f.men ?? 0) < 300 ? ' hi' : '')} title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for conscription." onClick={() => { click(); ui().setOverlay('nation'); }}>
-            <small>Men</small><b>{(f.men ?? 0) >= 10000 ? `${Math.round((f.men ?? 0) / 1000)}k` : Math.floor(f.men ?? 0).toLocaleString('en-GB')}<i>+{poolGrowth(g, me)}</i></b></button>
-          <div className={'ww' + (f.ww >= NATIONS[me].unrest ? ' hi' : f.ww >= 60 ? ' hi' : f.ww >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times.">
-            <small>Weariness</small><b>{Math.round(f.ww)}%</b></div>
+          <small>Supply</small><span className="lcd-w"><b key={f.supply}>{f.supply}</b><i>+{income(g, me)}</i></span>
         </div>
-        <div className="glass pills" role="group" aria-label="Powers">
+        <Lcd label="Shells" value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls="sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab." />
+        <Lcd label="Men" value={men >= 10000 ? `${Math.round(men / 1000)}k` : Math.floor(men).toLocaleString('en-GB')} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
+          title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for conscription." onClick={() => { click(); ui().setOverlay('nation'); }} />
+        <Needle v={f.ww} unrest={NATIONS[me].unrest} />
+        <div className="pills" role="group" aria-label="Powers">
           {FACTIONS.map((x, i) => (
             <button key={i} className={'pill' + (i === me ? ' me' : '') + (g.factions[i].alive ? '' : ' dead')} style={{ '--c': x.color } as React.CSSProperties}
               title={x.name} aria-label={`${x.name}: ${counts[i]} regions. Open scoreboard`} aria-expanded={scoreOpen} onClick={() => { click(); ui().toggleScore(); }}>
@@ -66,22 +89,18 @@ export function TopBar() {
       </div>
 
       <div className="right">
-        <div className="glass clock">
-          <button id="date" className="datebtn" title="War calendar: unlocks, rushes and doctrines" onClick={() => { click(); ui().setOverlay('calendar'); }}>{dateStr(g.day)}</button>
-          {(() => { const sel = useUi.getState().sel, at = sel >= 0 ? sel : g.regions.find(r => r.capitalOf === me)?.id ?? 0, w = weatherAt(at, g.day);
-            return <span className={'wx w' + w} title={`Weather in ${buildWorld().regions[at].name}: ${WEATHER[w]}${w === 1 ? ' · marches and assaults 30% slower, shells sink into the mud' : w === 2 ? ' · marches 40% slower, cut-off troops wear down twice as fast' : w === 3 ? ' · cut-off troops wear down 50% faster' : ''}`}>{WEATHER[w]}</span>; })()}
-          {session.canControlTime ? (
-            <div className="seg" role="group" aria-label="Game speed">
-              <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
-              {SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)}
-            </div>
-          ) : (
-            <span className="speedro" title={session instanceof GuestSession && session.spectator ? 'Watching with full vision, a little delayed' : 'The host controls the game speed'}>{session instanceof GuestSession && session.spectator ? 'Spectating' : speed === 0 ? 'Paused' : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ranked' : ''}</span>
-          )}
-          <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
-          <button className="ico" aria-label="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
-        </div>
-        <div className="glass layers"><LayerPicker /></div>
+        <button id="date" className="lcd datebtn" title="War calendar: unlocks, rushes and doctrines" onClick={() => { click(); ui().setOverlay('calendar'); }}><small>Date</small><span className="lcd-w"><b>{dateStr(g.day)}</b></span></button>
+        <span className={'wx w' + w} title={`Weather in ${buildWorld().regions[at].name}: ${WEATHER[w]}${w === 1 ? ' · marches and assaults 30% slower, shells sink into the mud' : w === 2 ? ' · marches 40% slower, cut-off troops wear down twice as fast' : w === 3 ? ' · cut-off troops wear down 50% faster' : ''}`}>{WEATHER[w]}</span>
+        {session.canControlTime ? (
+          <div className="seg speed" role="group" aria-label="Game speed">
+            <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
+            {SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)}
+          </div>
+        ) : (
+          <span className="speedro" title={session instanceof GuestSession && session.spectator ? 'Watching with full vision, a little delayed' : 'The host controls the game speed'}>{session instanceof GuestSession && session.spectator ? 'Spectating' : speed === 0 ? 'Paused' : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ranked' : ''}</span>
+        )}
+        <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
+        <button className="ico" aria-label="Menu" title="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
       </div>
     </header>
   );

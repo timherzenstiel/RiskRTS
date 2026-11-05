@@ -70,6 +70,7 @@ export class BattleView {
         case 'bunk': m.bunker(wx, y, wz, a.face, a.f, .7); break;
         case 'fort': m.emplacement(wx, y, wz, a.face, a.f, .6, recoil); break;
         case 'flak': m.flak(wx, y, wz, a.face, a.f, .55, recoil); break;
+        case 'inf': m.infantry(wx, y, wz, a.face, a.f, US, { walk: a.moving ? a.phase : 0, recoil, trench: !!a.trench, id: i }); break;
         default: m.unit(a.type as UnitType, wx, y, wz, a.face, a.f, US, a.moving ? a.phase : 0, recoil);
       }
     }

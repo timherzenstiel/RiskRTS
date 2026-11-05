@@ -1,7 +1,7 @@
 // National character and manpower: national units, traits, the manpower pool, mobilisation, strikes and risings.
 import { describe, it, expect } from 'vitest';
 import {
-  COST, DT, FORMATION, NATIONS, UNIT_TYPES, UT, applyCommand, applySnapshot, buildWorld, createGame, createMirror, dayOf, emptyUnits, fortCost, income,
+  COST, DT, FACTIONS, FORMATION, NATIONS, UNIT_TYPES, UT, applyCommand, applySnapshot, buildWorld, createGame, createMirror, dayOf, emptyUnits, fortCost, income,
   initMirrorCapitals, makeSnapshot, moraleCap, poolGrowth, run, shellIncome, statsOf, unitName, updateSupplyLines, type GameState,
 } from '../src';
 import { strike } from './helpers';
@@ -12,9 +12,9 @@ const GB = 0, FR = 1, RU = 2, DE = 3, AH = 4, OT = 5;
 function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
 
 describe('national units', () => {
-  const g = createGame({ seed: 1, humans: [0, 1, 2, 3, 4, 5] });
+  const g = createGame({ seed: 1, humans: [0, 1, 2, 3, 4, 5, 6] });
   it('each power has a national variant with its own name and stats', () => {
-    expect(NATIONS.length).toBe(6);
+    expect(NATIONS.length).toBe(FACTIONS.length);
     expect(statsOf(g, FR, 'art').rof).toBeLessThan(UT.art.rof);          // Canon de 75 fires faster
     expect(statsOf(g, AH, 'art').rof).toBeGreaterThan(UT.art.rof);       // Škoda fires slower
     expect(statsOf(g, GB, 'tank').hp).toBeCloseTo(UT.tank.hp * 1.2);     // Mark IV
@@ -68,7 +68,7 @@ describe('manpower', () => {
     expect(g.factions[0].men).toBe(25);
   });
   it('the pool grows with every home region held, faster when mobilised; mobilisation keeps weariness from fading', () => {
-    const g = createGame({ seed: 5, humans: [0, 1, 2, 3, 4, 5] });
+    const g = createGame({ seed: 5, humans: [0, 1, 2, 3, 4, 5, 6] });
     const base = poolGrowth(g, FR); expect(base).toBe(Math.round(g.regions.filter(r => r.home === FR && r.owner === FR).length * 20 * NATIONS[FR].growth));
     expect(applyCommand(g, FR, { t: 'mobilise', level: 2 })).toBeNull();
     expect(poolGrowth(g, FR)).toBe(Math.round(base * 2));
@@ -77,7 +77,7 @@ describe('manpower', () => {
     expect(g.factions[FR].ww).toBeGreaterThan(20); expect(g.factions[DE].ww).toBeLessThan(20);
   });
   it('long war weariness above the threshold brings strikes, then risings', () => {
-    const g = createGame({ seed: 6, humans: [0, 1, 2, 3, 4, 5] });
+    const g = createGame({ seed: 6, humans: [0, 1, 2, 3, 4, 5, 6] });
     g.factions.forEach(f => { f.mission = null; });
     g.factions[RU].ww = 85; g.factions[RU].mob = 2;
     run(g, 20 * 5 + .1);
@@ -99,8 +99,9 @@ describe('manpower', () => {
 
 describe('national damage', () => {
   it('Škoda howitzers break defences faster than other guns', () => {
-    const hit = (f: number) => {
-      const g = createGame({ seed: 9, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 0, pace: 1 } });
+    // averaged over several seeds: one battle alone is too much a matter of luck
+    const hit = (f: number, seed: number) => {
+      const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } });
       for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.capitalOf = -1; }
       const A = id('Austria-Hungary'), B = id('Italy'); g.regions[A].owner = f; g.regions[B].owner = 1;
       g.regions[A].units = { ...emptyUnits(), inf: 3, art: 3 }; g.regions[B].defs = [{ id: 900, k: 'bunk', s: A, hp: DT.bunk.hp, f: 1 }]; g.regions[B].units.inf = 1; fill(g);
@@ -109,6 +110,7 @@ describe('national damage', () => {
       const b = g.battles.find(x => x.region === B)!; const bunk = b.agents.find(a => a.type === 'bunk')!;
       return DT.bunk.hp - Math.max(0, bunk.hp);
     };
-    expect(hit(AH)).toBeGreaterThan(hit(DE) * 1.3);
+    const seeds = [3, 5, 7, 11], sum = (f: number) => seeds.reduce((t, sd) => t + hit(f, sd), 0);
+    expect(sum(AH)).toBeGreaterThan(sum(DE) * 1.3);
   });
 });

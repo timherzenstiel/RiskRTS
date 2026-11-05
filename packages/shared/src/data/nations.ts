@@ -159,6 +159,24 @@ export const NATIONS: Nation[] = [
     flags: { gallipoli: true, desert: true, fortInf: true, poorRails: true },
     ai: { doctrines: ['depth', 'elastic', 'mass', 'peace', 'air', 'total'], aggr: 1.35, dig: 1.6, guns: .9, mass: 1.2, navy: .8, line: 0.5, rush: 0.1, patience: 1.2, retreat: 1 },
   },
+  { // United States: neutral at first, the arsenal of the Entente, its fresh divisions only mobilised from 1917
+    unit: 'inf', unitName: 'Doughboy battalion', unitShort: 'AEF', unitDesc: 'Fresh, well-fed American infantry · +15% hit points', from: dayOf(1917, 4),
+    mult: { hp: 1.15 },
+    strengths: [
+      { name: 'Arsenal of democracy', desc: 'Factories make 4 shells per convoy and cost nothing extra.' },
+      { name: 'Fresh divisions', desc: 'The manpower pool is 40% larger and, from April 1917, grows 30% faster.' },
+    ],
+    weaknesses: [
+      { name: 'Neutrality', desc: 'Until April 1917 the nation will not mobilise: manpower grows at half speed.' },
+      { name: 'Untested army', desc: 'Morale ceiling −5. Tanks only from 1918 (French-built Renaults).' },
+    ],
+    tankFrom: dayOf(1918, 1), tankCost: 1.1,
+    pool: 1.4, growth: 1.3, growthUntil: [dayOf(1917, 4), .38],
+    shells: 1.1, factoryShells: 4, factoryCost: 0,
+    morale: -5, unrest: 85, wwLoss: 1.1, hold: 1.5, startInf: 5,
+    flags: { navy: true },
+    ai: { doctrines: ['mass', 'artillery', 'tankcorps', 'combined', 'total', 'air'], aggr: 1.25, dig: 1, guns: 1.1, mass: 1.1, navy: 1.4, line: 0.4, rush: 0.05, patience: 1.1, retreat: 1.1 },
+  },
 ];
 
 /** The nation of a power (falls back to a neutral profile for unknown ids). */

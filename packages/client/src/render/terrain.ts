@@ -1,12 +1,15 @@
-// Instanced voxel terrain: one box per land tile, plus trees, villages, cities, railways and sea lanes.
+// Painted heightfield terrain: one continuous, sun-lit surface over the whole map (tile-corner vertices, sloping into the sea at the
+// coasts), plus trees, villages, cities, railways and sea lanes. Close to the camera detail.ts lays a finer painted surface on top.
 // Everything static here is generated from the shared world raster with deterministic noise, so every client draws the same map.
 import * as THREE from 'three';
 import {
-  CITIES, COLS, HH, HW, N, RIDGES, ROWS, Rng, SEA, TS, hash2, latOf, lonOf, tileAtLL, tileAtW, tx, tz, vnoise, wxLon, wzLat, type World,
+  CITIES, COLS, HH, HW, N, RIDGES, ROWS, Rng, SEA, TS, hash2, latOf, lonOf, tileAtLL, tileAtW, tx, tz, vnoise, worksAt, wxLon, wzLat, type GameState, type World,
 } from '@riskrts/shared';
 import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
+import { COAST_GLSL, coastTexture } from './coast';
+import type { MeshKey, MeshPools } from './meshPools';
 
 /** Tiles per side of a close-up detail chunk (see detail.ts). */
 export const DETAIL_CH = 12;
@@ -70,32 +73,58 @@ const nb4 = (i: number, out: number[]) => { const c = i % COLS; out[0] = c > 0 ?
 /** Shared uniform: 0 = full faction colouring (strategic view), 1 = natural terrain with coloured borders only (close-up). */
 export const uNear = { value: 0 };
 
-function detailMaterial(tex: THREE.DataTexture, strength: number) {
+/** Tiles per side of a far-ground chunk. */
+const FAR_CH = 40;
+
+/** Far-ground material: region colours (linear-filtered, so borders read as painted), brush noise, rock on steep slopes,
+ *  wet sand where the land runs into the sea. Fragments under a drawn close-up chunk are discarded (detail.ts paints there). */
+function farMaterial(strat: THREE.DataTexture, nat: THREE.DataTexture, cover: THREE.DataTexture, war: THREE.DataTexture, coast: THREE.DataTexture) {
   const m = new THREE.MeshLambertMaterial();
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uDetail = { value: tex }; sh.uniforms.uNear = uNear;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aNat; varying vec3 vWP; varying vec3 vWN; varying vec3 vNat;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec4 _w = modelMatrix * instanceMatrix * vec4(transformed,1.0); vWP=_w.xyz; vWN=normalize(mat3(instanceMatrix)*objectNormal); vNat=aNat;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uDetail; uniform float uNear; varying vec3 vWP; varying vec3 vWN; varying vec3 vNat;')
+    Object.assign(sh.uniforms, { uStrat: { value: strat }, uNatL: { value: nat }, uCover: { value: cover }, uWar: { value: war }, uCoast: { value: coast }, uNear, uGrid: { value: new THREE.Vector2(COLS, ROWS) } });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normalize(mat3(modelMatrix)*objectNormal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform sampler2D uStrat, uNatL, uCover, uWar, uCoast; uniform float uNear; uniform vec2 uGrid; varying vec3 vWP; varying vec3 vWN;
+float fh(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float fn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(fh(i),fh(i+vec2(1,0)),f.x),mix(fh(i+vec2(0,1)),fh(i+vec2(1,1)),f.x),f.y); }
+float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+3.)*.08; }
+${COAST_GLSL}`)
+      .replace('void main() {', `void main() {
+  vec2 _cc=floor((vWP.xz+vec2(${HW.toFixed(4)},${HH.toFixed(4)}))/${(DETAIL_CH * TS).toFixed(5)});
+  if(uNear>.01 && texture2D(uCover,(_cc+.5)/vec2(${DCC}.,${DCR}.)).r>.5) discard;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-  diffuseColor.rgb = mix(diffuseColor.rgb, vNat, uNear);
-  vec3 _an=abs(vWN); float _n;
-  if(_an.y>.5){ _n=texture2D(uDetail,vWP.xz*.5).r; diffuseColor.rgb*=${(1 - strength).toFixed(2)}+${(2 * strength).toFixed(2)}*_n; }
-  else { vec2 _uv=_an.x>.5?vWP.zy:vWP.xy; _n=texture2D(uDetail,_uv*.5+.37).r; float _st=step(.5,fract(vWP.y*24.+_n*.6));
-    diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.3,.21,.13),.6)*(.8+.35*_n)*(.85+.25*_st)*mix(.75,1.15,clamp(vWP.y*2.,0.,1.)); }`);
+  vec2 _t=(vWP.xz/${TS.toFixed(6)}+uGrid*.5)/uGrid;
+  // smooth coastline: cut the land along the coast field, crinkled by noise into a rocky edge
+  float _cs=coastSd(uCoast,_t)+(fb(vWP.xz*9.)-.5)*.28+(fn(vWP.xz*31.)-.5)*.08;
+  if(_cs>0.) discard;
+  vec2 _w=vec2(fb(vWP.xz*1.7),fb(vWP.xz*1.7+7.1))-.5;
+  vec3 _s=pow(texture2D(uStrat,_t+_w*.0009).rgb,vec3(2.2)), _n=pow(texture2D(uNatL,_t+_w*.0012).rgb,vec3(2.2));
+  vec3 _c=mix(_s,_n,uNear);
+  float _m=fb(vWP.xz*3.1), _m2=fb(vWP.xz*15.);
+  _c*=(.86+.34*_m+.14*(_m2-.5))*mix(1.38,1.,uNear);
+  float _sl=1.-normalize(vWN).y;
+  vec3 _rock=mix(vec3(.21,.15,.095),vec3(.105,.085,.065),fn(vWP.xz*22.))*(.8+.3*step(.5,fract(vWP.y*60.+_m*2.)));
+  _c=mix(_c,mix(_rock,_c,.35*(1.-uNear)),smoothstep(.2,.5,_sl));
+  // war damage: churned no-man's-land and shell craters where a border has been fought over
+  float _dm=texture2D(uWar,_t).g;
+  if(_dm>.01){
+    _c=mix(_c,vec3(.085,.07,.05)*(.75+.5*_m2),smoothstep(.0,.6,_dm)*.8);
+    vec2 _cg=vWP.xz*7.,_ci=floor(_cg),_cf=fract(_cg)-.5; float _cr=.18+.2*fh(_ci+3.);
+    if(fh(_ci)<_dm*.7&&length(_cf)<_cr) _c*=length(_cf+vec2(.06))<_cr?.55:1.25;
+  }
+  // the shore: wet sand a little inland, then a dark broken rock rim at the water's edge (lit top-left)
+  float _sand=smoothstep(-.42,-.2,_cs)*(1.-smoothstep(-.14,-.08,_cs));
+  _c=mix(_c,vec3(.24,.2,.14)*(.8+.3*_m2),_sand*.55);
+  float _rim=smoothstep(-.13,-.05,_cs);
+  vec3 _rk=mix(vec3(.12,.1,.085),vec3(.3,.26,.21),fn(vWP.xz*40.)); _rk*=.75+.5*step(.55,fn(vWP.xz*26.+3.));
+  _c=mix(_c,_rk,_rim*.9);
+  float _wet=smoothstep(.235,.15,vWP.y);
+  _c=mix(_c,vec3(.2,.17,.12)*(.75+.35*_m2),_wet*.45);
+  _c*=mix(.55,1.,smoothstep(.04,.18,vWP.y));
+  diffuseColor.rgb=_c;`);
   };
   return m;
-}
-
-function makeDetailTex() {
-  const S = 64, d = new Uint8Array(S * S * 4);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const n = vnoise(x * .22, y * .22) * .55 + hash2(x * 3 + 1, y * 7) * .45, v = Math.floor(clamp(n, 0, 1) * 255), o = (y * S + x) * 4;
-    d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 255;
-  }
-  const t = new THREE.DataTexture(d, S, S, THREE.RGBAFormat);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true;
-  return t;
 }
 
 export class Terrain {
@@ -123,8 +152,29 @@ export class Terrain {
   readonly roadT = new Uint8Array(N);
   readonly fieldT = new Uint8Array(N);
   readonly coastT = new Uint8Array(N);
-  private readonly natAttr: THREE.InstancedBufferAttribute;
-  private readonly tileMesh: THREE.InstancedMesh;
+  /** Linear-filtered copies for the far ground: strategic (owner-tinted) and natural colour per tile; sea tiles next to the
+   *  coast repeat their land neighbour so the coast does not bleed to black. */
+  private readonly stratData: Uint8Array<ArrayBuffer>;
+  private readonly natLData: Uint8Array<ArrayBuffer>;
+  private readonly stratTex: THREE.DataTexture;
+  private readonly natLTex: THREE.DataTexture;
+  /** Sea tiles that copy a land tile's colours (land tile -> sea tiles). */
+  private readonly shoreOf = new Map<number, number[]>();
+  private readonly farMeshes: THREE.Mesh[] = [];
+  /** War texture, one texel per tile: r = trench depth on a held border (0-3, x80), g = shell damage (0-255). */
+  readonly warData = new Uint8Array(N * 4);
+  readonly warTex: THREE.DataTexture;
+  private warKey = '';
+  private readonly nearBorder = new Map<string, Int32Array>();
+  /** Signed distance to the smooth coastline (coast.ts), shared by the ground shaders and the water. */
+  readonly coastTex: THREE.DataTexture;
+  /** Village and town houses (x, y, z, width, height, depth, wall colour) and churches (x, y, z, size), for the modelled scenery. */
+  private readonly homes: [number, number, number, number, number, number, THREE.Color][] = [];
+  private readonly churches: [number, number, number, number][] = [];
+  /** Modelled trees and houses (built once the baked models load), chunked so off-screen chunks are culled. */
+  private readonly sceneryMeshes: THREE.InstancedMesh[] = [];
+  private sceneryOn = false;
+  hasScenery = false;
   private readonly treeMesh: THREE.InstancedMesh;
   private readonly houseMesh: THREE.InstancedMesh;
   private readonly treeBase: Float32Array;
@@ -138,19 +188,7 @@ export class Terrain {
     const landIdx: number[] = [];
     for (let i = 0; i < N; i++) if (land[i]) { this.instOf[i] = landIdx.length; landIdx.push(i); }
 
-    // voxel tiles
-    const detail = this.bag.add(makeDetailTex());
-    const tm = this.bag.add(detailMaterial(detail, .16));
-    this.tileMesh = new THREE.InstancedMesh(boxGeo, tm, landIdx.length);
-    this.tileMesh.frustumCulled = false; this.tileMesh.castShadow = this.tileMesh.receiveShadow = true;
     const m4 = new THREE.Matrix4();
-    for (const i of landIdx) { const h = tileH[i]; m4.makeScale(TS, h, TS); m4.setPosition(tx(i % COLS), h / 2, tz((i / COLS) | 0)); this.tileMesh.setMatrixAt(this.instOf[i], m4); }
-    this.tileMesh.setColorAt(0, WHITE);
-    this.natAttr = new THREE.InstancedBufferAttribute(new Float32Array(landIdx.length * 3).fill(1), 3);
-    this.tileMesh.geometry = boxGeo.clone(); this.bag.add(this.tileMesh.geometry);
-    this.tileMesh.geometry.setAttribute('aNat', this.natAttr);
-    this.add(this.tileMesh);
-
     // base biome colours, beaches and patchwork fields
     const coastLand = this.coastT, NB = [0, 0, 0, 0];
     for (const i of landIdx) { nb4(i, NB); for (const j of NB) if (j >= 0 && !land[j]) coastLand[i] = 1; }
@@ -211,6 +249,25 @@ export class Terrain {
     this.treeBase = new Float32Array(treeBaseL);
     this.coverTex = this.bag.add(new THREE.DataTexture(this.coverData, DCC, DCR, THREE.RedFormat, THREE.UnsignedByteType));
     this.coverTex.needsUpdate = true;
+
+    // far ground: linear colour textures + heightfield chunks
+    this.stratData = new Uint8Array(N * 4); this.natLData = new Uint8Array(N * 4);
+    this.stratTex = this.bag.add(new THREE.DataTexture(this.stratData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    this.natLTex = this.bag.add(new THREE.DataTexture(this.natLData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    for (const t of [this.stratTex, this.natLTex]) { t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; }
+    {
+      // sea tiles up to two tiles out take the colour of the nearest land tile
+      const src = new Int32Array(N).fill(-1), q: number[] = [];
+      for (const i of landIdx) { src[i] = i; q.push(i); }
+      const depth = new Uint8Array(N);
+      for (let h = 0; h < q.length; h++) { const i = q[h]; if (depth[i] >= 2) continue; nb4(i, NB); for (const j of NB) if (j >= 0 && src[j] < 0) { src[j] = src[i]; depth[j] = depth[i] + 1; q.push(j); } }
+      for (let i = 0; i < N; i++) if (!land[i] && src[i] >= 0) { let l = this.shoreOf.get(src[i]); if (!l) this.shoreOf.set(src[i], l = []); l.push(i); }
+    }
+    this.warTex = this.bag.add(new THREE.DataTexture(this.warData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    this.warTex.magFilter = this.warTex.minFilter = THREE.LinearFilter; this.warTex.needsUpdate = true;
+    this.coastTex = this.bag.add(coastTexture(world));
+    const farMat = this.bag.add(farMaterial(this.stratTex, this.natLTex, this.coverTex, this.warTex, this.coastTex));
+    this.buildFarGround(farMat);
     const treeMat = this.bag.add(new THREE.MeshLambertMaterial()), coverTex = this.coverTex;
     // voxel trees give way to the detailed close-up trees wherever the detail layer is drawn
     treeMat.onBeforeCompile = (sh) => {
@@ -244,10 +301,10 @@ export class Terrain {
         const ti = tileAtW(x, z); if (ti < 0 || !land[ti]) continue;
         for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const j = ti + dr * COLS + dc; if (j >= 0 && j < N && land[j]) this.cityT[j] = 1; }
         const y = tileH[ti], w = .05 + rng.next() * .05, d = .05 + rng.next() * .05, h = .04 + rng.next() * .05 + (size === 3 && r < .12 ? .05 : 0), rot = rng.next() < .5, ww = rot ? d : w, dd = rot ? w : d;
-        houses.push([x, y + h / 2, z, ww, h, dd, WALLS[Math.floor(rng.next() * 4)]]);
+        const wc = WALLS[Math.floor(rng.next() * 4)]; houses.push([x, y + h / 2, z, ww, h, dd, wc]); this.homes.push([x, y, z, ww, h, dd, wc]);
         const rc = ROOFS[Math.floor(rng.next() * 5)]; houses.push([x, y + h + .008, z, ww + .012, .016, dd + .012, rc]); houses.push([x, y + h + .022, z, ww * .55, .014, dd + .006, rc]);
       }
-      if (size >= 2) { const y = tileH[ci]; houses.push([cx, y + .12, cz, .045, .24, .045, WALLS[3]]); houses.push([cx, y + .27, cz, .024, .07, .024, ROOFS[2]]); }
+      if (size >= 2) { const y = tileH[ci]; houses.push([cx, y + .12, cz, .045, .24, .045, WALLS[3]]); houses.push([cx, y + .27, cz, .024, .07, .024, ROOFS[2]]); this.churches.push([cx, y, cz, size]); }
       if (size === 3) { const y = tileH[ci]; houses.push([cx + .1, y + .05, cz + .08, .16, .1, .1, WALLS[1]]); houses.push([cx + .1, y + .12, cz + .08, .06, .05, .06, col('#5f7a6e')]); }
     }
     for (const t of world.regions) {
@@ -259,7 +316,7 @@ export class Terrain {
         for (let q = 0; q < n; q++) {
           const a = rng.next() * 6.283, r = Math.sqrt(rng.next()) * .11, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, ti = tileAtW(x, z); if (ti < 0 || !land[ti] || river[ti]) continue;
           const y = tileH[ti], w = .04 + rng.next() * .03, d = .04 + rng.next() * .035, h = .03 + rng.next() * .03, rot = rng.next() < .5, ww = rot ? d : w, dd = rot ? w : d;
-          houses.push([x, y + h / 2, z, ww, h, dd, WALLS[Math.floor(rng.next() * 4)]]); const rc = ROOFS[Math.floor(rng.next() * 5)];
+          const wc = WALLS[Math.floor(rng.next() * 4)]; houses.push([x, y + h / 2, z, ww, h, dd, wc]); this.homes.push([x, y, z, ww, h, dd, wc]); const rc = ROOFS[Math.floor(rng.next() * 5)];
           houses.push([x, y + h + .007, z, ww + .01, .013, dd + .01, rc]); houses.push([x, y + h + .018, z, ww * .5, .011, dd + .004, rc]);
         }
         if (rng.next() < .45) { const y = tileH[i]; houses.push([cx + .07, y + .05, cz - .06, .018, .1, .018, WALLS[3]]); houses.push([cx + .07, y + .11, cz - .06, .02, .025, .02, ROOFS[2]]); }
@@ -320,6 +377,67 @@ export class Terrain {
 
   private add(o: THREE.Object3D) { this.scene.add(o); this.objects.push(o); }
 
+  /** Swap the box trees and houses for the baked models (trees by biome, houses by size), in culled chunks. */
+  useModels(mp: MeshPools) {
+    if (this.hasScenery) return; this.hasScenery = true;
+    const groups = new Map<string, { key: MeshKey; m: number[]; c: number[] }>();
+    const put = (key: MeshKey, x: number, z: number, mat: THREE.Matrix4, c: THREE.Color) => {
+      const ck = key + ':' + Math.floor((x + HW) / (FAR_CH * TS)) + ':' + Math.floor((z + HH) / (FAR_CH * TS));
+      let g = groups.get(ck); if (!g) groups.set(ck, g = { key, m: [], c: [] });
+      g.m.push(...mat.elements); g.c.push(c.r, c.g, c.b);
+    };
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), sc = new THREE.Vector3(), tc = new THREE.Color();
+    const R = this.treeRec;
+    for (let k = 0; k < R.length; k += 7) {
+      const x = R[k], z = R[k + 1], y = this.surfaceAt(x, z), s = R[k + 3], bio = BIOME_KEYS[R[k + 4]], ci = R[k + 5], h = hash2(k, 31);
+      const key: MeshKey = bio === 'taiga' ? 'tree_pine' : bio === 'jungle' ? (h < .35 ? 'tree_palm' : 'tree_broad') : bio === 'savanna' ? 'tree_acacia' : bio === 'tundra' ? 'shrub' : (h < .25 ? 'tree_pine' : 'tree_broad');
+      const cc = (TREEC[bio] ?? TREEC.temperate!)[ci % (TREEC[bio] ?? TREEC.temperate!).length];
+      const size = key === 'shrub' ? .2 * s : key === 'tree_pine' ? .17 * s : .18 * s;
+      q.setFromAxisAngle(up, h * 6.283); m4.compose(v.set(x, y - .004, z), q, sc.set(size, size * (.9 + hash2(k, 7) * .25), size));
+      put(key, x, z, m4, tc.copy(cc).multiplyScalar(1.15));
+    }
+    for (const [x, y, z, w, h, d, wc] of this.homes) {
+      const big = h > .07, key: MeshKey = big ? 'house_b' : 'house_a', yaw = w >= d ? 0 : Math.PI / 2;
+      q.setFromAxisAngle(up, yaw); m4.compose(v.set(x, this.surfaceAt(x, z) - .002, z), q, sc.set(yaw ? d : w, h * .85, yaw ? w : d));
+      put(key, x, z, m4, tc.copy(wc).multiplyScalar(.75));
+    }
+    for (const [x, y, z, size] of this.churches) {
+      q.setFromAxisAngle(up, 0); const S = size === 3 ? .16 : .12; m4.compose(v.set(x, y, z), q, sc.set(S, S * 1.1, S));
+      put('church', x, z, m4, tc.setRGB(1, 1, 1));
+    }
+    for (const g of groups.values()) {
+      const geo = mp.geometry(g.key); if (!geo) continue;
+      const n = g.c.length / 3, im = new THREE.InstancedMesh(geo, mp.mat, n);
+      im.instanceMatrix.array.set(g.m); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(g.c), 3);
+      im.castShadow = im.receiveShadow = true; im.computeBoundingSphere(); im.visible = false;
+      this.sceneryMeshes.push(im); this.add(im);
+    }
+  }
+
+  /** Heightfield chunks over every tile that is land or touches land; corners with no land sink under the sea (shore slope). */
+  private buildFarGround(mat: THREE.Material) {
+    const land = this.world.land, G = FAR_CH + 1;
+    const near = (c: number, r: number) => { for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc = (c + dc + COLS) % COLS; if (rr >= 0 && rr < ROWS && land[rr * COLS + cc]) return true; } return false; };
+    for (let r0 = 0; r0 < ROWS; r0 += FAR_CH) for (let c0 = 0; c0 < COLS; c0 += FAR_CH) {
+      const idx = new Int32Array(G * G).fill(-1), pos: number[] = [], ind: number[] = [];
+      const vert = (lx: number, ly: number) => {
+        const o = ly * G + lx; if (idx[o] >= 0) return idx[o];
+        const gx = 2 * (c0 + lx), gy = 2 * (r0 + ly), h = this.vtxH(gx, gy); idx[o] = pos.length / 3;
+        pos.push(gx * TS / 2 - HW, h < 0 ? .24 : h, gy * TS / 2 - HH); return idx[o];
+      };
+      for (let r = r0; r < Math.min(ROWS, r0 + FAR_CH); r++) for (let c = c0; c < Math.min(COLS, c0 + FAR_CH); c++) {
+        if (!near(c, r)) continue;
+        const lx = c - c0, ly = r - r0, a = vert(lx, ly), b = vert(lx + 1, ly), d = vert(lx, ly + 1), e = vert(lx + 1, ly + 1);
+        ind.push(a, d, b, b, d, e);
+      }
+      if (!ind.length) continue;
+      const geo = this.bag.add(new THREE.BufferGeometry());
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(ind); geo.computeVertexNormals(); geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = mesh.castShadow = true;
+      this.farMeshes.push(mesh); this.add(mesh);
+    }
+  }
+
   /** Height of the smooth close-up surface at half-tile grid point (gx, gy) (tile c centre = 2c+1); -1 where no land touches it.
    *  Every vertex takes the highest land tile it touches, so the surface always covers the voxel tiles beneath it. */
   vtxH(gx: number, gy: number): number {
@@ -352,7 +470,7 @@ export class Terrain {
   paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3) {
     const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE;
     const { river, borderNb } = this.world;
-    const A = this.tileMesh.instanceColor!.array as Float32Array, base = this.baseCol, NA = this.natAttr.array as Float32Array;
+    const base = this.baseCol, SD = this.stratData, LD = this.natLData;
     const hlC = hl === 2 ? WHITE : hl === 1 ? WHITE : hl === 3 ? RED : null, hlA = hl === 2 ? .26 : hl === 1 ? .12 : hl === 3 ? .15 : 0;
     for (const i of reg.tiles) {
       const k = this.instOf[i] * 3;
@@ -370,7 +488,10 @@ export class Terrain {
       if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; if (owners[nb] !== owner) { nr = r; ng = g; nbb = b; } }
       if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; nr += (hlC.r - nr) * hlA; ng += (hlC.g - ng) * hlA; nbb += (hlC.b - nbb) * hlA; pr += (hlC.r - pr) * hlA; pg += (hlC.g - pg) * hlA; pb += (hlC.b - pb) * hlA; }
       const o = i * 4, D = this.natData; D[o] = enc(pr); D[o + 1] = enc(pg); D[o + 2] = enc(pb); D[o + 3] = owner >= 0 ? owner + 1 : 0;
-      A[k] = r; A[k + 1] = g; A[k + 2] = b; NA[k] = nr; NA[k + 1] = ng; NA[k + 2] = nbb;
+      const sr = enc(r), sg = enc(g), sb = enc(b), lr = enc(nr), lg = enc(ng), lb = enc(nbb);
+      SD[o] = sr; SD[o + 1] = sg; SD[o + 2] = sb; SD[o + 3] = 255; LD[o] = lr; LD[o + 1] = lg; LD[o + 2] = lb; LD[o + 3] = 255;
+      const sea = this.shoreOf.get(i);
+      if (sea) for (const j of sea) { const q = j * 4; SD[q] = sr; SD[q + 1] = sg; SD[q + 2] = sb; SD[q + 3] = 255; LD[q] = lr; LD[q + 1] = lg; LD[q + 2] = lb; LD[q + 3] = 255; }
     }
     const T = this.treeMesh.instanceColor?.array as Float32Array | undefined;
     if (T) {
@@ -384,13 +505,51 @@ export class Terrain {
     }
   }
 
+  /** Tiles of `rid` within three tiles of its border with `n`, as (tile, depth) pairs. */
+  private borderBand(rid: number, n: number): Int32Array {
+    const key = rid + '|' + n; let b = this.nearBorder.get(key); if (b) return b;
+    const { terrOf, borderNb, land } = this.world, out: number[] = [], seen = new Set<number>(), q: number[] = [];
+    for (const i of this.world.regions[rid].tiles) if (borderNb[i] === n) { q.push(i, 0); seen.add(i); }
+    for (let h = 0; h < q.length; h += 2) {
+      const i = q[h], d = q[h + 1]; out.push(i, d); if (d >= 3) continue; const c = i % COLS;
+      for (const j of [c > 0 ? i - 1 : -1, c < COLS - 1 ? i + 1 : -1, i - COLS, i + COLS]) if (j >= 0 && j < N && land[j] && terrOf[j] === rid && !seen.has(j)) { seen.add(j); q.push(j, d + 1); }
+    }
+    b = Int32Array.from(out); this.nearBorder.set(key, b); return b;
+  }
+
+  /** Trenches along held borders and shell damage (RegionState.cr) into the war texture; cheap when nothing changed. */
+  setWar(g: GameState | null) {
+    if (!g) return;
+    let key = '';
+    for (const r of g.regions) {
+      if (r.cr) for (const n in r.cr) key += r.id + ':' + n + '=' + (r.cr[n] >> 3) + ',';
+      for (const n of this.world.regions[r.id].adj) { const tr = worksAt(r, n).tr, c = r.fr?.[n] ? 1 : 0; if (tr || c) key += r.id + '>' + n + '=' + Math.max(tr, c) + ','; }
+    }
+    if (key === this.warKey) return;
+    this.warKey = key; const D = this.warData; D.fill(0);
+    for (const r of g.regions) for (const n of this.world.regions[r.id].adj) {
+      const lvl = Math.max(worksAt(r, n).tr, r.fr?.[n] ? 1 : 0), dmg = Math.min(1, (r.cr?.[n] ?? 0) / 150);
+      if (!lvl && dmg <= 0) continue;
+      const band = this.borderBand(r.id, n);
+      for (let k = 0; k < band.length; k += 2) {
+        const o = band[k] * 4, d = band[k + 1];
+        if (lvl && d === 0) D[o] = Math.max(D[o], lvl * 80);
+        if (dmg > 0) D[o + 1] = Math.max(D[o + 1], Math.round(dmg * 255 * (1 - d / 4)));
+      }
+    }
+    this.warTex.needsUpdate = true;
+  }
+
   /** Call after one or more paintRegion calls. */
   commitColors() {
-    this.tileMesh.instanceColor!.needsUpdate = true; this.natAttr.needsUpdate = true; this.natTex.needsUpdate = true;
+    this.stratTex.needsUpdate = true; this.natLTex.needsUpdate = true; this.natTex.needsUpdate = true;
     if (this.treeMesh.instanceColor) this.treeMesh.instanceColor.needsUpdate = true;
   }
 
   setCameraDistance(dist: number) {
+    // modelled trees and houses up to the front band; the light box versions further out
+    const on = this.hasScenery && dist < 40;
+    if (on !== this.sceneryOn) { this.sceneryOn = on; for (const m of this.sceneryMeshes) m.visible = on; this.treeMesh.visible = !on; this.houseMesh.visible = !on; }
     uNear.value = 1 - clamp((dist - 9) / 14, 0, 1);
     // line railways on the strategic map; up close the painted ground draws them (groundPaint.ts)
     const o = (1 - clamp((dist - 22) / 18, 0, 1)) * clamp((dist - 13) / 4, 0, 1);
@@ -400,7 +559,7 @@ export class Terrain {
 
   dispose() {
     for (const o of this.objects) o.removeFromParent();
-    this.tileMesh.dispose(); this.treeMesh.dispose(); this.houseMesh.dispose();
+    this.treeMesh.dispose(); this.houseMesh.dispose();
     this.bag.disposeAll();
   }
 }

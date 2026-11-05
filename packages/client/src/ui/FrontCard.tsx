@@ -2,6 +2,7 @@
 import { BARRAGES, SHELLS, STANCES, buildWorld, groundUnits, autoGoIn, moveK, shellsFor, type Barrage, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { click } from './actions';
+import { Sfx } from '../audio/sfx';
 
 const SHORT_STANCE = ['Balanced', 'Aggressive', 'Defensive', 'Hold'] as const;
 const STANCE_TIP = [
@@ -35,7 +36,7 @@ function StageRow({ g, me, b, att }: { g: GameState; me: number; b: Battle; att:
       : st === 2 ? (att ? 'Fighting the main army in the open behind the line' : 'Our main army meets the enemy behind the line')
         : (att ? 'Our troops hold the enemy\'s first line and dig in' : 'The enemy holds a foothold in our first line');
   return (
-    <div className="lv-row stage" title={tip}>
+    <div className="lv-row lv-stage" title={tip}>
       <span className="lv-l">Stage</span>
       <ol className="stages" aria-label="Stages of the offensive">
         {(b.goal === 1 && st !== 1 && st !== 2 ? [0, 3] : [0, 1, 2]).map(k => <li key={k} className={k === st ? 'on' : (k < st && st !== 3) || (k === 0 && st === 3) ? 'done' : ''}>{STAGES[k]}{k === 1 && st === 1 ? ` · ${left}s` : ''}</li>)}
@@ -68,14 +69,14 @@ export function FrontControls({ g, me, b, compact }: { g: GameState; me: number;
       </div>
       <div className="lv-row">
         <span className="lv-l">Guns</span>
-        <div className="seg" role="group" aria-label="Barrage">
+        <div className="seg lever" role="group" aria-label="Barrage">
           {BARRAGES.map((n, i) => (
             <button key={n} aria-pressed={lvl === i} disabled={i === 2 && shells < SHELLS.shot}
               title={i === 0 ? 'Guns hold fire: saves shells and hides your strength' : i === 1 ? 'Steady fire · about one shell per battery every 10 s' : 'Heavy barrage · 80% more fire and suppression, twice the shells'}
-              onClick={() => send({ t: 'barrage', battle: b.id, level: i as Barrage })}>{i === 0 ? 'Off' : n}</button>
+              onClick={() => { Sfx.ratchet(); useUi.getState().order({ t: 'barrage', battle: b.id, level: i as Barrage }); }}>{i === 0 ? 'Off' : n}</button>
           ))}
         </div>
-        {att && !b.go && <button className="btn sm primary otop" onClick={() => send({ t: 'charge', battle: b.id })} title="The attackers leave the start line now">Over the top{goIn > 0 ? <small> · auto {goIn}s</small> : null}</button>}
+        {att && !b.go && <button className="btn sm primary otop" onClick={() => send({ t: 'charge', battle: b.id })} title="The attackers leave the start line now"><span className="cover" aria-hidden="true" /><span className="otop-l">Over the top</span>{goIn > 0 ? <small> · auto {goIn}s</small> : null}</button>}
         {att && b.go && <span className="lv-go">Attack under way</span>}
       </div>
       <div className="lv-row">

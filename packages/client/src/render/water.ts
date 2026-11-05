@@ -1,6 +1,7 @@
-// Pixel-quantised animated sea: depth from a coast distance field, foam rings along shores, sparkles and a faint grid.
+// Finely pixel-quantised animated sea: depth from a coast distance field, foam rings along shores, sparkles and a faint grid.
 import * as THREE from 'three';
-import { COLS, HH, HW, N, ROWS, TS, type World } from '@riskrts/shared';
+import { COLS, HH, HW, ROWS, TS, type World } from '@riskrts/shared';
+void COLS; void ROWS;
 
 export class Water {
   readonly mesh: THREE.Mesh;
@@ -8,16 +9,9 @@ export class Water {
   private readonly tex: THREE.DataTexture;
   private readonly geo: THREE.PlaneGeometry;
 
-  constructor(scene: THREE.Scene, world: World) {
-    const coast = new Uint8Array(N).fill(20), q: number[] = [], nb = [0, 0, 0, 0];
-    for (let i = 0; i < N; i++) if (world.land[i]) { coast[i] = 0; q.push(i); }
-    for (let h = 0; h < q.length; h++) {
-      const i = q[h], d = coast[i]; if (d >= 16) continue;
-      const c = i % COLS; nb[0] = c > 0 ? i - 1 : -1; nb[1] = c < COLS - 1 ? i + 1 : -1; nb[2] = i >= COLS ? i - COLS : -1; nb[3] = i + COLS < N ? i + COLS : -1;
-      for (const j of nb) if (j >= 0 && coast[j] > d + 1) { coast[j] = d + 1; q.push(j); }
-    }
-    this.tex = new THREE.DataTexture(coast, COLS, ROWS, THREE.RedFormat, THREE.UnsignedByteType);
-    this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter; this.tex.needsUpdate = true;
+  constructor(scene: THREE.Scene, world: World, coast: THREE.DataTexture) {
+    void world;
+    this.tex = coast;
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uCoast: { value: this.tex }, uSize: { value: new THREE.Vector2(COLS, ROWS) }, uTS: { value: TS } },
       vertexShader: `varying vec2 vMap; uniform vec2 uSize; uniform float uTS; void main(){ vec4 w=modelMatrix*vec4(position,1.); vMap=vec2(w.x/uTS+uSize.x*.5,w.z/uTS+uSize.y*.5); gl_Position=projectionMatrix*viewMatrix*w; }`,
@@ -28,16 +22,16 @@ export class Water {
     vec3 deep=vec3(.075,.11,.135);
     vec2 wp=(vMap-uSize*.5)*uTS;
     if(vMap.x<0.||vMap.y<0.||vMap.x>uSize.x||vMap.y>uSize.y){ gl_FragColor=vec4(pow(deep*.6,vec3(2.2)),1.); return; }
-    vec2 q=floor(wp*16.)/16.;
-    float d=texture2D(uCoast,vMap/uSize).r*255.;
-    vec3 c=mix(vec3(.28,.37,.34),vec3(.13,.21,.24),smoothstep(1.,6.,d)); c=mix(c,deep,smoothstep(5.,18.,d));
-    float n=vn(q*2.2+vec2(uTime*.07,uTime*.05))*.6+vn(q*5.5+vec2(-uTime*.11,uTime*.09))*.4;
-    c*=.9+.2*n;
+    vec2 q=floor(wp*48.)/48.;
+    float d=max(0.,(texture2D(uCoast,vMap/uSize).r*255.-40.)/12.);
+    vec3 c=mix(vec3(.2,.29,.28),vec3(.13,.21,.24),smoothstep(.3,4.,d)); c=mix(c,deep,smoothstep(5.,18.,d));
+    float n=vn(q*1.6+vec2(uTime*.07,uTime*.05))*.6+vn(q*4.+vec2(-uTime*.11,uTime*.09))*.4;
+    c*=.93+.14*n;
     float w=sin((q.x*1.3+q.y*.8)*3.1+uTime*.9+n*6.)*.5+.5;
     c+=vec3(.04,.06,.06)*smoothstep(.9,1.,w)*(.5+n);
     float ring=sin(d*1.6-uTime*1.3+n*3.)*.5+.5;
-    float foam=smoothstep(3.2,.5,d)*smoothstep(.62,.95,ring)*.9+smoothstep(1.3,.2,d)*.55;
-    foam*=.65+.5*h21(floor(q*5.));
+    float foam=smoothstep(.9,.2,d)*smoothstep(.8,.98,ring)*.28+smoothstep(.22,.03,d)*.45;
+    foam*=.65+.5*vn(q*7.);
     c=mix(c,vec3(.66,.68,.6),clamp(foam,0.,.6));
     if(h21(floor(wp*26.)+floor(uTime*1.4))>.994&&n>.5) c+=.4;
     vec2 g=abs(fract(wp/6.+.5)-.5)*6.; if(min(g.x,g.y)<.018) c+=vec3(.025,.035,.03);
@@ -52,5 +46,5 @@ export class Water {
 
   setTime(t: number) { this.mat.uniforms.uTime.value = t; }
 
-  dispose() { this.mesh.removeFromParent(); this.geo.dispose(); this.mat.dispose(); this.tex.dispose(); }
+  dispose() { this.mesh.removeFromParent(); this.geo.dispose(); this.mat.dispose(); }
 }

@@ -45,12 +45,14 @@ export function DoctrineSheet() {
   const left = Math.max(0, Math.ceil((f.docDue ?? g.time) - g.time)), fav = favouriteDoctrine(me, year);
   const pick = (k: typeof fav) => { click(); ui().order({ t: 'doctrine', doc: k }); ui().setOverlay(null); };
   return (
-    <Modal label={`Doctrine for ${year}`} narrow onClose={() => ui().setOverlay(null)}>
+    <Modal label={`Doctrine for ${year}`} onClose={() => ui().setOverlay(null)}>
       <div className="kicker">{year} · General Staff conference</div><h2>Choose this year's doctrine</h2>
       <p className="muted small">One doctrine per war year, kept for the rest of the war. If no choice is made within {left} s, the War Office takes the one it favours.</p>
-      <div className="doctrines">
-        {doctrinesOf(year).map(d => (
-          <button key={d.key} className="doc" onClick={() => pick(d.key)}>
+      <div className="fuse" role="img" aria-label={`${left} seconds left`}><i style={{ width: `${Math.min(100, left / 60 * 100)}%` }} /><b>{left}s</b></div>
+      <div className="doctrines desk">
+        {doctrinesOf(year).map((d, i) => (
+          <button key={d.key} className="doc dossier" style={{ '--tilt': `${(i - 1) * 2.2}deg` } as React.CSSProperties} onClick={() => pick(d.key)}>
+            <span className="tab">File {year}/{i + 1}</span>
             <b>{d.name}{d.key === fav ? <span className="badge">Favoured</span> : null}</b><small>{d.desc}</small>
           </button>
         ))}

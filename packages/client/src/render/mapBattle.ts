@@ -5,7 +5,7 @@ import { battleCounts, tileAtW, type Battle, type GameState, type World } from '
 import { Sfx } from '../audio/sfx';
 import type { CameraRig } from './camera';
 import { MAP_S } from './dynamic';
-import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, SCORCH, type FxSystem } from './fxSystem';
+import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, SCORCH, type FxSystem } from './fxSystem';
 import type { Models } from './models';
 import { K } from './palette';
 import { FLAME as FLAME_K, GLOW, type Sprites } from './sprites';
@@ -115,7 +115,18 @@ export class MapBattles {
     if (F.shellT < 0) {
       F.shellT += .3 + Math.random() * .7;
       const side = Math.random() < .5 ? 0 : 1, at = this.pt(F, side, Math.random(), Math.random(), p);
-      if (this.land(at.x, at.z)) this.explode(at.x, at.z, .8 + Math.random() * .5, Math.random() < .5, dist);
+      if (this.land(at.x, at.z)) {
+        this.explode(at.x, at.z, .8 + Math.random() * .5, Math.random() < .5, dist);
+        // the shell's flight as a faint arc of dots from the guns behind the other line (design 1.3), fading in half a second
+        if (dist < 90) {
+          const from = this.pt(F, 1 - side, .3 + Math.random() * .4, 1.5, q), y0 = this.gy(from.x, from.z) + .05, y1 = this.gy(at.x, at.z);
+          const len = Math.hypot(at.x - from.x, at.z - from.z), hgt = .3 + len * .45;
+          for (let j = 1; j < 14; j++) {
+            const t = j / 14, x = from.x + (at.x - from.x) * t, z = from.z + (at.z - from.z) * t, y = y0 + (y1 - y0) * t + 4 * hgt * t * (1 - t);
+            fx.spawn(x, y, z, 0, 0, 0, 0, .25 + t * .35, .014 * k, .006 * k, K.tracer, F_THIN);
+          }
+        }
+      }
     }
     // rocket volleys (Katyusha-style ripples), alternating sides
     F.volleyT -= dt;

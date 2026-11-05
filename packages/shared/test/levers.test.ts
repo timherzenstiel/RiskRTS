@@ -11,7 +11,7 @@ const id = (n: string) => W.byName[n].id;
 function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
 /** France (0) against Germany (1); every other region belongs to power 2 and is empty. */
 function setup(seed = 21, pace = 1) {
-  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 0, pace } });
+  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace } });
   for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; }
   const A = id('France'), B = id('Germany');
   g.regions[A].owner = 0; g.regions[A].home = 0; g.regions[B].owner = 1; g.regions[B].home = 1;
@@ -68,9 +68,11 @@ describe('barrage, shells and suppression', () => {
     expect(dry.lost).toBeGreaterThan(0); expect(dry.lost).toBeLessThan(full.lost);
   });
   it('suppression fades when the guns fall silent', () => {
-    const s = shell(2); const before = s.b.supp[1];
-    applyCommand(s.g, 0, { t: 'barrage', battle: s.b.id, level: 0 }); run(s.g, 20);
-    expect(s.b.supp[1]).toBeLessThan(before * .6);
+    // the same front twice: one keeps firing, one falls silent; the silenced defenders recover
+    const quiet = shell(2), loud = shell(2), before = quiet.b.supp[1];
+    applyCommand(quiet.g, 0, { t: 'barrage', battle: quiet.b.id, level: 0 }); run(quiet.g, 20); run(loud.g, 20);
+    expect(quiet.b.supp[1]).toBeLessThan(before * .8);
+    expect(quiet.b.supp[1]).toBeLessThan((loud.b.supp[1] ?? 0) * .7);
   });
   it('factories and the capital produce shells; supply buys more', () => {
     const { g, A } = setup(); g.regions[A].factory = true; g.regions[A].capitalOf = 0;

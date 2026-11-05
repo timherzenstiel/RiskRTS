@@ -5,10 +5,10 @@ import { AIR_RANGE, HW, buildWorld, hops, tileAtW, wrapDx, type Battle, type Fx,
 import type { Session } from '../game/session';
 import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
-import type { CreateRenderer, RendererCallbacks, WorldRendererApi } from './api';
+import type { CreateRenderer, PixelScale, RendererCallbacks, WorldRendererApi } from './api';
 import { Ambient } from './ambient';
 import { AIR_Y, BS, BattleView } from './battleView';
-import { CameraRig } from './camera';
+import { CameraRig, bandOf } from './camera';
 import { DynamicDraw } from './dynamic';
 import { GroundDetail } from './detail';
 import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, FxSystem } from './fxSystem';
@@ -18,17 +18,22 @@ import { Labels } from './labels';
 import { NetworkLayer } from './network';
 import { MapBattles } from './mapBattle';
 import { Models } from './models';
+import { MeshPools } from './meshPools';
+import { Impostors } from './impostors';
 import { K } from './palette';
 import { Post } from './post';
 import { LineBatch, Pool, litMaterial, uChrome } from './pools';
 import { Terrain } from './terrain';
 import { Water } from './water';
+import { Shroud } from './shroud';
 import { battleAnchor, sectorPoint } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
-type Quality = 0 | 1 | 2;
+type Quality = PixelScale;
 /** Render-buffer scale: Ultra = device pixels, High = CSS pixels, Chunky = half resolution. */
-const QUAL_DIV = [() => 1 / Math.min(window.devicePixelRatio || 1, 2), () => 1, () => 2];
+const QUAL_DIV = [() => 1 / Math.min(window.devicePixelRatio || 1, 2), () => 1, () => 1 / .75, () => 2];
+/** Classic (0.75×) is upscaled with filtering: a 4:3 nearest stretch gives uneven pixel rows. */
+const QUAL_SMOOTH = [true, false, true, false];
 /** Battlefield ground pixels per local unit. */
 
 class WorldRenderer implements WorldRendererApi {
@@ -41,6 +46,10 @@ class WorldRenderer implements WorldRendererApi {
   private readonly rig: CameraRig;
   private readonly terrain: Terrain;
   private readonly water: Water;
+  private readonly shroud: Shroud;
+  private readonly meshes: MeshPools;
+  private readonly impostors: Impostors;
+  private cursorCls = '';
   private readonly lit: Pool; private readonly glow: Pool;
   private readonly detail: GroundDetail;
   private readonly lines: LineBatch;
@@ -89,13 +98,16 @@ class WorldRenderer implements WorldRendererApi {
       this.world = buildWorld();
       this.rig = new CameraRig(this.scene, SM);
       this.terrain = new Terrain(this.scene, this.world);
-      this.water = new Water(this.scene, this.world);
+      this.water = new Water(this.scene, this.world, this.terrain.coastTex);
+      this.shroud = new Shroud(this.scene, this.world);
       this.lit = new Pool(this.scene, 120000, litMaterial(), true);
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);
       this.detail = new GroundDetail(this.scene, this.world, this.terrain);
       this.lines = new LineBatch(this.scene, 8000);
       this.sprites = new Sprites(this.scene);
       this.models = new Models(this.lit, this.glow);
+      this.meshes = new MeshPools(this.scene); this.models.mesh = this.meshes;
+      this.impostors = new Impostors(this.scene); this.models.sprites = this.impostors;
       this.dyn = new DynamicDraw(this.world, this.terrain, this.models, this.lines, this.fx);
       this.net = new NetworkLayer(this.world, this.terrain);
       this.war = new MapBattles(this.world, this.terrain, this.models, this.fx);
@@ -108,9 +120,10 @@ class WorldRenderer implements WorldRendererApi {
     this.curOwner = new Int16Array(R).fill(-2); this.curHl = new Int8Array(R).fill(-1); this.dirty = new Uint8Array(R);
     this.rig.snap();
 
-    this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); });
+    this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); },
+      (id) => { cb.onSelect(id); const u = useUi.getState(), st = this.session?.state; if (st && st.regions[id].owner === this.session!.me) u.setTab('deploy'); });
     this.labelCtx = {
-      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0,
+      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
       armyH: (a) => { this.armyTuple[0] = this.terrain.anchorH(a.from); this.armyTuple[1] = this.terrain.anchorH(a.to); return this.armyTuple; },
     };
@@ -149,7 +162,7 @@ class WorldRenderer implements WorldRendererApi {
     this.renderer.setSize(w, h, false); this.post.setSize(w, h); this.rig.setAspect(this.vw / this.vh);
   }
 
-  setQuality(q: Quality) { this.quality = q; this.canvas.classList.toggle('smooth', q === 0); this.resize(); }
+  setQuality(q: Quality) { this.quality = q; this.canvas.classList.toggle('smooth', QUAL_SMOOTH[q]); this.resize(); }
 
   /** Fly to a region; zoomed in close on a region at war, fly to its (first) front instead. */
   flyTo(regionId: number, distance?: number) {
@@ -185,6 +198,8 @@ class WorldRenderer implements WorldRendererApi {
     return best;
   }
 
+  zoomBand(b: number) { this.input.zoomBand(b); }
+
   watchedBattles(): number[] {
     const g = this.session?.state, out: number[] = []; if (!g || this.rig.dist >= 40) return out;
     for (const b of g.battles) if (!b.ended && this.distTo(b) < 22) out.push(b.id);
@@ -197,15 +212,26 @@ class WorldRenderer implements WorldRendererApi {
     const dt = clamp(dtReal, 0, .05), ui = useUi.getState(), s = this.session, g = s ? s.state : null;
     this.now += dt; this.frameNo++;
     if (ui.quality !== this.lastStoreQ) { this.lastStoreQ = ui.quality; if (ui.quality !== this.quality) this.setQuality(ui.quality); }
-    if (ui.orderMode !== this.orderCursor) { this.orderCursor = ui.orderMode; this.canvas.classList.toggle('order', ui.orderMode); }
+    { // context cursor: attack / march / air / no-go while giving orders, spade while fortifying, binoculars over unknown land
+      let c = '';
+      const me = s?.me ?? -1, hov = ui.hover, sel = ui.sel, rs = g && hov >= 0 ? g.regions[hov] : null;
+      if (ui.orderMode) c = ui.orderKind === 'air' ? 'c-air' : !rs ? 'c-no' : sel >= 0 && !this.world.regions[sel].adj.includes(hov) ? 'c-no' : rs.owner === me ? 'c-move' : 'c-atk';
+      else if (ui.tab === 'fort' && sel >= 0 && g?.regions[sel].owner === me) c = 'c-fort';
+      else if (rs && rs.owner !== me && (rs.vis ?? 3) < 2) c = 'c-scout';
+      if (c !== this.cursorCls) { if (this.cursorCls) this.canvas.classList.remove(this.cursorCls); if (c) this.canvas.classList.add(c); this.cursorCls = c; }
+      if (ui.orderMode !== this.orderCursor) { this.orderCursor = ui.orderMode; this.canvas.classList.toggle('order', ui.orderMode); }
+    }
 
     const [px, pz] = this.input.pan();
     this.rig.update(dt, px, pz);
+    if (!this.terrain.hasScenery && this.meshes.ready) this.terrain.useModels(this.meshes);
     this.terrain.setCameraDistance(this.rig.dist);
     this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
-    this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.dyn.sel = ui.sel;
+    this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.labels.setBand(bandOf(this.rig.dist)); this.dyn.sel = ui.sel;
 
     this.syncPaint(g, ui.sel, ui.hover);
+    this.shroud.update(g, this.now);
+    if (this.frameNo % 30 === 0) this.terrain.setWar(g);
     const speed = s ? s.speed : 1, fdt = dt * (speed > 0 ? Math.min(speed, 4) : .5);
     this.updateBattles(g, dt, fdt);
     if (s) this.processFx(s);
@@ -217,7 +243,8 @@ class WorldRenderer implements WorldRendererApi {
     this.post.tune(this.rig.dist, ui.look, this.now); uChrome.value = ui.look ? .75 : .3;
     this.post.render();
 
-    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now;
+    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
+    this.dyn.me = c.me; this.dyn.zoomK = Math.max(1, this.rig.dist / 10);
     this.labels.update(c);
     let active = 0; if (g) for (const b of g.battles) if (!b.ended) active++;
     const hh = .344 * this.rig.dist;
@@ -233,7 +260,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input.dispose(); this.labels.dispose();
     for (const v of this.views.values()) v.dispose();
     this.views.clear();
-    this.terrain.dispose(); this.water.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
+    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.meshes.dispose(); this.impostors.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
     this.post.dispose(); this.rig.dispose();
     this.canvas.classList.remove('order', 'drag', 'smooth');
     // The context is deliberately not force-lost: the page may mount a new renderer on the same canvas.
@@ -397,10 +424,10 @@ class WorldRenderer implements WorldRendererApi {
 
   private drawScene(g: GameState | null, T: number) {
     const { lit, glow, lines, rig, sprites } = this;
-    lit.begin(); glow.begin(); lines.begin(); sprites.begin();
+    lit.begin(); glow.begin(); lines.begin(); sprites.begin(); this.meshes.begin(); this.impostors.begin();
     const near = rig.dist < 26;
     // fine model detail (rivets, faces, spokes, markings) only where it can be seen
-    this.models.hi = rig.dist < 7; this.models.t = T;
+    this.models.hi = rig.dist < 7; this.models.hiMesh = rig.dist < 12; this.models.t = T;
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
       this.net.draw(lines, g, this.session?.me ?? -1, rig);
@@ -413,7 +440,7 @@ class WorldRenderer implements WorldRendererApi {
     this.dyn.drawMarker(T);
     this.debug.extra?.(this.models, T);
     this.fx.draw(sprites, near); this.fx.drawTracers(lines);
-    lit.end(); glow.end(); lines.end(); sprites.end(rig.camera, T);
+    lit.end(); glow.end(); lines.end(); sprites.end(rig.camera, T); this.meshes.end(); this.impostors.end();
   }
 }
 

@@ -4,6 +4,7 @@ import { describeEvent, type BuildKind, type Command, type FortKind, type GameEv
 import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
+import { DEFAULT_PIXEL_SCALE, type PixelScale } from '../render/api';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
 export type Tab = 'rec' | 'build' | 'fort' | 'deploy' | 'march';
@@ -28,7 +29,7 @@ interface Ui {
   reportId: number;
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
-  tut: number; tips: boolean; quality: 0 | 1 | 2; sound: boolean;
+  tut: number; tips: boolean; quality: PixelScale; sound: boolean;
   /** Spoken radio dispatches (signal cues still play when off). */
   radio: boolean;
   /** Visual style: 0 = Tiberian (muddy brown/grey), 1 = Red Alert (industrial chrome). */
@@ -52,7 +53,7 @@ interface Ui {
   toggleScore(): void;
   say(text: string): void;
   setSpeed(s: number): void;
-  setQuality(q: 0 | 1 | 2): void;
+  setQuality(q: PixelScale): void;
   setLook(l: 0 | 1): void;
   setSound(on: boolean): void;
   setRadio(on: boolean): void;
@@ -76,12 +77,23 @@ const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { r
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
 let feedId = 1;
 
+/** Pixel scale from storage; the old three-step setting (f14q: Ultra/High/Chunky) carries over as Ultra/Classic/Retro. */
+export function loadPixelScale(get: (k: string) => string | null = lsGet): PixelScale {
+  const v = get('f14px');
+  if (v !== null && ['0', '1', '2', '3'].includes(v)) return Number(v) as PixelScale;
+  const old = get('f14q');
+  if (old === '0') return 0;
+  if (old === '2') return 3;
+  if (old === '1') return 2;
+  return DEFAULT_PIXEL_SCALE;
+}
+
 Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
-  quality: ([0, 1, 2].includes(Number(lsGet('f14q'))) && lsGet('f14q') !== null ? Number(lsGet('f14q')) : 1) as 0 | 1 | 2,
+  quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
@@ -102,7 +114,7 @@ export const useUi = create<Ui>((set, get) => ({
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
   say: (text) => set({ toast: { text, id: ++feedId } }),
   setSpeed: (n) => { const s = get().session; if (s?.canControlTime) { s.speed = n; get().bump(); } },
-  setQuality: (quality) => { lsSet('f14q', String(quality)); set({ quality }); },
+  setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
   setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; if (!sound) Radio.reset(); set({ sound }); },
   setRadio: (radio) => { lsSet('f14radio', radio ? '1' : '0'); Radio.voice = radio; if (!radio) Radio.reset(); set({ radio }); },

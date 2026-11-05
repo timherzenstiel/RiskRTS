@@ -1,9 +1,10 @@
-// Right-hand region file: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
+// Region file in the War Office sidebar: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
 import { useState } from 'react';
 import { WEATHER, TREATY_NAMES, railOpen, railsOf, weatherAt, activeSpies, techOn, treatyOf } from '@riskrts/shared';
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useSim, useUi, dateStr, type Tab } from '../game/store';
 import { click } from './actions';
+import { Sfx } from '../audio/sfx';
 import { CloseIcon, Icon, SupplyIcon } from './icons';
 import { rendererRef } from './refs';
 import { AttackBudget, BuildTab, FortifyTab, MarchTab, RecruitTab, SharePicker, NeighbourRow, knownTroops, reportAge } from './DrawerTabs';
@@ -14,7 +15,7 @@ import { Briefing } from './Briefing';
 import { DeployTab, corpsState, unitsLine } from './DeployTab';
 import { groupName } from '@riskrts/shared';
 
-const TABS: [Tab, string][] = [['rec', 'Recruit'], ['build', 'Build'], ['fort', 'Fortify'], ['deploy', 'Deploy'], ['march', 'March']];
+const TABS: [Tab, string][] = [['rec', 'Recruit'], ['fort', 'Fortify'], ['build', 'Build'], ['deploy', 'Deploy'], ['march', 'March']];
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 
 /** One line per front: where the attack comes from, who is left, morale, and (for the defender) a reserves button. */
@@ -64,7 +65,7 @@ export function Drawer() {
   const borders = !own ? wr.adj.map(n => ({ n, w: worksAt(r, n), d: r.defs.filter(d => d.s === n && d.f === r.owner) })).filter(x => x.w.tr || x.w.sand || x.w.wire || x.d.length) : [];
 
   return (
-    <aside id="drawer" className="glass" aria-label={`${wr.name} region file`}>
+    <section id="drawer" aria-label={`${wr.name} region file`}>
       <div className="dh" style={{ '--c': F.color } as React.CSSProperties}>
         <div className="dh-row"><small>{CONT[wr.cont].name} · bonus +{CONT[wr.cont].bonus}</small>
           <button className="x" aria-label="Close region file" onClick={() => ui().select(-1)}><CloseIcon /></button></div>
@@ -136,7 +137,7 @@ export function Drawer() {
       {own ? (
         <>
           <div className="tabs" role="tablist" aria-label="Orders">
-            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { click(); ui().setTab(k); }}>{l}</button>)}
+            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l}</button>)}
           </div>
           <div className="tb-body" role="tabpanel">
             {tab === 'rec' && <RecruitTab region={r} id={sel} />}
@@ -194,6 +195,6 @@ export function Drawer() {
           {!myNb.length && !airBases.length && <p className="note">None of your regions border {wr.name}. Infantry and tanks need a direct border (or a sea lane); aircraft reach two borders.</p>}
         </div>
       )}
-    </aside>
+    </section>
   );
 }

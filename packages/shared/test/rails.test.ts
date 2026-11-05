@@ -11,7 +11,7 @@ const id = (n: string) => W.byName[n].id;
 function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
 /** Everything belongs to power 2 except what a test hands out. */
 function blank(seed = 3) {
-  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 0, pace: 1 } });
+  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } });
   for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; }
   g.factions.forEach(f => { f.mission = null; f.supply = 100; f.shells = 200; });
   return g;
@@ -102,7 +102,7 @@ describe('weather and terrain', () => {
     const g = blank(); const r = g.regions[id('Austria-Hungary')]; r.owner = 4; expect(fortCost(r, 'pill', -1)).toBeLessThan(COST.pill);
   });
   it('snapshots carry supply quality and the rail state', () => {
-    const g = createGame({ seed: 5, humans: [0] }); const k = Object.keys(g.railCut); void k; g.railCut['1|2'] = 99; g.railNew.push([3, 4, 50]);
+    const g = createGame({ seed: 5, humans: [0] }); const k = Object.keys(g.railCut); void k; g.railCut['1|2'] = 99; const mine = g.regions.find(r => r.capitalOf === 0)!.id; g.railNew.push([mine, buildWorld().regions[mine].adj[0], 50]);
     const m = createMirror(); initMirrorCapitals(m); applySnapshot(m, makeSnapshot(g, 0));
     const own = g.regions.find(r => r.owner === 0)!; expect(m.regions[own.id].supplyQ).toBe(own.supplyQ);
     expect(m.railCut['1|2']).toBe(99); expect(m.railNew.length).toBe(1);

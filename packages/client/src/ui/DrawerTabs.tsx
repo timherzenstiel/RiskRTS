@@ -7,6 +7,7 @@ import {
 import { useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { Icon, SupplyIcon } from './icons';
+import { Cameo, CameoGrid } from './Cameo';
 import { garrisonOf } from './garrison';
 import { menStr } from './format';
 
@@ -27,24 +28,23 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
       {region.cut && <p className="note budget full">Cut off from supply: no recruiting here until a route home is reopened.</p>}
       {region.strike && <p className="note budget full">On strike: no recruits from here until the war weariness eases.</p>}
       {pool < FORMATION.inf.men && <p className="note budget full">The manpower pool is nearly empty ({Math.floor(pool)} men). Raise conscription on the nation screen, or wait for the next age class.</p>}
-      {UNIT_TYPES.map((k, i) => {
-        const c = unitCost(g, me, k), men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
-        const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
-        const locked = !!early || (k === 'tank' && !region.factory) || (k === 'plane' && !region.airfield) || region.cut || !!region.strike;
-        const noMen = pool < men;
-        return (
-          <div className={'it' + (nat ? ' nat' : '')} key={k}>
-            <span className="ic"><Icon k={k} /></span>
-            <div className="tx"><b>{unitName(g, me, k)}<kbd>{i + 1}</kbd></b><small>{early ? `Arrives ${monthStr(techDayFor(me, tech!, g.factions[me].rushed))} · see the war calendar` : `${nat ? NATIONS[me].unitDesc : UDESC[k]} · ${men} men`}</small></div>
-            <div className="buys">
-              <button className="buy" disabled={supply < c || locked || noMen} title={locked ? (early ? 'Not available yet' : region.cut ? 'Cut off from supply' : region.strike ? 'On strike' : `Build ${k === 'tank' ? 'a factory' : 'an airfield'} here first`) : noMen ? `Needs ${men} men from the pool` : `Raise one ${FORMATION[k].one} (Shift-click raises 5)`}
-                aria-label={`Raise one ${FORMATION[k].one}, costs ${c}`} onClick={e => recruit(id, k, e.shiftKey ? 5 : 1)}>+1 <SupplyIcon />{c}</button>
-              <button className="buy five" disabled={supply < c * 5 || locked || pool < men * 5} aria-label={`Raise five ${FORMATION[k].many}, costs ${c * 5}`} onClick={() => recruit(id, k, 5)}>×5</button>
-            </div>
-          </div>
-        );
-      })}
-      <p className="note">+1 raises one formation at full strength; its men come from the manpower pool (a battalion is 100 men). Shift-click raises five. New formations join a running defence at once.</p>
+      <CameoGrid label="Recruit" hint="Click raises one formation · Shift-click or ×5 raises five · keys 1–4">
+        {UNIT_TYPES.map((k, i) => {
+          const c = unitCost(g, me, k), men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
+          const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
+          const needs = k === 'tank' && !region.factory ? 'Needs factory' : k === 'plane' && !region.airfield ? 'Needs airfield' : null;
+          const locked = !!early || !!needs || region.cut || !!region.strike;
+          const noMen = pool < men;
+          const lock = early ? monthStr(techDayFor(me, tech!, g.factions[me].rushed)) : needs ?? (region.cut ? 'Cut off' : region.strike ? 'Strike' : undefined);
+          return (
+            <Cameo key={k} k={k} nation={me} name={unitName(g, me, k)} hotkey={i < 4 ? String(i + 1) : undefined} national={!!nat} count={region.units[k]}
+              cost={<><SupplyIcon />{c}</>} lock={lock} disabled={supply < c || locked || noMen}
+              title={`${nat ? NATIONS[me].unitDesc : UDESC[k]} · ${men} men${noMen && !locked ? ` · needs ${men} men from the pool` : ''}`}
+              onBuy={five => recruit(id, k, five ? 5 : 1)} five fiveDisabled={supply < c * 5 || locked || pool < men * 5} />
+          );
+        })}
+      </CameoGrid>
+      <p className="note">Each formation is raised at full strength; its men come from the manpower pool (a battalion is 100 men). New formations join a running defence at once.</p>
     </>
   );
 }
@@ -65,9 +65,14 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
   const supply = sim.g.factions[sim.me].supply;
   return (
     <>
-      <BuildRow icon="factory" name="Factory" desc={`+2 supply and +${NATIONS[sim.me].factoryShells} shells per convoy · unlocks tanks · a supply depot`} label={region.factory ? 'Built' : <><SupplyIcon />{buildCostOf(sim.me, 'factory')}</>} disabled={region.factory || supply < buildCostOf(sim.me, 'factory')} onBuy={() => build(id, 'factory')} />
-      <BuildRow icon="barracks" name="Barracks" desc="One volunteer battalion per convoy (stops when the war weariness is high)" label={region.barracks ? 'Built' : <><SupplyIcon />{COST.barracks}</>} disabled={region.barracks || supply < COST.barracks} onBuy={() => build(id, 'barracks')} />
-      {(() => { const early = !techOn(sim.g, sim.me, 'air'); return <BuildRow icon="airfield" name="Airfield" desc={early ? `Military aviation arrives ${monthStr(techDayFor(sim.me, 'air', sim.g.factions[sim.me].rushed))}` : 'Unlocks squadrons and reconnaissance flights here'} label={region.airfield ? 'Built' : early ? 'Later' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || early || supply < COST.airfield} onBuy={() => build(id, 'airfield')} />; })()}
+      <CameoGrid label="Build">
+        <Cameo k="factory" name="Factory" done={region.factory} cost={region.factory ? 'Built' : <><SupplyIcon />{buildCostOf(sim.me, 'factory')}</>} disabled={region.factory || supply < buildCostOf(sim.me, 'factory')}
+          title={`+2 supply and +${NATIONS[sim.me].factoryShells} shells per convoy · unlocks tanks · a supply depot`} onBuy={() => build(id, 'factory')} />
+        <Cameo k="barracks" name="Barracks" done={region.barracks} cost={region.barracks ? 'Built' : <><SupplyIcon />{COST.barracks}</>} disabled={region.barracks || supply < COST.barracks}
+          title="One volunteer battalion per convoy (stops when the war weariness is high)" onBuy={() => build(id, 'barracks')} />
+        {(() => { const early = !techOn(sim.g, sim.me, 'air'); return <Cameo k="airfield" name="Airfield" done={region.airfield} lock={early && !region.airfield ? monthStr(techDayFor(sim.me, 'air', sim.g.factions[sim.me].rushed)) : undefined} cost={region.airfield ? 'Built' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || early || supply < COST.airfield}
+          title="Unlocks squadrons and reconnaissance flights here" onBuy={() => build(id, 'airfield')} />; })()}
+      </CameoGrid>
       <Railways region={region} id={id} />
       <div className="lbl"><span>Munitions · {Math.floor(sim.g.factions[sim.me].shells ?? 0)} shells in stock</span></div>
       <div className="it">
@@ -127,15 +132,19 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
       {sector > -2 ? (
         <>
           <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `Works facing ${W.regions[sector].name} only fight attacks from there · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
-          {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
-            const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
-            const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
-            const early = need && !techOn(g, me, need);
-            const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
-            const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
-            const label = c === null ? 'Max' : early ? 'Later' : !room ? 'Full' : <><SupplyIcon />{c}</>;
-            return <BuildRow key={k} icon={k} name={FNAME[k]} pips={pips} desc={early ? `Arrives ${monthStr(techDayFor(me, need!, g.factions[me].rushed))}` : FDESC[k]} label={label} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
-          })}
+          <CameoGrid label="Works">
+            {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
+              const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
+              const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
+              const early = need && !techOn(g, me, need);
+              const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
+              const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
+              const cost = c === null ? 'Max' : !room && !early ? 'Full' : <><SupplyIcon />{c}</>;
+              return <Cameo key={k} k={k} name={FNAME[k]} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
+                count={k === 'trench' || k === 'sand' || k === 'wire' ? undefined : here(sector).filter(d => d.k === k).length}
+                title={FDESC[k]} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
+            })}
+          </CameoGrid>
         </>
       ) : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}
     </>

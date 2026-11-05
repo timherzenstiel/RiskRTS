@@ -1,4 +1,5 @@
-// Shown when the camera is zoomed into a fight: both sides, survivors, defender marked.
+// Front command bar: docked along the bottom of the map when the camera is on a fight. Both sides with crests and
+// strength bars, then the levers (suppression, wire, shells, barrage lever, over the top, stance, reinforce, withdraw).
 import { useEffect } from 'react';
 import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -16,16 +17,18 @@ export function BattleCard() {
   const quiet = b.age - (b.lastJoin ?? 0) > 60;
   const works = [b.tr ? `trench ${['', 'I', 'II', 'III'][b.tr]}` : '', b.sand ? 'sandbags' : '', b.wire > 0 ? `wire ${Math.round(b.wire / Math.max(1, b.wire0) * 100)}%` : ''].filter(Boolean).join(' · ');
   return (
-    <div id="bcard" className="glass" aria-live="polite">
-      <div className="bt"><b>Battle of {W.regions[b.region].name}</b><small>{b.ended ? 'Over' : `${Math.floor(b.age)} s${quiet ? ' · trench warfare' : ''}`}</small></div>
-      <div className="bf"><small>{b.from >= 0 ? `${W.regions[b.from].name} border` : 'Inside the region'}{works ? ` · ${works}` : ''}</small></div>
-      {counts.map(([f, [alive, all]]) => (
-        <div className="side" key={f}>
-          <span className="nm"><i className="dot" style={{ '--c': FACTIONS[f].color } as React.CSSProperties} />{FACTIONS[f].short}{f === owner ? ' · def.' : ''}</span>
-          <span className="sb" style={{ '--c': FACTIONS[f].color } as React.CSSProperties}><i style={{ width: `${all ? alive / all * 100 : 0}%` }} /></span>
-          <span className="n">{alive}/{all}{b.mor?.[f] !== undefined ? <small> · {Math.round(b.mor[f])}%</small> : null}</span>
-        </div>
-      ))}
+    <div id="bcard" className="plate cmdbar" aria-live="polite">
+      <div className="cb-sides">
+        <div className="bt"><b>Battle of {W.regions[b.region].name}</b><small className="lcd-t">{b.ended ? 'Over' : `${Math.floor(b.age)} s${quiet ? ' · trench warfare' : ''}`}</small></div>
+        <div className="bf"><small>{b.from >= 0 ? `${W.regions[b.from].name} border` : 'Inside the region'}{works ? ` · ${works}` : ''}</small></div>
+        {counts.map(([f, [alive, all]]) => (
+          <div className="side" key={f} style={{ '--c': FACTIONS[f].color } as React.CSSProperties}>
+            <span className="nm"><span className="crest sm">{FACTIONS[f].key}</span>{FACTIONS[f].short}{f === owner ? ' · def.' : ''}</span>
+            <span className="sb"><i style={{ width: `${all ? alive / all * 100 : 0}%` }} /></span>
+            <span className="n">{alive}/{all}{b.mor?.[f] !== undefined ? <small> · {Math.round(b.mor[f])}%</small> : null}</span>
+          </div>
+        ))}
+      </div>
       {!b.ended && <FrontControls g={sim.g} me={sim.me} b={b} />}
     </div>
   );

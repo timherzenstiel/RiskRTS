@@ -4,14 +4,21 @@ import { createRoot } from 'react-dom/client';
 import { useUi, useSim } from '../src/game/store';
 import { HostSession } from '../src/game/session';
 import { TopBar } from '../src/ui/TopBar';
-import { Drawer } from '../src/ui/Drawer';
+import { Sidebar } from '../src/ui/Sidebar';
 import { Feed } from '../src/ui/Feed';
 import { Overlays } from '../src/ui/Overlays';
 import { Toast } from '../src/ui/Toast';
 import { FrontControls } from '../src/ui/FrontCard';
 import { OfferBanner } from '../src/ui/Diplomacy';
 import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/saira-stencil-one/latin-400.css';
+import '@fontsource/share-tech-mono/latin-400.css';
 import '../src/ui/styles.css';
+import '../src/ui/war-office.css';
 
 const q = new URLSearchParams(location.search), me = Number(q.get('me') ?? 1);
 const session = new HostSession(me, { humans: [me], difficulty: 1, seed: 11 });
@@ -25,15 +32,17 @@ function Card() {
   const b = sim?.g.battles.find(x => x.id === id); if (!sim || !b) return null;
   const W = buildWorld();
   return (
-    <div id="bcard" className="glass">
-      <div className="bt"><b>Battle of {W.regions[b.region].name}</b><small>{Math.floor(b.age)} s</small></div>
-      {[...battleCounts(b)].map(([f, [a, all]]) => <div className="side" key={f}><span className="nm"><i className="dot" style={{ '--c': FACTIONS[f].color } as React.CSSProperties} />{FACTIONS[f].short}</span><span className="sb" style={{ '--c': FACTIONS[f].color } as React.CSSProperties}><i style={{ width: `${a / all * 100}%` }} /></span><span className="n">{a}/{all}</span></div>)}
+    <div id="bcard" className="plate cmdbar">
+      <div className="cb-sides">
+        <div className="bt"><b>Battle of {W.regions[b.region].name}</b><small className="lcd-t">{Math.floor(b.age)} s</small></div>
+        {[...battleCounts(b)].map(([f, [a, all]]) => <div className="side" key={f} style={{ '--c': FACTIONS[f].color } as React.CSSProperties}><span className="nm"><span className="crest sm">{FACTIONS[f].key}</span>{FACTIONS[f].short}</span><span className="sb"><i style={{ width: `${a / all * 100}%` }} /></span><span className="n">{a}/{all}</span></div>)}
+      </div>
       <FrontControls g={sim.g} me={sim.me} b={b} />
     </div>
   );
 }
 function Hud() {
   const hasDrawer = useUi(s => s.sel >= 0);
-  return <div id="app" className={hasDrawer ? 'has-drawer' : ''}><TopBar /><Drawer /><OfferBanner /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
+  return <div id="app" className={hasDrawer ? 'has-drawer' : ''}><TopBar /><Sidebar /><OfferBanner /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
 }
 createRoot(document.getElementById('root')!).render(<Hud />);

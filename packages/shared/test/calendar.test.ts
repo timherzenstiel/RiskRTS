@@ -12,7 +12,7 @@ function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TY
 
 describe('unlocks', () => {
   it('the opening is infantry, MGs and guns; aircraft come in spring 1915, tanks by nation', () => {
-    const g = createGame({ seed: 2, humans: [0, 1, 2, 3, 4, 5] }); const cap = g.regions.find(r => r.capitalOf === GB)!;
+    const g = createGame({ seed: 2, humans: [0, 1, 2, 3, 4, 5, 6] }); const cap = g.regions.find(r => r.capitalOf === GB)!;
     g.factions[GB].supply = 99;
     expect(applyCommand(g, GB, { t: 'build', region: cap.id, kind: 'airfield' })).toMatch(/Mar 1915/);
     expect(applyCommand(g, GB, { t: 'fortify', region: cap.id, kind: 'bunk', sector: -1 })).toMatch(/1916/);
@@ -48,7 +48,7 @@ describe('doctrines', () => {
     expect(doctrinesOf(1916).map(d => d.key)).toContain(g.factions[0].doctrines![1]);
   });
   it('doctrines change the rules', () => {
-    const g = createGame({ seed: 3, humans: [0, 1, 2, 3, 4, 5] }); g.day = dayOf(1918, 6);
+    const g = createGame({ seed: 3, humans: [0, 1, 2, 3, 4, 5, 6] }); g.day = dayOf(1918, 6);
     const base = { pool: poolGrowth(g, RU), tank: unitCost(g, GB, 'tank'), inc: income(g, FR), inf: statsOf(g, RU, 'inf').speed };
     g.factions[RU].doctrines = ['mass', 'infiltration']; g.factions[GB].doctrines = ['tankcorps']; g.factions[FR].doctrines = ['total'];
     expect(poolGrowth(g, RU)).toBeCloseTo(base.pool * 1.5, -1); expect(unitCost(g, GB, 'tank')).toBeLessThan(base.tank);
@@ -57,7 +57,7 @@ describe('doctrines', () => {
     const t0 = fortCost(r, 'trench', n, g)!; g.factions[DE].doctrines = ['depth']; expect(fortCost(r, 'trench', n, g)!).toBeLessThan(t0); expect(t0).toBe(TRENCH_COST[0]);
   });
   it('elastic defence pulls breaking defenders back once', () => {
-    const g = createGame({ seed: 8, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 0, pace: 1 } }); g.day = dayOf(1918, 6);
+    const g = createGame({ seed: 8, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } }); g.day = dayOf(1918, 6);
     for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.capitalOf = -1; r.factory = false; }
     g.factions.forEach(f => { f.mission = null; }); g.factions[1].doctrines = ['elastic'];
     const A = id('France'), B = id('Germany'); g.regions[A].owner = 0; g.regions[B].owner = 1;

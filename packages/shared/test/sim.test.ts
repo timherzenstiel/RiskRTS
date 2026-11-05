@@ -85,7 +85,7 @@ import type { GameState } from '../src';
 
 /** A quiet game: AI off, every region of `a` and `b` set up by hand. */
 function duel(seed = 11) {
-  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5], settings: { attackCap: 2, pace: 0 } });
+  const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 2, pace: 0 } });
   const W = buildWorld();
   const A = W.byName['France'].id, B = W.byName['Germany'].id, C = W.byName['Poland'].id;
   for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; }
@@ -166,7 +166,7 @@ describe('rules: aircraft', () => {
   });
   it('pace setting changes battle length', () => {
     const len = (pace: number) => {
-      const g = createGame({ seed: 4, humans: [0, 1, 2, 3, 4, 5], settings: { pace } });
+      const g = createGame({ seed: 4, humans: [0, 1, 2, 3, 4, 5, 6], settings: { pace } });
       const W = buildWorld(), A = W.byName['France'].id, B = W.byName['Germany'].id;
       g.regions[A].owner = 0; g.regions[B].owner = 1; g.regions[B].defs = [];
       g.regions[A].units = { ...emptyUnits(), inf: 14, art: 2 }; g.regions[B].units = { ...emptyUnits(), inf: 10, mg: 2 };

@@ -1,0 +1,257 @@
+{
+ "note": "Land contacts between regions as built before real borders (PR #14 map). The real-border raster must reproduce exactly these pairs.",
+ "land": {
+  "Alaska": [
+   "Yukon"
+  ],
+  "Yukon": [
+   "Alaska",
+   "Ontario",
+   "Prairies"
+  ],
+  "Greenland": [],
+  "Prairies": [
+   "Ontario",
+   "Western States",
+   "Yukon"
+  ],
+  "Ontario": [
+   "Eastern States",
+   "Prairies",
+   "Quebec",
+   "Western States",
+   "Yukon"
+  ],
+  "Quebec": [
+   "Eastern States",
+   "Ontario"
+  ],
+  "Western States": [
+   "Eastern States",
+   "Mexico",
+   "Ontario",
+   "Prairies"
+  ],
+  "Eastern States": [
+   "Mexico",
+   "Ontario",
+   "Quebec",
+   "Western States"
+  ],
+  "Mexico": [
+   "Eastern States",
+   "Western States"
+  ],
+  "Gran Colombia": [
+   "Brazil",
+   "Peru"
+  ],
+  "Peru": [
+   "Argentina",
+   "Brazil",
+   "Gran Colombia"
+  ],
+  "Brazil": [
+   "Argentina",
+   "Gran Colombia",
+   "Peru"
+  ],
+  "Argentina": [
+   "Brazil",
+   "Peru"
+  ],
+  "Iceland": [],
+  "Britain": [],
+  "Scandinavia": [
+   "Petrograd"
+  ],
+  "France": [
+   "Germany",
+   "Iberia",
+   "Italy"
+  ],
+  "Iberia": [
+   "France"
+  ],
+  "Germany": [
+   "Austria-Hungary",
+   "France",
+   "Italy",
+   "Poland"
+  ],
+  "Italy": [
+   "Austria-Hungary",
+   "France",
+   "Germany"
+  ],
+  "Austria-Hungary": [
+   "Balkans",
+   "Germany",
+   "Italy",
+   "Poland",
+   "Ukraine"
+  ],
+  "Balkans": [
+   "Anatolia",
+   "Austria-Hungary",
+   "Ukraine"
+  ],
+  "Poland": [
+   "Austria-Hungary",
+   "Germany",
+   "Petrograd",
+   "Ukraine"
+  ],
+  "Petrograd": [
+   "Caucasus",
+   "Poland",
+   "Scandinavia",
+   "Ukraine",
+   "Ural"
+  ],
+  "Ukraine": [
+   "Austria-Hungary",
+   "Balkans",
+   "Caucasus",
+   "Petrograd",
+   "Poland"
+  ],
+  "Maghreb": [
+   "Egypt",
+   "West Africa"
+  ],
+  "West Africa": [
+   "Congo",
+   "Egypt",
+   "Maghreb"
+  ],
+  "Egypt": [
+   "Congo",
+   "East Africa",
+   "Maghreb",
+   "Mesopotamia",
+   "West Africa"
+  ],
+  "East Africa": [
+   "Congo",
+   "Egypt",
+   "South Africa"
+  ],
+  "Congo": [
+   "East Africa",
+   "Egypt",
+   "South Africa",
+   "West Africa"
+  ],
+  "South Africa": [
+   "Congo",
+   "East Africa"
+  ],
+  "Madagascar": [],
+  "Anatolia": [
+   "Balkans",
+   "Caucasus",
+   "Mesopotamia"
+  ],
+  "Mesopotamia": [
+   "Anatolia",
+   "Arabia",
+   "Caucasus",
+   "Egypt",
+   "Persia"
+  ],
+  "Arabia": [
+   "Mesopotamia"
+  ],
+  "Persia": [
+   "Caucasus",
+   "India",
+   "Mesopotamia",
+   "Turkestan",
+   "Ural"
+  ],
+  "Caucasus": [
+   "Anatolia",
+   "Mesopotamia",
+   "Persia",
+   "Petrograd",
+   "Ukraine",
+   "Ural"
+  ],
+  "Turkestan": [
+   "India",
+   "Mongolia",
+   "Persia",
+   "Siberia",
+   "Ural"
+  ],
+  "India": [
+   "China",
+   "Indochina",
+   "Mongolia",
+   "Persia",
+   "Turkestan"
+  ],
+  "Ural": [
+   "Caucasus",
+   "Persia",
+   "Petrograd",
+   "Siberia",
+   "Turkestan"
+  ],
+  "Siberia": [
+   "Irkutsk",
+   "Mongolia",
+   "Turkestan",
+   "Ural"
+  ],
+  "Irkutsk": [
+   "Manchuria",
+   "Mongolia",
+   "Siberia",
+   "Yakutsk"
+  ],
+  "Yakutsk": [
+   "Irkutsk",
+   "Kamchatka",
+   "Manchuria"
+  ],
+  "Kamchatka": [
+   "Yakutsk"
+  ],
+  "Mongolia": [
+   "China",
+   "India",
+   "Irkutsk",
+   "Manchuria",
+   "Siberia",
+   "Turkestan"
+  ],
+  "China": [
+   "India",
+   "Indochina",
+   "Manchuria",
+   "Mongolia"
+  ],
+  "Manchuria": [
+   "China",
+   "Irkutsk",
+   "Mongolia",
+   "Yakutsk"
+  ],
+  "Japan": [],
+  "Indochina": [
+   "China",
+   "India"
+  ],
+  "East Indies": [],
+  "New Guinea": [],
+  "Western Australia": [
+   "Eastern Australia"
+  ],
+  "Eastern Australia": [
+   "Western Australia"
+  ],
+  "New Zealand": []
+ }
+}

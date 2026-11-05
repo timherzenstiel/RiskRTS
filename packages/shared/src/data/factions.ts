@@ -8,6 +8,7 @@ export const FACTIONS:FactionDef[]=[
   def('DE','German Empire','Germany','#a8aeb6','Germany'),
   def('AH','Austria-Hungary','Austria','#dfb640','Austria-Hungary'),
   def('OT','Ottoman Empire','Ottomans','#ab66b9','Anatolia'),
+  def('US','United States','America','#d9822b','Eastern States'),
 ];
 export const NUM_FACTIONS=FACTIONS.length;
 export const cap=(s:string)=>s[0].toUpperCase()+s.slice(1);

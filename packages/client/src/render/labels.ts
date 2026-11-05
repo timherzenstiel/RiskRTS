@@ -1,21 +1,21 @@
 // DOM map labels (region markers, city names, army counts, battle buttons). The React stylesheet styles these class names.
 import * as THREE from 'three';
-import { FACTIONS, GROUND_TYPES, armyPos, battleCounts, groundUnits, groupName, mainOf, sectorPoint, totalUnits, type Army, type Battle, type Corps, type GameState, type Units, type World } from '@riskrts/shared';
+import { FACTIONS, FORMATION, UNIT_TYPES, GROUND_TYPES, armyPos, battleCounts, groundUnits, groupName, mainOf, sectorPoint, totalUnits, type Army, type Battle, type Corps, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
 import { battleAnchor } from '@riskrts/shared';
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
-function garrisonLabel(r: GameState['regions'][number]) {
-  const v = r.vis ?? 3, n = r.fr ? totalUnits(mainOf(r)) : totalUnits(r.units);
+function garrisonLabel(r: GameState['regions'][number], merged = false) {
+  const v = r.vis ?? 3, n = r.fr && !merged ? totalUnits(mainOf(r)) : totalUnits(r.units);
   if (v >= 3) return String(n);
   if (r.est) return r.est[1] > 0 ? `~${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '~0';
   if (v === 2) return `${n}?`;
   return '?';
 }
 
-interface RegionLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; bd: HTMLSpanElement; badges: string; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string; st?: boolean }
+interface RegionLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; bd: HTMLSpanElement; pp: HTMLSpanElement; pips: string; badges: string; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string; st?: boolean }
 interface CorpsLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; key: string; shown: boolean; tf: string; seen: number }
 
 /** Map symbols of the unit types (staff-map style): a crossed box for infantry, a ringed dot for MGs, a dot for guns, an oval for tanks. */
@@ -40,6 +40,8 @@ interface BattleLabel { el: HTMLButtonElement; text: HTMLSpanElement; label: str
 
 export interface LabelContext {
   g: GameState | null; cam: CameraRig; w: number; h: number; sel: number; hover: number;
+  /** Faction of the viewer (-1 spectator). */
+  me: number;
   isTarget(id: number): boolean; anchorH(id: number): number; groundY(id: number): number; armyH(a: Army): [number, number]; frame: number; now: number;
 }
 
@@ -52,15 +54,20 @@ export class Labels {
   private readonly battles = new Map<number, BattleLabel>();
   private readonly corps = new Map<string, CorpsLabel>();
   private layer = 0;
+  private readonly brackets: HTMLDivElement[] = [];
+  private band = -1;
+  /** Zoom band (camera.ts): the theatre band merges each region's corps into one marker and drops city names. */
+  setBand(b: number) { if (b === this.band) return; this.band = b; for (let k = 0; k < 4; k++) this.root.classList.toggle('band' + k, k === b); }
   /** Map layer: 0 everything, 1 troops, 2 industry (set as a class on the label layer; the stylesheet does the rest). */
   setLayer(l: number) { if (l === this.layer) return; this.layer = l; this.root.classList.toggle('ly1', l === 1); this.root.classList.toggle('ly2', l === 2); }
 
   constructor(private readonly root: HTMLElement, private readonly world: World, private readonly cities: CityInfo[], private readonly cityH: (c: CityInfo) => number,
-    private readonly onBattleClick: (regionId: number, battleId: number) => void) {
+    private readonly onBattleClick: (regionId: number, battleId: number) => void,
+    private readonly onCorpsClick: (regionId: number, post: number) => void = () => {}) {
     this.regions = world.regions.map((r) => {
-      const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="bd"></span><span class="nm"></span>';
-      const n = el.children[0] as HTMLSpanElement, bd = el.children[1] as HTMLSpanElement, nm = el.children[2] as HTMLSpanElement; nm.textContent = r.name; root.appendChild(el);
-      return { el, n, nm, bd, badges: '', count: '', color: '', sel: false, tg: false, sm: false, names: true, shown: true, tf: '' };
+      const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="pp"></span><span class="bd"></span><span class="nm"></span>';
+      const n = el.children[0] as HTMLSpanElement, pp = el.children[1] as HTMLSpanElement, bd = el.children[2] as HTMLSpanElement, nm = el.children[3] as HTMLSpanElement; nm.textContent = r.name; root.appendChild(el);
+      return { el, n, nm, bd, pp, pips: '', badges: '', count: '', color: '', sel: false, tg: false, sm: false, names: true, shown: true, tf: '' };
     });
     this.cityLabels = cities.map((c) => {
       const el = document.createElement('div'); el.className = 'cl c' + c.size; el.textContent = c.name; root.appendChild(el);
@@ -84,7 +91,7 @@ export class Labels {
       if (!rs || rs.battle >= 0) { this.hide(l); return; }
       const color = FACTIONS[rs.owner]?.color ?? '#888';
       if (color !== l.color) { l.color = color; l.el.style.setProperty('--c', color); }
-      const s = garrisonLabel(rs); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; }
       const names = showNames || i === ctx.sel || i === ctx.hover; if (names !== l.names) { l.names = names; l.nm.style.display = names ? '' : 'none'; }
       const isSel = i === ctx.sel, tg = ctx.isTarget(i);
       if (isSel !== l.sel) { l.sel = isSel; l.el.classList.toggle('sel', isSel); }
@@ -94,6 +101,14 @@ export class Labels {
       const known = (rs.vis ?? 3) >= 2;
       const badges = (rs.capitalOf >= 0 ? BADGE.cap : '') + (known && rs.factory ? BADGE.fac : '') + (known && rs.barracks ? BADGE.bar : '') + (known && rs.airfield ? BADGE.air : '');
       if (badges !== l.badges) { l.badges = badges; l.bd.innerHTML = badges; }
+      // strength and morale pips on your own garrisons when zoomed in (design 3.4): green -> amber -> red
+      let pips = '';
+      if (rs.owner === ctx.me && dist < 60) {
+        let men = 0, full = 0; for (const k of UNIT_TYPES) { men += rs.men[k] ?? 0; full += rs.units[k] * FORMATION[k].men; }
+        const st = full ? Math.min(1, men / full) : 0, mo = Math.min(1, (rs.mor ?? 0) / 100);
+        if (full) pips = `<i class="ps" style="--v:${st.toFixed(2)};--h:${Math.round(st * 110)}"></i><i class="pm" style="--v:${mo.toFixed(2)};--h:${Math.round(mo * 110)}"></i>`;
+      }
+      if (pips !== l.pips) { l.pips = pips; l.pp.innerHTML = pips; }
       this.place(l, ctx, def.cx, ctx.anchorH(i) + 1.05, def.cz);
     });
     this.cities.forEach((c, i) => {
@@ -112,7 +127,7 @@ export class Labels {
       }
       l.seen = ctx.frame;
       // a column forming up for an offensive shows how long it still needs
-      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : a.decoy ? 'Feint' : a.wait ? `${totalUnits(a.units)} · ${Math.ceil(a.wait)}s` : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.classList.toggle('form', !!a.wait); l.el.classList.toggle('atk', (a.ord ?? 0) >= 1); }
+      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : a.decoy ? 'Feint' : a.wait ? `${totalUnits(a.units)} · ${Math.ceil(a.wait)}s` : a.owner === ctx.me ? `${totalUnits(a.units)} → ${Math.max(1, Math.ceil((1 - a.t) * a.dur))}s` : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.classList.toggle('form', !!a.wait); l.el.classList.toggle('atk', (a.ord ?? 0) >= 1); }
       const [x, z] = armyPos(a), [y0, y1] = ctx.armyH(a);
       this.place(l, ctx, x, lerp(y0, y1, a.t) + Math.sin(a.t * Math.PI) * .4 + .85, z);
     }
@@ -145,6 +160,8 @@ export class Labels {
         let l = this.corps.get(key);
         if (!l) {
           const el = document.createElement('div'); el.className = 'tl cp'; el.innerHTML = '<span class="n"></span><span class="nm"></span>';
+          const rid = r.id; el.style.pointerEvents = 'auto'; el.title = 'Open the deployment of this region';
+          el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.onCorpsClick(rid, post); });
           this.root.appendChild(el); l = { el, n: el.children[0] as HTMLSpanElement, nm: el.children[1] as HTMLSpanElement, key: '', shown: true, tf: '', seen: 0 }; this.corps.set(key, l);
         }
         l.seen = ctx.frame;
@@ -154,6 +171,22 @@ export class Labels {
       }
     }
     for (const [k, l] of this.corps) if (l.seen !== ctx.frame) { l.el.remove(); this.corps.delete(k); }
+
+    // selection brackets around the selected region's main army and corps, battle and close bands (design 3.4)
+    let nb = 0;
+    if (ctx.sel >= 0 && dist < 30) {
+      const R = this.world.regions[ctx.sel], rs = g.regions[ctx.sel], ppu = ctx.h / (dist * .688);
+      const spots: [number, number, number][] = [[R.cx, R.cz, .55]];
+      if (rs.fr) for (const ks of Object.keys(rs.fr)) { const p = sectorPoint(this.world, ctx.sel, +ks); spots.push([p.x, p.z, .4]); }
+      for (const [x, z, r] of spots) {
+        let el = this.brackets[nb]; if (!el) { el = document.createElement('div'); el.className = 'brk'; this.root.appendChild(el); this.brackets.push(el); }
+        ctx.cam.project(x, ctx.anchorH(ctx.sel) + .02, z, ctx.w, ctx.h, P, v3);
+        const px = Math.max(26, Math.min(220, r * 2 * ppu));
+        el.style.display = ''; el.style.width = el.style.height = px + 'px'; el.style.transform = `translate(${(P.x - px / 2).toFixed(1)}px,${(P.y - px * .6).toFixed(1)}px)`;
+        nb++;
+      }
+    }
+    for (let k = nb; k < this.brackets.length; k++) this.brackets[k].style.display = 'none';
   }
 
   /** Text and state classes of a corps marker: symbol, battalions (or the estimate), name up close, holding / assembling / attacking. */

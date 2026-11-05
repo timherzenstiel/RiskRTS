@@ -7,12 +7,13 @@ import { COLS, ROWS, TS } from '@riskrts/shared';
 import { facCol } from './palette';
 import type { Terrain } from './terrain';
 import { uNear } from './terrain';
+import { COAST_GLSL } from './coast';
 
 /** Pixel density of the painted ground (pixels per world unit), set from the zoom level each frame. */
 export const uPx = { value: 128 };
 
 const GLSL = /* glsl */ `
-uniform sampler2D uNat, uInfo; uniform vec2 uGrid; uniform float uTS, uPx, uNear; uniform vec3 uFac[8];
+uniform sampler2D uNat, uInfo, uWar, uCoast; uniform vec2 uGrid; uniform float uTS, uPx, uNear; uniform vec3 uFac[8];
 varying vec3 vWP; varying vec3 vWN;
 const vec2 DIRS[8] = vec2[8](vec2(1,0),vec2(-1,0),vec2(0,1),vec2(0,-1),vec2(1,1),vec2(-1,1),vec2(1,-1),vec2(-1,-1));
 float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -35,11 +36,16 @@ float netDist(vec2 t, vec2 f, float b){
   }
   return any?d:length(f)*.8;
 }
+${COAST_GLSL}
 vec3 groundPaint(vec3 wp, vec3 wn){
   vec2 hp=floor(wp.xz*uPx), p=(hp+.5)/uPx;
   float px=h1(hp);
+  // smooth, rocky coastline (coast.ts): cut away the sea, paint a broken rock rim and wet sand along the edge
+  float cs=coastSd(uCoast,tuv(p))+(fbm(p*9.)-.5)*.28+(n1(p*31.)-.5)*.08;
+  if(cs>0.) discard;
   vec2 w=vec2(fbm(p*5.5),fbm(p*5.5+9.3))-.5, q=p+w*uTS*1.1;
   vec4 natC=texture2D(uNat,tuv(p)), infC=texture2D(uInfo,tuv(p));
+  if(infC.r<.02) for(int k=0;k<8;k++){ vec2 q2=p+DIRS[k]*uTS*.75; vec4 ni=texture2D(uInfo,tuv(q2)); if(ni.r>.02){ infC=ni; natC=texture2D(uNat,tuv(q2)); break; } }
   vec4 nat=texture2D(uNat,tuv(q)), inf=texture2D(uInfo,tuv(q));
   if(inf.r<.02){ nat=natC; inf=infC; }
   float flC=floor(infC.g*255.+.5), flW=floor(inf.g*255.+.5), bio=floor(inf.r*255./20.+.5)-1.;
@@ -101,6 +107,26 @@ vec3 groundPaint(vec3 wp, vec3 wn){
     rock*=.78+.32*step(.5,fract(wp.y*90.+m*1.5));
     c=mix(c,rock,smoothstep(.12,.28,slope));
   }
+  { float sand=smoothstep(-.42,-.2,cs)*(1.-smoothstep(-.14,-.08,cs)); c=mix(c,dec(vec3(.52,.45,.33))*(.8+.3*m),sand*.6);
+    float rim=smoothstep(-.13,-.05,cs); vec3 rk=mix(dec(vec3(.3,.26,.22)),dec(vec3(.55,.5,.42)),n1(p*60.)); float lit=n1(p*45.+vec2(.6,.6))-n1(p*45.);
+    rk*=lit>.06?1.25:lit<-.06?.6:.9; c=mix(c,rk,rim*.9); }
+  // war: churned mud and craters where the border was shelled; a zig-zag fire trench with a sandbag parapet along held borders
+  { vec4 wr=texture2D(uWar,tuv(p)); float dm=wr.g;
+    if(dm>.01){
+      c=mix(c,dec(vec3(.33,.27,.2))*(.7+.45*m),smoothstep(0.,.55,dm)*.85);
+      vec2 kg=p*16.,ki=floor(kg),kf=fract(kg)-.5-(vec2(h1(ki+1.3),h1(ki+7.1))-.5)*.3; float kr=.16+.22*h1(ki+3.);
+      if(h1(ki)<dm*.75&&length(kf)<kr){ float sd=kf.x+kf.y; c=dec(vec3(.2,.16,.11))*(sd<-.05?.6:sd>.06?1.35:.9); if(length(kf)<kr*.45) c=dec(vec3(.12,.13,.12)); }
+    }
+    float lv=floor(texture2D(uWar,(floor(p/uTS+uGrid*.5)+.5)/uGrid).r*255./80.+.5);
+    if(lv>.5){
+      vec2 tc2=p/uTS+uGrid*.5, t2=floor(tc2), g2=tc2-t2-.5; float rg=floor(infC.b*255.+.5)+256.*floor(infC.a*255.+.5), e=1.;
+      for(int k=0;k<4;k++){ vec2 o=DIRS[k]; vec4 ni=texture2D(uInfo,(t2+.5+o)/uGrid); if(ni.r<.02) continue;
+        float nr=floor(ni.b*255.+.5)+256.*floor(ni.a*255.+.5); if(nr!=rg) e=min(e,.5-dot(g2,o)); }
+      float zz=.07*(abs(fract((p.x-p.y)*5.5)-.5)*4.-1.), d=abs(e-.34-zz), w=.035+.012*lv;
+      if(d<w) c=dec(vec3(.13,.1,.07))*(.7+.4*step(.5,fract((p.x+p.y)*70.)));
+      else if(d<w+.03&&e<.34+zz) c=dec(vec3(.62,.55,.4))*(.75+.35*px)*(fract((p.x*1.3+p.y)*60.)<.5?.85:1.);
+    }
+  }
   // ownership: a tint that fades as you zoom in, a solid line in the owner's colour where owners meet, a dark dashed line between regions
   vec2 g=tc-t-.5; float own=floor(natC.a*255.+.5), reg=floor(infC.b*255.+.5)+256.*floor(infC.a*255.+.5);
   vec3 fc=own>.5?uFac[int(own)-1]:vec3(.5);
@@ -124,7 +150,7 @@ export function groundMaterial(terrain: Terrain): THREE.MeshLambertMaterial {
   const fac = Array.from({ length: 8 }, (_, i) => (facCol[i] ?? new THREE.Color(1, 1, 1)).clone());
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, {
-      uNat: { value: terrain.natTex }, uInfo: { value: terrain.infoTex }, uGrid: { value: new THREE.Vector2(COLS, ROWS) }, uTS: { value: TS },
+      uNat: { value: terrain.natTex }, uInfo: { value: terrain.infoTex }, uWar: { value: terrain.warTex }, uCoast: { value: terrain.coastTex }, uGrid: { value: new THREE.Vector2(COLS, ROWS) }, uTS: { value: TS },
       uPx, uFac: { value: fac }, uNear,
     });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')

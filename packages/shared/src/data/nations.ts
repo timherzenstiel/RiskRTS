@@ -43,6 +43,8 @@ export interface Nation {
     /** Share of guns among new units. */ guns: number;
     /** Share of infantry among new units. */ mass: number;
     /** Preference for targets across sea lanes and on coasts. */ navy: number;
+    /** Chance an offensive only takes the enemy's first line (and digs in there) instead of invading. */ line: number;
+    /** Chance an assembling attack goes in early, without waiting for the guns to register. */ rush: number;
     /** Suppression wanted before going over the top. */ patience: number;
     /** Willingness to call off a failing attack. */ retreat: number;
   };
@@ -65,7 +67,7 @@ export const NATIONS: Nation[] = [
     shells: 1, factoryShells: 3, factoryCost: 0,
     morale: 0, unrest: 80, wwLoss: 1, hold: 1.5, startInf: 5,
     flags: { navy: true, empire: true },
-    ai: { doctrines: ['blockade', 'tankcorps', 'depth', 'total', 'creeping', 'air'], aggr: 1, dig: 1, guns: 1, mass: 1, navy: 2.5, patience: 1, retreat: 1 },
+    ai: { doctrines: ['blockade', 'tankcorps', 'depth', 'total', 'creeping', 'air'], aggr: 1, dig: 1, guns: 1, mass: 1, navy: 2.5, line: 0.15, rush: 0.1, patience: 1, retreat: 1 },
   },
   { // French Republic
     unit: 'art', unitName: 'Canon de 75 battery', unitShort: '75', unitDesc: 'Quick-firing field guns · +35% rate of fire, −20% against deep trenches and bunkers',
@@ -83,7 +85,7 @@ export const NATIONS: Nation[] = [
     shells: 1, factoryShells: 3, factoryCost: 0,
     morale: 0, unrest: 80, wwLoss: 1.2, hold: 1.25, startInf: 6,
     flags: { fortress: true, canon: true },
-    ai: { doctrines: ['artillery', 'creeping', 'air', 'combined', 'depth', 'peace'], aggr: 1.05, dig: 1.4, guns: 1.4, mass: .9, navy: 1, patience: 1.1, retreat: 1 },
+    ai: { doctrines: ['artillery', 'creeping', 'air', 'combined', 'depth', 'peace'], aggr: 1.05, dig: 1.4, guns: 1.4, mass: .9, navy: 1, line: 0.5, rush: 0.05, patience: 1.1, retreat: 1 },
   },
   { // Russian Empire
     unit: 'inf', unitName: 'Siberian rifle battalion', unitShort: 'SIB', unitDesc: 'Hardened riflemen · ignore winter and fight 20% harder in it',
@@ -101,7 +103,7 @@ export const NATIONS: Nation[] = [
     shells: 1, shellsUntil: [dayOf(1916, 1), .6], factoryShells: 3, factoryCost: 0,
     morale: -10, unrest: 70, wwLoss: 1, hold: 1.5, startInf: 6,
     flags: { siberian: true },
-    ai: { doctrines: ['mass', 'depth', 'total', 'elastic', 'infiltration', 'combined'], aggr: .8, dig: .9, guns: .7, mass: 1.6, navy: 1, patience: .8, retreat: .2 },
+    ai: { doctrines: ['mass', 'depth', 'total', 'elastic', 'infiltration', 'combined'], aggr: .8, dig: .9, guns: .7, mass: 1.6, navy: 1, line: 0, rush: 0.4, patience: .8, retreat: .2 },
   },
   { // German Empire
     unit: 'inf', unitName: 'Storm battalion', unitShort: 'STB', from: dayOf(1917, 1), unitDesc: 'From 1917: cross 60% of the wire unhindered, +25% speed, +15% damage in the assault',
@@ -119,7 +121,7 @@ export const NATIONS: Nation[] = [
     shells: 1.25, factoryShells: 3, factoryCost: 0,
     morale: 0, unrest: 80, wwLoss: 1, hold: 1.5, startInf: 6,
     flags: { interior: true, krupp: true, blockaded: true, storm: true },
-    ai: { doctrines: ['artillery', 'elastic', 'blockade', 'infiltration', 'combined', 'total'], aggr: 1.2, dig: 1.1, guns: 1.5, mass: .9, navy: .6, patience: 1.25, retreat: 1 },
+    ai: { doctrines: ['artillery', 'elastic', 'blockade', 'infiltration', 'combined', 'total'], aggr: 1.2, dig: 1.1, guns: 1.5, mass: .9, navy: .6, line: 0.1, rush: 0.05, patience: 1.25, retreat: 1 },
   },
   { // Austria-Hungary
     unit: 'art', unitName: 'Škoda siege battery', unitShort: 'ŠKO', unitDesc: 'Heavy howitzers · +80% damage against defences, −20% rate of fire',
@@ -137,7 +139,7 @@ export const NATIONS: Nation[] = [
     shells: 1, factoryShells: 3, factoryCost: 0,
     morale: -10, unrest: 75, wwLoss: 1, hold: 1.5, startInf: 6,
     flags: { skoda: true, mountain: true },
-    ai: { doctrines: ['depth', 'artillery', 'peace', 'elastic', 'air', 'total'], aggr: 1.2, dig: 1.4, guns: 1.3, mass: 1, navy: .7, patience: 1, retreat: 1.2 },
+    ai: { doctrines: ['depth', 'artillery', 'peace', 'elastic', 'air', 'total'], aggr: 1.2, dig: 1.4, guns: 1.3, mass: 1, navy: .7, line: 0.4, rush: 0.1, patience: 1, retreat: 1.2 },
   },
   { // Ottoman Empire
     unit: 'inf', unitName: 'Fortress infantry', unitShort: 'FOR', unitDesc: 'Stubborn defenders · +25% defence in a trench, −15% in the attack',
@@ -155,7 +157,7 @@ export const NATIONS: Nation[] = [
     shells: 1, factoryShells: 2, factoryCost: 2,
     morale: 0, unrest: 80, wwLoss: 1, hold: 1.5, startInf: 6,
     flags: { gallipoli: true, desert: true, fortInf: true, poorRails: true },
-    ai: { doctrines: ['depth', 'elastic', 'mass', 'peace', 'air', 'total'], aggr: 1.35, dig: 1.6, guns: .9, mass: 1.2, navy: .8, patience: 1.2, retreat: 1 },
+    ai: { doctrines: ['depth', 'elastic', 'mass', 'peace', 'air', 'total'], aggr: 1.35, dig: 1.6, guns: .9, mass: 1.2, navy: .8, line: 0.5, rush: 0.1, patience: 1.2, retreat: 1 },
   },
 ];
 

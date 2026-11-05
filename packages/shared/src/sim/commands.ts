@@ -21,7 +21,10 @@ import { techDayFor, type TechKey } from '../data/tech';
 import { monthStr } from '../data/calendar';
 import { bombedNow } from './economy';
 import { recordIntel, MAX_SPIES } from './fog';
-import type { Army, Battle, BuildKind, Command, GameState, RegionState } from './types';
+import { ASSEMBLE, UNREG, armyNo, autoDeploy, column, columnArrives, fixPosts, formTime, groupUnits, landRoute, mainOf, moveK, routeColumn, setAttackCheck, takeGroup } from './posts';
+import { allied } from './diplomacy';
+import type { Army, Battle, BuildKind, Command, GameState, Order, RegionState } from './types';
+import type { Units } from '../data/units';
 
 /** The front of a region the owner's fresh troops should go to: the one facing `from` if there is one, else the most hard-pressed. */
 export function frontFor(g: GameState, r: RegionState, f: number, from = -2): Battle | null {
@@ -39,7 +42,7 @@ export function frontFor(g: GameState, r: RegionState, f: number, from = -2): Ba
 
 export function addUnits(g: GameState, r: RegionState, type: UnitType, n: number) {
   const b = frontFor(g, r, r.owner);
-  if (b && b.def === r.owner) { const u = emptyUnits(); u[type] = n; joinBattle(g, b, r.owner, u, null, true, r.id, undefined, r.mor); }
+  if (b && b.def === r.owner && !b.goal) { const u = emptyUnits(); u[type] = n; joinBattle(g, b, r.owner, u, null, true, r.id, undefined, r.mor); }
   else addForce(r.units, r.men, type, n);
 }
 
@@ -55,7 +58,7 @@ export function recruit(g: GameState, fid: number, r: RegionState, type: UnitTyp
   if (r.contested >= 0) return contestedMsg(r);
   if (r.cut) return cutMsg(r);
   if (r.strike) return `The workers of ${world().regions[r.id].name} are on strike. No recruits until the unrest eases.`;
-  if ((f.men ?? 0) < men) return `The manpower pool is empty: a ${FORMATION[type].one} needs ${men} men and ${Math.floor(f.men ?? 0)} are left. Mobilise, or wait for the next age class.`;
+  if ((f.men ?? 0) < men) return `The manpower pool is empty: a ${FORMATION[type].one} needs ${men} men and ${Math.floor(f.men ?? 0)} are left. Raise conscription, or wait for the next age class.`;
   if (type === 'tank' && !techOn(g, fid, 'tank')) return locked(g, fid, 'tank', 'Tanks');
   if (type === 'plane' && !techOn(g, fid, 'air')) return locked(g, fid, 'air', 'Aircraft');
   if (type === 'tank' && !r.factory) return 'Tanks need a factory in this region.';
@@ -119,7 +122,7 @@ export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKin
   return null;
 }
 
-function capCheck(g: GameState, fid: number, to: number): string | null {
+export function capCheck(g: GameState, fid: number, to: number): string | null {
   const cap = g.cfg?.attackCap ?? 0; if (!cap || g.regions[to].owner === fid) return null;
   const now = offensives(g, fid); if (now.has(to) || now.size < cap) return null;
   return `You already run ${now.size} attack${now.size === 1 ? '' : 's'} at once (limit ${cap}). Wait for one to finish.`;
@@ -129,37 +132,122 @@ function capCheck(g: GameState, fid: number, to: number): string | null {
 export const FORCED_MARCH = 45, BATTLE_REST = 60, FATIGUE_MORALE = 15;
 
 /**
- * Form a marching army of a share of a region's ground troops (one formation always stays behind). Checks ownership, battle,
- * border and size; the caller adds it to the game. Returns the army or an error text.
+ * Form a column of a share of a region's main army marching to a neighbouring region (one formation always stays behind in the
+ * region). It ends at `toPost` there (default: the border it comes over when the region is foreign, else the centre).
+ * Checks ownership, battle, border and size; the column is already on its way. Returns it or an error text.
  */
-export function formArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number): Army | string {
+export function formArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number, toPost?: number): Army | string {
   const W = world(), A = g.regions[fromId], B = g.regions[toId], WA = W.regions[fromId], WB = W.regions[toId];
   if (!A || !B) return 'Unknown region.';
   if (A.owner !== fid) return 'Select one of your own regions first.';
-  if (A.battle >= 0) return `${WA.name} is under attack. Its troops cannot leave.`;
+  if (A.battle >= 0 && !frontsOf(g, A.id).every(b => b.goal)) return `${WA.name} is under attack. Its troops cannot leave.`;
   if (!WA.adj.includes(toId)) return `${WB.name} does not border ${WA.name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
   const tot = groundUnits(A.units); if (tot < 2) return `${WA.name} needs at least 2 ground formations to march. One always stays behind.`;
-  frac = Math.max(.05, Math.min(1, frac));
-  const n: Record<string, number> = {}; let sent = 0;
-  for (const k of GROUND_TYPES) { n[k] = Math.round(A.units[k] * frac); sent += n[k]; }
-  if (sent >= tot) { for (const k of GROUND_TYPES) if (n[k] > 0) { n[k]--; sent--; break; } }
-  if (sent <= 0) { for (const k of GROUND_TYPES) if (A.units[k] > 0) { n[k] = 1; sent = 1; break; } }
-  const a = mkArmy(g, fid, fromId, toId, MARCH_SPEED, MARCH_MIN); a.mor = A.mor; a.stance = A.stance ?? 0;
-  const mf = marchFactor(g, fid, fromId, toId); a.dur *= mf.k; if (mf.rail) a.rail = true;
-  for (const k of GROUND_TYPES) { const men = takeForce(A.units, A.men, k, n[k]); a.units[k] += n[k]; a.men[k] += men; }
-  // fatigue: marching on right after arriving, or straight out of a battle
-  a.legs = (A.arrT !== undefined && g.time - A.arrT < FORCED_MARCH ? (A.legs ?? 1) : 0) + 1;
-  if (A.foughtT !== undefined && g.time - A.foughtT < BATTLE_REST) a.tired = true;
-  return a;
+  const main = mainOf(A); if (groundUnits(main) < 1) return `The main army of ${WA.name} is empty: its troops stand on the borders. Move some back to the centre, or give the corps on the border its orders.`;
+  const n = shareOf(main, frac, groundUnits(main) >= tot);
+  const out = takeGroup(A, -1, 0, n);
+  const legs = (A.arrT !== undefined && g.time - A.arrT < FORCED_MARCH ? (A.legs ?? 1) : 0) + 1;
+  const tired = A.foughtT !== undefined && g.time - A.foughtT < BATTLE_REST;
+  return column(g, fid, fromId, -1, toId, toPost ?? (B.owner === fid ? -1 : fromId), out.u, out.m, A.mor, { stance: A.stance ?? 0, legs, tired, gn: armyNo(g, A), gk: 0 });
 }
 
-export function sendArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number, brk?: boolean): string | null {
-  const B = g.regions[toId];
-  if (B) { const cap = capCheck(g, fid, toId); if (cap) return cap; }
-  if (B && g.regions[fromId]?.owner === fid) { const t = treatyCheck(g, fid, toId, brk); if (t) return t; }
-  const a = formArmy(g, fid, fromId, toId, frac); if (typeof a === 'string') return a;
-  g.armies.push(a);
-  emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(a.units) });
+/** Formations to take from a group for a share `frac` (at least one; one stays behind when `keep`). */
+function shareOf(src: Units, frac: number, keep: boolean): Partial<Units> {
+  frac = Math.max(.05, Math.min(1, frac));
+  const n: Partial<Units> = {}; let sent = 0, tot = 0;
+  for (const k of GROUND_TYPES) { n[k] = Math.round(src[k] * frac); sent += n[k]!; tot += src[k]; }
+  if (keep && sent >= tot) { for (const k of GROUND_TYPES) if (n[k]! > 0) { n[k]!--; sent--; break; } }
+  if (sent <= 0) { for (const k of GROUND_TYPES) if (src[k] > 0) { n[k] = 1; break; } }
+  return n;
+}
+
+/**
+ * Quick order. To an own region: a share of the main army marches there. To a foreign region: the troops are called up and form
+ * up, march to the border facing it, assemble, and attack with goal `goal` (1 take the first line, 2 invade) — every phase takes
+ * its time. If the main army is empty, the corps already on that border gets the order.
+ */
+export function sendArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number, brk?: boolean, goal: Order = 2, post?: number): string | null {
+  const B = g.regions[toId], A = g.regions[fromId], W = world();
+  if (!A || !B) return 'Unknown region.';
+  if (B.owner === fid || (B.owner >= 0 && allied(g, fid, B.owner))) {
+    if (B.owner !== fid) return 'Your troops do not garrison allied regions.';
+    const a = formArmy(g, fid, fromId, toId, frac, post !== undefined && W.regions[toId].adj.includes(post) ? post : -1); if (typeof a === 'string') return a;
+    emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(a.units) });
+    return null;
+  }
+  if (A.owner !== fid) return 'Select one of your own regions first.';
+  const cap = capCheck(g, fid, toId); if (cap) return cap;
+  const t = treatyCheck(g, fid, toId, brk); if (t) return t;
+  if (!W.regions[fromId].adj.includes(toId)) return `${W.regions[toId].name} does not border ${W.regions[fromId].name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
+  if (goal !== 1 && goal !== 2) goal = 2;
+  const main = mainOf(A), c = A.fr?.[toId];
+  if (groundUnits(main) < 1 || groundUnits(A.units) < 2) {
+    if (c && groundUnits(c.u) > 0) return setOrder(g, fid, fromId, toId, goal, false, brk);
+    return groundUnits(A.units) < 2 ? `${W.regions[fromId].name} needs at least 2 ground formations to march. One always stays behind.` : `The main army of ${W.regions[fromId].name} is empty.`;
+  }
+  const keep = groundUnits(main) >= groundUnits(A.units);
+  const out = takeGroup(A, -1, 0, shareOf(main, frac, keep));
+  // forming up, then the march to the border; the corps there assembles and attacks
+  column(g, fid, fromId, -1, fromId, toId, out.u, out.m, A.mor, { wait: formTime(g, A, out.u), ord: goal, stance: A.stance ?? 0, gn: armyNo(g, A), gk: 0 });
+  if (c && (c.ord ?? 0) === 0) { c.ord = goal; c.ready = Math.max(c.ready ?? 0, g.time + ASSEMBLE * moveK(g)); }
+  emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(out.u) });
+  return null;
+}
+
+/** Move a share of a group (`post` -1 main army, else a corps) to another post of the region, or through own land to a post of `to`. */
+export function moveGroup(g: GameState, fid: number, region: number, post: number, to: number, toPost: number, frac: number): string | null {
+  const W = world(), A = g.regions[region], B = g.regions[to];
+  if (!A || !B) return 'Unknown region.';
+  if (A.owner !== fid) return 'Select one of your own regions first.';
+  if (B.owner !== fid) return `${W.regions[to].name} is not yours. To attack, give the corps on its border an order.`;
+  if (post >= 0 && !W.regions[region].adj.includes(post)) return 'That border does not belong to this region.';
+  if (toPost >= 0 && !W.regions[to].adj.includes(toPost)) return `That border does not belong to ${W.regions[to].name}.`;
+  if (region === to && post === toPost) return 'The troops are already there.';
+  const src = groupUnits(A, post); if (groundUnits(src) < 1) return post < 0 ? `The main army of ${W.regions[region].name} has no ground troops.` : 'There is no corps on that border.';
+  const n = shareOf(src, frac, false);
+  if (region !== to) {
+    const tot = groundUnits(A.units); let sent = 0; for (const k of GROUND_TYPES) sent += n[k] ?? 0;
+    if (tot < 2) return `${W.regions[region].name} needs at least 2 ground formations to march. One always stays behind.`;
+    if (sent >= tot) for (const k of GROUND_TYPES) if ((n[k] ?? 0) > 0) { n[k]!--; break; }
+  }
+  const route = region === to ? [] : landRoute(g, fid, region, to);
+  if (!route) return `No route through your own land leads from ${W.regions[region].name} to ${W.regions[to].name}.`;
+  const fb = toPost >= 0 && region === to ? frontsOf(g, region).find(b => b.from === toPost && b.def === fid) : undefined;
+  const gk = post < 0 ? 0 : 1, gn = post < 0 ? armyNo(g, A) : A.fr?.[post]?.n, st = post >= 0 ? A.fr?.[post]?.st ?? A.stance : A.stance;
+  const out = takeGroup(A, post, 0, n); if (groundUnits(out.u) < 1) return 'No troops to move.';
+  if (region === to) column(g, fid, region, post, region, toPost, out.u, out.m, A.mor, { front: fb?.id, stance: st, gn, gk });
+  else {
+    const legs = (A.arrT !== undefined && g.time - A.arrT < FORCED_MARCH ? (A.legs ?? 1) : 0) + 1;
+    routeColumn(g, fid, region, post, route, toPost, out.u, out.m, A.mor, { stance: st, legs, gn, gk });
+  }
+  A.deploy = 1; if (region !== to || toPost >= 0) B.deploy = 1;
+  fixPosts(g, A);
+  return null;
+}
+
+/** Standing order of the corps on border `post` of `region`: 0 hold, 1 take the first line, 2 invade. */
+export function setOrder(g: GameState, fid: number, region: number, post: number, k: Order, now = false, brk?: boolean): string | null {
+  const W = world(), r = g.regions[region];
+  if (!r || r.owner !== fid) return 'Select one of your own regions first.';
+  if (!W.regions[region].adj.includes(post)) return 'That border does not belong to this region.';
+  if (k !== 0 && k !== 1 && k !== 2) return 'Invalid order.';
+  const c = r.fr?.[post];
+  const foothold = frontsOf(g, post).find(b => b.from === region && b.attacker === fid && b.stage === 3);
+  const advance = () => { foothold!.stage = 1; foothold!.stT = foothold!.age; foothold!.goal = 2; emit(g, { k: 'advance', faction: fid, region: post }); };
+  if (!c || groundUnits(c.u) < 1) {
+    if (foothold && k === 2) { advance(); return null; }
+    return 'There is no corps on that border. Move troops there first.';
+  }
+  if (k === 0) { c.ord = 0; c.now = false; c.since = g.time; return null; }
+  const T = g.regions[post];
+  if (T.owner === fid || (T.owner >= 0 && allied(g, fid, T.owner))) return `${W.regions[post].name} is not an enemy region.`;
+  if (!foothold) { const cap = capCheck(g, fid, post); if (cap) return cap; }
+  const t = treatyCheck(g, fid, post, brk); if (t) return t;
+  const was = c.ord ?? 0;
+  c.ord = k; c.now = now;
+  if (was === 0) { c.ready = Math.max(c.ready ?? 0, g.time + ASSEMBLE * moveK(g)); emit(g, { k: 'massing', faction: fid, region, to: post, owner: T.owner }); }
+  if (foothold && k === 2) advance();
+  r.deploy = 1;
   return null;
 }
 
@@ -241,6 +329,7 @@ export function assault(g: GameState, fid: number, r: RegionState): string | nul
   const cap = g.cfg?.attackCap ?? 0, now = offensives(g, fid);
   if (cap && now.size >= cap) return `You already run ${now.size} attacks at once (limit ${cap}).`;
   startAssault(g, r); // the whole garrison, aircraft included, storms the holdouts
+  r.fr = undefined;
   return null;
 }
 
@@ -311,6 +400,12 @@ export function arrive(g: GameState, a: Army) {
     const fb = g.battles.find(b => b.id === a.front && !b.ended && b.region === a.to);
     if (fb && (fb.def === a.owner ? t.owner === a.owner : fb.sides.includes(a.owner))) { joinBattle(g, fb, a.owner, a.units, dir, fb.def === a.owner, a.to, a.men, a.mor, a.stance); return; }
   }
+  // ground columns: march on, take up their post, or join a front; only an attack on a foreign region goes on below
+  if (a.post !== undefined && !a.air && columnArrives(g, a, bid => {
+    const fb = g.battles.find(b => b.id === bid && !b.ended && b.region === a.to);
+    if (!fb || !(fb.def === a.owner ? t.owner === a.owner : fb.sides.includes(a.owner))) return false;
+    joinBattle(g, fb, a.owner, a.units, dir, fb.def === a.owner, a.to, a.men, a.mor, a.stance); return true;
+  })) return;
   const sector = a.air ? approachSector(a.from, a.to) : a.from;
   if (a.ret) {
     // returning aircraft land at home, or join its defence; a lost home means a lost squadron
@@ -335,12 +430,13 @@ export function arrive(g: GameState, a: Army) {
   // attacking: join the front over the same border, aircraft support any front, otherwise open a new front
   const same = fronts.find(b => b.from === sector) ?? (a.air ? fronts.find(b => b.sides.includes(a.owner)) ?? fronts[0] : undefined);
   if (same) { joinBattle(g, same, a.owner, a.units, dir, same.def === a.owner, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance); return; }
-  const nb = startBattle(g, t, dir, a.owner, sector);
+  const nb = startBattle(g, t, dir, a.owner, sector, !a.air && a.post !== undefined ? (a.ord || 2) : undefined);
+  if (a.now) nb.unreg = UNREG;
   joinBattle(g, nb, a.owner, a.units, dir, false, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance);
 }
 
 const FORT_KINDS: FortKind[] = ['trench', 'sand', 'wire', 'pill', 'fort', 'flak', 'bunk'];
-const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's'] as const;
+const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode'] as const;
 /** Commands arrive from the network: every numeric field must be a finite number. */
 function validCommand(c: Command): boolean {
   if (!c || typeof c !== 'object' || typeof c.t !== 'string') return false;
@@ -363,7 +459,10 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     }
     case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
     case 'fortify': { const r = g.regions[c.region]; if (!r || !FORT_KINDS.includes(c.kind)) return 'Invalid order.'; return fortify(g, fid, r, c.kind, c.sector); }
-    case 'march': return sendArmy(g, fid, c.from, c.to, c.frac, c.brk);
+    case 'march': return sendArmy(g, fid, c.from, c.to, c.frac, c.brk, c.goal ?? 2, c.post);
+    case 'move': return moveGroup(g, fid, c.region, c.post, c.to, c.toPost, c.frac);
+    case 'order': return setOrder(g, fid, c.region, c.post, c.k, !!c.now, c.brk);
+    case 'deploy': { const r = g.regions[c.region]; if (!r || r.owner !== fid) return 'Select one of your own regions first.'; r.deploy = c.mode === 1 ? 1 : undefined; if (r.deploy !== 1) autoDeploy(g, r); return null; }
     case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail, !!c.factory, c.brk);
     case 'decoy': return decoy(g, fid, c.from, c.to);
     case 'raid': return raid(g, fid, c.battle);
@@ -390,3 +489,5 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     default: return 'Unknown command.';
   }
 }
+
+setAttackCheck(capCheck);

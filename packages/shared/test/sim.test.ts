@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { dayOf, createGame, run, step, applyCommand, buildWorld, makeSnapshot, createMirror, applySnapshot, initMirrorCapitals, income, FACTIONS, totalUnits, missionText, fogView } from '../src';
+import { strike } from './helpers';
 
 describe('world', () => {
   const W = buildWorld();
@@ -135,7 +136,7 @@ describe('rules: defences by sector', () => {
     g.regions[B].defs.push({ id: 900, k: 'pill', s: other, hp: DT.pill.hp, f: 1 });
     g.regions[A].units.inf = 12; g.regions[A].units.tank = 2; g.regions[B].units.inf = 1;
     fill(g);
-    expect(applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 })).toBeNull();
+    expect(strike(g, 0, A, B)).toBeNull();
     settle(g, 200);
     expect(g.regions[B].owner).toBe(0);
     expect(g.regions[B].contested).toBe(1);
@@ -169,7 +170,7 @@ describe('rules: aircraft', () => {
       const W = buildWorld(), A = W.byName['France'].id, B = W.byName['Germany'].id;
       g.regions[A].owner = 0; g.regions[B].owner = 1; g.regions[B].defs = [];
       g.regions[A].units = { ...emptyUnits(), inf: 14, art: 2 }; g.regions[B].units = { ...emptyUnits(), inf: 10, mg: 2 };
-      fill(g); applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 });
+      fill(g); strike(g, 0, A, B);
       let t = 0; for (let i = 0; i < 20 * 900; i++) { step(g, .05); if (g.battles.some(b => b.region === B && b.ended)) break; if (g.battles.some(b => b.region === B)) t += .05; }
       return t;
     };

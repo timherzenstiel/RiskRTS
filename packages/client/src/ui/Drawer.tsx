@@ -11,8 +11,10 @@ import { forceOf } from './garrison';
 import { menOf, menStr, strengthOf } from './format';
 import { FrontControls } from './FrontCard';
 import { Briefing } from './Briefing';
+import { DeployTab, corpsState, unitsLine } from './DeployTab';
+import { groupName } from '@riskrts/shared';
 
-const TABS: [Tab, string][] = [['rec', 'Recruit'], ['build', 'Build'], ['fort', 'Fortify'], ['march', 'March']];
+const TABS: [Tab, string][] = [['rec', 'Recruit'], ['build', 'Build'], ['fort', 'Fortify'], ['deploy', 'Deploy'], ['march', 'March']];
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 
 /** One line per front: where the attack comes from, who is left, morale, and (for the defender) a reserves button. */
@@ -116,6 +118,13 @@ export function Drawer() {
           </div>
         </div>
       )}
+      {!own && r.fr && Object.keys(r.fr).length > 0 && (
+        <div className="pad borders corps-seen">
+          {Object.entries(r.fr).map(([s, c]) => (
+            <small key={s}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} on the {W.regions[+s].name} border:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
+          ))}
+        </div>
+      )}
       {borders.length > 0 && (
         <div className="pad borders">
           {borders.map(({ n, w, d }) => (
@@ -133,6 +142,7 @@ export function Drawer() {
             {tab === 'rec' && <RecruitTab region={r} id={sel} />}
             {tab === 'build' && <BuildTab region={r} id={sel} />}
             {tab === 'fort' && <FortifyTab region={r} id={sel} />}
+            {tab === 'deploy' && <DeployTab region={r} id={sel} />}
             {tab === 'march' && <MarchTab region={r} id={sel} />}
           </div>
         </>

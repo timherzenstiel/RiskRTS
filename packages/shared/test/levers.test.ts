@@ -4,6 +4,7 @@ import {
   FORMATION, SHELLS, UNIT_TYPES, applyCommand, applySnapshot, buildWorld, createGame, createMirror, emptyUnits, frontsOf, initMirrorCapitals, makeSnapshot,
   run, shellIncome, step, updateSupplyLines, type Battle, type GameState,
 } from '../src';
+import { openFront } from './helpers';
 
 const W = buildWorld();
 const id = (n: string) => W.byName[n].id;
@@ -19,11 +20,7 @@ function setup(seed = 21, pace = 1) {
   return { g, A, B };
 }
 /** March from A on B and run until the battle opens. */
-function open(g: GameState, A: number, B: number, frac = 1): Battle {
-  expect(applyCommand(g, 0, { t: 'march', from: A, to: B, frac })).toBeNull();
-  for (let i = 0; i < 20 * 30 && !frontsOf(g, B).length; i++) step(g, .05);
-  return frontsOf(g, B)[0];
-}
+function open(g: GameState, A: number, B: number, frac = 1): Battle { return openFront(g, 0, A, B, frac); }
 const attackers = (b: Battle) => b.agents.filter(a => a.f === b.attacker && !a.dead && !a.out && a.type === 'inf');
 const along = (b: Battle) => Math.min(...attackers(b).map(a => a.x * b.ax + a.z * b.az));
 
@@ -67,7 +64,7 @@ describe('barrage, shells and suppression', () => {
   });
   it('guns out of shells fire rationed, for free', () => {
     const dry = shell(2, 0), full = shell(2);
-    expect(dry.used).toBeLessThanOrEqual(SHELLS.base + .01); // only what the convoy brought
+    expect(dry.used).toBeLessThanOrEqual(2 * SHELLS.base + .01); // only what the convoys brought
     expect(dry.lost).toBeGreaterThan(0); expect(dry.lost).toBeLessThan(full.lost);
   });
   it('suppression fades when the guns fall silent', () => {
@@ -131,7 +128,7 @@ describe('reserves and retreat', () => {
     s.g.regions[s.A].units = { ...emptyUnits(), inf: 8 }; s.g.regions[s.B].units = { ...emptyUnits(), inf: 5 }; fill(s.g); updateSupplyLines(s.g);
     const b2 = open(s.g, s.A, s.B);
     expect(applyCommand(s.g, 1, { t: 'withdraw', battle: b2.id })).toBeNull();
-    run(s.g, 20);
+    run(s.g, 90);
     expect(s.g.regions[s.B].owner).toBe(0);
     expect(s.g.regions[C].units.inf).toBeGreaterThan(3);
   });

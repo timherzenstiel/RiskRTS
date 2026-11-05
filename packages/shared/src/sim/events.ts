@@ -63,6 +63,16 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (e.faction === me) return { text: `Our defenders at ${R(e.region)} fall back to the second line and steady.`, cls: 'me', region: e.region };
       if (g.battles.some(b => b.region === e.region && b.sides.includes(me))) return { text: `The enemy at ${R(e.region)} falls back to a second line.`, cls: '', region: e.region };
       return null;
+    case 'firstLine':
+      if (e.faction === me) return { text: e.hold ? `We hold the enemy's first line at ${R(e.region)}. The troops dig in there; order the invasion when ready.` : `The first line at ${R(e.region)} is ours. The troops consolidate before pushing into the depth.`, cls: 'good', region: e.region };
+      if (e.def === me) return { text: `The enemy has taken our first line at ${R(e.region)} on the border with ${R(e.from)}.`, cls: 'bad', region: e.region };
+      return null;
+    case 'depth':
+      if (e.faction === me) return { text: `Our troops push into the depth of ${R(e.region)}.`, cls: 'me', region: e.region };
+      if (e.def === me) return { text: `The enemy pushes into ${R(e.region)}. The main army meets them.`, cls: 'bad', region: e.region };
+      return null;
+    case 'advance': return e.faction === me ? { text: `The advance from our foothold in ${R(e.region)} begins.`, cls: 'me', region: e.region } : null;
+    case 'massing': return e.owner === me ? { text: `${cap(F(e.faction).the)} is massing troops in ${R(e.region)}, facing ${R(e.to)}.`, cls: 'bad', region: e.to } : null;
     case 'raid':
       if (e.faction === me) return { text: e.ok ? `Our trench raid at ${R(e.region)} comes back with prisoners${e.target >= 0 ? ` and a report on ${R(e.target)}` : ''}.` : `Our trench raid at ${R(e.region)} was beaten back.`, cls: e.ok ? 'good' : 'bad', region: e.region };
       if (e.ok && (g.regions[e.region].owner === me || g.battles.some(b => b.region === e.region && b.sides.includes(me)))) return { text: `An enemy raiding party got into our trenches at ${R(e.region)}.`, cls: 'bad', region: e.region };

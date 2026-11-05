@@ -4,6 +4,7 @@ import {
   COST, DT, FORMATION, NATIONS, UNIT_TYPES, UT, applyCommand, applySnapshot, buildWorld, createGame, createMirror, dayOf, emptyUnits, fortCost, income,
   initMirrorCapitals, makeSnapshot, moraleCap, poolGrowth, run, shellIncome, statsOf, unitName, updateSupplyLines, type GameState,
 } from '../src';
+import { strike } from './helpers';
 
 const W = buildWorld();
 const id = (n: string) => W.byName[n].id;
@@ -104,7 +105,7 @@ describe('national damage', () => {
       const A = id('Austria-Hungary'), B = id('Italy'); g.regions[A].owner = f; g.regions[B].owner = 1;
       g.regions[A].units = { ...emptyUnits(), inf: 3, art: 3 }; g.regions[B].defs = [{ id: 900, k: 'bunk', s: A, hp: DT.bunk.hp, f: 1 }]; g.regions[B].units.inf = 1; fill(g);
       g.factions.forEach(x => { x.mission = null; x.shells = 300; }); updateSupplyLines(g);
-      applyCommand(g, f, { t: 'march', from: A, to: B, frac: 1 }); run(g, 50);
+      strike(g, f, A, B); run(g, 50);
       const b = g.battles.find(x => x.region === B)!; const bunk = b.agents.find(a => a.type === 'bunk')!;
       return DT.bunk.hp - Math.max(0, bunk.hp);
     };

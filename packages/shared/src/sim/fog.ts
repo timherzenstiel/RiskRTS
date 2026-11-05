@@ -4,7 +4,8 @@
 // the local player's screen, each network guest's snapshots and each computer power's decisions all go through fogView.
 import { emptyUnits, type Units } from '../data/units';
 import { emit, menTotal, rnd, world } from './core';
-import type { Army, Battle, Defence, GameState, Intel, RegionState, Works } from './types';
+import type { Army, Battle, Corps, Defence, GameState, Intel, RegionState, Works } from './types';
+import { groupMen } from './posts';
 import { allied } from './diplomacy';
 
 export const MAX_SPIES = 3;
@@ -13,6 +14,7 @@ export const STALE_DAYS = 21;
 
 const cloneWorks = (w: Record<number, Works>) => { const o: Record<number, Works> = {}; for (const [k, v] of Object.entries(w)) o[+k] = { ...v }; return o; };
 const cloneDefs = (d: Defence[]) => d.map(x => ({ ...x }));
+const cloneCorps = (fr?: Record<number, Corps>) => { if (!fr) return undefined; const o: Record<number, Corps> = {}; for (const [k, c] of Object.entries(fr)) o[+k] = { ...c, u: { ...c.u } }; return o; };
 
 /** File a report on `region` for `fid`. With `sector`, only the troops and that border's defences are seen (a patrol). */
 export function recordIntel(g: GameState, fid: number, region: number, sector?: number) {
@@ -24,8 +26,12 @@ export function recordIntel(g: GameState, fid: number, region: number, sector?: 
     defs = [...(prev?.defs.filter(d => d.s !== sector) ?? []), ...cloneDefs(own.filter(d => d.s === sector))];
     works = prev ? cloneWorks(prev.works) : {}; if (r.works[sector]) works[sector] = { ...r.works[sector] }; else delete works[sector];
   }
+  // corps: every border on a full report, the patrolled border (and what was known of the others) on a patrol
+  let fr: Record<number, Corps> | undefined;
+  if (sector === undefined) fr = cloneCorps(r.fr);
+  else { fr = { ...(prev?.fr ?? {}) }; delete fr[sector]; if (r.fr?.[sector]) fr[sector] = { ...r.fr[sector], u: { ...r.fr[sector].u } }; }
   const it: Intel = {
-    day: g.day, time: g.time, owner: r.owner, units: { ...r.units }, men: { ...r.men }, defs, works,
+    day: g.day, time: g.time, owner: r.owner, units: { ...r.units }, men: { ...r.men }, defs, works, fr,
     factory: sector === undefined ? r.factory : prev?.factory ?? false, barracks: sector === undefined ? r.barracks : prev?.barracks ?? false, airfield: sector === undefined ? r.airfield : prev?.airfield ?? false,
   };
   (g.intel[fid] ??= [])[region] = it;
@@ -71,8 +77,13 @@ export function visibility(g: GameState, fid: number): Uint8Array {
 export function estimate(g: GameState, r: RegionState, reportDay = -1): [number, number] {
   // a fake concentration inflates the estimate until a newer report shows the truth
   const fake = r.fake && r.fake.until > g.day && reportDay < r.fake.day ? r.fake.men : 0;
-  const m = menTotal(r.men) + fake; if (m <= 0) return [0, 0];
-  let h = (r.id * 2654435761 + Math.floor(g.day / 7) * 40503) >>> 0; h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
+  return estimateMen(g, r.id, menTotal(r.men) + fake);
+}
+
+/** A range around a noisy guess of `m` men, the same for every viewer during one week. */
+export function estimateMen(g: GameState, key: number, m: number): [number, number] {
+  if (m <= 0) return [0, 0];
+  let h = (key * 2654435761 + Math.floor(g.day / 7) * 40503) >>> 0; h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
   const c = m * (.85 + (h % 1000) / 1000 * .3);
   return [Math.max(100, Math.floor(c * .7 / 100) * 100), Math.max(100, Math.ceil(c * 1.3 / 100) * 100)];
 }
@@ -87,7 +98,17 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   if (it && it.owner === r.owner) { for (const d of it.defs) if (!(vis >= 1 && mine(d.s))) defs.push(d); for (const [k, w] of Object.entries(it.works)) works[+k] = w; }
   if (vis >= 1) for (const s of W.regions[r.id].adj) if (mine(s)) { for (const d of r.defs) if (d.s === s && d.f === r.owner) defs.push(d); if (r.works[s]) works[s] = r.works[s]; else delete works[s]; }
   const known = it && it.owner === r.owner ? it : null;
+  // corps: those on a report, and those across the viewer's own borders as an estimate (a fake concentration swells the biggest)
+  let fr: Record<number, Corps> | undefined = known?.fr ? cloneCorps(known.fr) : undefined;
+  if (vis >= 1) for (const s of W.regions[r.id].adj) if (mine(s)) {
+    const c = r.fr?.[s];
+    if (fr) delete fr[s];
+    if (!c) continue;
+    const fake = r.fake && r.fake.until > g.day && (it?.day ?? -1) < r.fake.day ? r.fake.men / Math.max(1, Object.keys(r.fr ?? {}).length) : 0;
+    (fr ??= {})[s] = { u: emptyUnits(), n: -1, est: estimateMen(g, r.id * 64 + s, groupMen(r, c.u) + fake), ord: (c.ord ?? 0) >= 1 && g.time >= (c.ready ?? 0) - 30 ? c.ord : undefined };
+  }
   return {
+    fr,
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
     factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false,
     supplyQ: undefined, bombed: vis >= 1 ? r.bombed : undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
@@ -98,7 +119,8 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
 /** The game as one power sees it. Battles and armies in view are shared by reference; nothing in the view may be mutated. */
 export function fogView(g: GameState, fid: number): GameState {
   const vis = visibility(g, fid), it = g.intel[fid] ?? [], spied = new Set(activeSpies(g, fid).map(s => s.region));
-  const seeArmy = (a: Army) => a.owner === fid || vis[a.to] >= 1 || vis[a.from] >= 1;
+  // troops forming up in the middle of a region are only seen in full view (a spy there); once they march, observers see them
+  const seeArmy = (a: Army) => a.owner === fid || (a.wait ? vis[a.from] >= 3 : vis[a.to] >= 1 || vis[a.from] >= 1);
   const seeBattle = (b: Battle) => b.sides.includes(fid) || vis[b.region] >= 1;
   return {
     ...g,

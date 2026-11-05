@@ -1,0 +1,118 @@
+// Deploy tab of the region drawer: the main army in the middle, one row per border with its corps, and the troops on the move.
+// Moves send a share of a group (the share picker of the March tab) to another post; corps on foreign borders get their orders here.
+import {
+  FACTIONS, GROUND_TYPES, ORDERS, UT, buildWorld, frontsOf, groundUnits, groupName, isMountain, legDist, mainOf, moveK, POST_SPEED, treatyOf,
+  type Army, type Corps, type GameState, type Order, type RegionState, type Units,
+} from '@riskrts/shared';
+import { useSim, useUi } from '../game/store';
+import { click } from './actions';
+import { Icon } from './icons';
+import { SharePicker } from './DrawerTabs';
+
+/** "6 inf · 2 MG · 1 art" (ground troops only). */
+export function unitsLine(u: Units): string {
+  const p = GROUND_TYPES.filter(k => u[k] > 0).map(k => `${u[k]} ${UT[k].short.toLowerCase()}`);
+  return p.length ? p.join(' · ') : 'no troops';
+}
+const secs = (s: number) => s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : `${Math.ceil(s)}s`;
+
+/** What a corps is doing, in a few words. */
+export function corpsState(g: GameState, c: Corps): string {
+  const ord = c.ord ?? 0;
+  if (ord >= 1) { const left = Math.max(0, (c.ready ?? 0) - g.time); return left > 0 && !c.now ? `assembling · ${ORDERS[ord].toLowerCase()} in ${secs(left)}` : `going in · ${ORDERS[ord].toLowerCase()}`; }
+  const held = c.since !== undefined ? g.time - c.since : 0;
+  return held >= 40 ? 'holding · dug in' : 'holding';
+}
+
+/** Columns of this power that left or are heading for this region, with what they are doing. */
+function columnsOf(g: GameState, me: number, id: number): Army[] {
+  return g.armies.filter(a => a.owner === me && a.post !== undefined && !a.air && (a.from === id || a.to === id));
+}
+
+function ColumnRow({ g, a, id }: { g: GameState; a: Army; id: number }) {
+  const W = buildWorld();
+  const dest = a.inner ? (a.post! >= 0 ? `${W.regions[a.post!].name} border` : 'the centre') : a.to === id ? `here (${a.post! >= 0 ? W.regions[a.post!].name + ' border' : 'centre'})` : W.regions[a.path?.length ? a.path[a.path.length - 1] : a.to].name;
+  const left = (a.wait ?? 0) + (1 - a.t) * a.dur;
+  const what = a.wait ? `forming up · ${secs(a.wait)}, then marching` : `marching · ${secs(left)}`;
+  const n = groundUnits(a.units);
+  return (
+    <div className="it nb col">
+      <span className="ic"><Icon k="inf" size={18} /></span>
+      <div className="tx"><b>{n} formation{n === 1 ? '' : 's'} → {dest}</b><small>{what}{(a.ord ?? 0) >= 1 ? ` · then ${ORDERS[a.ord!].toLowerCase()}` : ''}{a.rail ? ' · by rail' : ''}</small></div>
+    </div>
+  );
+}
+
+function BorderRow({ g, me, r, n }: { g: GameState; me: number; r: RegionState; n: number }) {
+  const W = buildWorld(), ui = useUi.getState, nb = g.regions[n], F = FACTIONS[nb.owner];
+  const c = r.fr?.[n], foreign = nb.owner !== me, peace = foreign && !!treatyOf(g, me, nb.owner);
+  const main = mainOf(r), fb = frontsOf(g, r.id).find(b => b.from === n);
+  const foothold = frontsOf(g, n).find(b => b.from === r.id && b.attacker === me && b.stage === 3);
+  const t = Math.round(legDist(r.id, -1, r.id, n) / POST_SPEED * moveK(g));
+  const frac = useUi.getState().sendFrac;
+  const send = () => { click(); ui().order({ t: 'move', region: r.id, post: -1, to: r.id, toPost: n, frac }); };
+  const back = () => { click(); ui().order({ t: 'move', region: r.id, post: n, to: r.id, toPost: -1, frac }); };
+  const order = (k: Order, now = false) => { click(); ui().order({ t: 'order', region: r.id, post: n, k, now, brk: peace || undefined }); };
+  return (
+    <div className={'post' + (fb ? ' fight' : '')} style={{ '--c': F.color } as React.CSSProperties}>
+      <div className="post-h">
+        <i className="dot" />
+        <div className="tx">
+          <b>{W.regions[n].name}</b>
+          <small>{foreign ? F.short : 'Yours'}{W.seaLane.has(r.id + '|' + n) ? ' · sea lane' : ''}{isMountain(r.id, n) ? ' · mountains' : ''} · {t}s from the centre</small>
+        </div>
+      </div>
+      <div className="post-b">
+        {fb ? <small className="st fight">Battle on this border</small>
+          : c ? <small className="st"><b>{groupName(me, 1, c.n)}</b> · {unitsLine(c.u)} · {corpsState(g, c)}</small>
+            : <small className={'st ' + (foreign ? 'open' : '')}>{foreign ? 'Unmanned: only the fixed defences hold this border' : 'Quiet border'}</small>}
+        {foothold && <small className="st good">Foothold held across the border</small>}
+      </div>
+      <div className="post-a">
+        <button className="btn sm" disabled={groundUnits(main) < 1 || !!fb} onClick={send} title="Send a share of the main army to this border">Send</button>
+        {c && <button className="btn sm" onClick={back} title="Bring a share of this corps back to the main army">Back</button>}
+        {foreign && (c || foothold) && (
+          <div className="seg ord" role="group" aria-label={`Orders for the ${W.regions[n].name} border`}>
+            {ORDERS.map((o, k) => (
+              <button key={o} aria-pressed={(c?.ord ?? 0) === k && !!c} disabled={!c && !(foothold && k === 2)}
+                title={k === 0 ? 'Hold the border and dig in' : k === 1 ? 'Take the enemy\'s first line, then dig in there' : 'Take the first line, then push into the region'}
+                onClick={() => order(k as Order)}>{k === 0 ? 'Hold' : k === 1 ? 'First line' : 'Invade'}</button>
+            ))}
+          </div>
+        )}
+        {c && (c.ord ?? 0) >= 1 && !c.now && (c.ready ?? 0) > g.time && <button className="btn sm danger" title="Attack before the troops have assembled: tired men, unregistered guns" onClick={() => order(c.ord!, true)}>Go now</button>}
+      </div>
+    </div>
+  );
+}
+
+export function DeployTab({ region, id }: { region: RegionState; id: number }) {
+  const sim = useSim(); if (!sim) return null;
+  const { g, me } = sim, W = buildWorld(), ui = useUi.getState;
+  const main = mainOf(region), cols = columnsOf(g, me, id);
+  const borders = [...W.regions[id].adj].sort((a, b) => (g.regions[b].owner !== me ? 1 : 0) - (g.regions[a].owner !== me ? 1 : 0));
+  const auto = region.deploy !== 1;
+  return (
+    <>
+      <div className="lv-row deploy-mode">
+        <span className="lv-l" title="A region on Auto keeps about a third of its troops in the middle and spreads the rest over the threatened borders every convoy">Deploy</span>
+        <div className="seg" role="group" aria-label="Deploy mode">
+          <button aria-pressed={auto} onClick={() => { click(); ui().order({ t: 'deploy', region: id, mode: 0 }); }}>Auto</button>
+          <button aria-pressed={!auto} onClick={() => { click(); ui().order({ t: 'deploy', region: id, mode: 1 }); }}>Manual</button>
+        </div>
+      </div>
+      <div className="post main">
+        <div className="post-h"><span className="ic"><Icon k="barracks" size={18} /></span>
+          <div className="tx"><b>{groupName(me, 0, region.an)}</b><small>Main army · centre · {unitsLine(main)}{main.plane ? ` · ${main.plane} squadron${main.plane === 1 ? '' : 's'}` : ''}</small></div>
+        </div>
+        <small className="note">The reserve: recruits join it, it meets any enemy who breaks through, and offensives are called up from it.</small>
+      </div>
+      <SharePicker />
+      <div className="lbl"><span>Borders · a corps on each one holds its trench</span></div>
+      {borders.map(n => <BorderRow key={n} g={g} me={me} r={region} n={n} />)}
+      {cols.length > 0 && <div className="lbl"><span>On the move</span></div>}
+      {cols.map(a => <ColumnRow key={a.id} g={g} a={a} id={id} />)}
+      <p className="note">Every move takes the distance divided by the marching speed; railways make it three times faster.</p>
+    </>
+  );
+}

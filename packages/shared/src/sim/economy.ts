@@ -1,4 +1,5 @@
 // Supply income, convoys, supply lines, reinforcement of battered formations and war weariness.
+import { deployOnConvoy } from './posts';
 import { CONT, CONT_KEYS } from '../data/regions';
 import { nationOf } from '../data/nations';
 import { DT, FORMATION, SHELLS, TICK_SECONDS, UNIT_TYPES } from '../data/units';
@@ -182,6 +183,7 @@ export function supplyTick(g: GameState) {
     if (r.contested < 0) emit(g, { k: 'cleared', region: r.id, faction: r.owner });
   }
   spiesOnConvoy(g);
+  deployOnConvoy(g);
   emit(g, { k: 'supply' });
   checkMissions(g);
 }

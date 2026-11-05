@@ -5,6 +5,7 @@ import { recordIntel } from './fog';
 import { setStopAttack, treatyCheck } from './diplomacy';
 import { marchFactor } from './rails';
 import { MARCH_MIN, MARCH_SPEED, emit, mkArmy, rnd, world } from './core';
+import { POST_SPEED, column, legDist, moveK } from './posts';
 import { weatherMarch } from './rails';
 import { forceIn, goOverTheTop, LULL_FROM } from './battle';
 import { formArmy } from './commands';
@@ -51,8 +52,8 @@ export function reinforce(g: GameState, fid: number, from: number, bid: number, 
   const own = g.regions[b.region].owner === fid;
   if (!own && !b.sides.includes(fid)) return NOT_HERE;
   if (!own) { const t = treatyCheck(g, fid, b.region); if (t) return t; }
-  const a = formArmy(g, fid, from, b.region, frac); if (typeof a === 'string') return a;
-  a.front = b.id; g.armies.push(a);
+  const a = formArmy(g, fid, from, b.region, frac, own ? (world().regions[b.region].adj.includes(from) ? from : -1) : from); if (typeof a === 'string') return a;
+  a.front = b.id;
   emit(g, { k: 'march', faction: fid, from, to: b.region, units: groundUnits(a.units) });
   return null;
 }
@@ -67,14 +68,19 @@ setStopAttack((g, bid, f) => { const b = live(g, bid); if (b) pullOut(g, b, f); 
 
 function pullOut(g: GameState, b: Battle, fid: number): string | null {
   const f = forceIn(b, fid, false, g); if (groundUnits(f.u) <= 0) return 'None of your troops are left on this front.';
+  const out = () => { for (const x of b.agents) if (x.f === fid && !x.dead && !x.out && !isDef(x.type) && x.type !== 'plane') x.out = true; };
+  const mor = Math.max(0, f.mor - 10), st = stanceIn(b, fid);
+  // defenders of a phased front fall back to the main army in the middle of the region (the fight goes on in the depth)
+  if (fid === b.def && b.goal && (b.stage ?? 0) === 0 && g.regions[b.region].owner === fid && b.from >= 0) {
+    out(); column(g, fid, b.region, b.from, b.region, -1, f.u, f.m, mor, { tired: true, stance: st, gn: b.cn, gk: 1 });
+    emit(g, { k: 'withdraw', faction: fid, region: b.region, to: b.region });
+    return null;
+  }
   const W = world(), adj = W.regions[b.region].adj.filter(j => g.regions[j].owner === fid && j !== b.region);
   if (!adj.length) return 'There is no region of yours next to this front to fall back to.';
   const score = (j: number) => (j === b.from ? 4 : 0) + (g.regions[j].cut ? 0 : 2) + (g.regions[j].battle < 0 ? 1 : 0);
   const dest = adj.sort((x, y) => score(y) - score(x))[0];
-  for (const x of b.agents) if (x.f === fid && !x.dead && !x.out && !isDef(x.type) && x.type !== 'plane') x.out = true;
-  const a = mkArmy(g, fid, b.region, dest, MARCH_SPEED, MARCH_MIN);
-  a.units = f.u; a.men = f.m; a.mor = Math.max(0, f.mor - 10); a.tired = true; a.stance = stanceIn(b, fid); a.dur *= weatherMarch(g, fid, dest);
-  g.armies.push(a);
+  out(); column(g, fid, b.region, fid === b.def ? -1 : b.from, dest, -1, f.u, f.m, mor, { tired: true, stance: st });
   emit(g, { k: 'withdraw', faction: fid, region: b.region, to: dest });
   return null;
 }
@@ -104,7 +110,7 @@ export function decoy(g: GameState, fid: number, from: number, to: number): stri
   if (!W.regions[from].adj.includes(to)) return `${W.regions[to].name} does not border ${W.regions[from].name}.`;
   if (f.supply < COST.decoy) return `Not enough supply: a decoy costs ${COST.decoy}.`;
   f.supply -= COST.decoy;
-  const a = mkArmy(g, fid, from, to, MARCH_SPEED, MARCH_MIN); a.decoy = true; a.fake = DECOY.min + Math.floor(rnd(g) * DECOY.spread);
+  const a = mkArmy(g, fid, from, to, MARCH_SPEED, MARCH_MIN); a.dur = legDist(from, -1, to, -1) / POST_SPEED * moveK(g); a.decoy = true; a.fake = DECOY.min + Math.floor(rnd(g) * DECOY.spread);
   // look like a real march: the garrison's morale and stance, a first leg
   a.mor = A.mor; a.stance = A.stance ?? 0; a.legs = 1;
   const mf = marchFactor(g, fid, from, to); a.dur *= mf.k; if (mf.rail) a.rail = true; g.armies.push(a);

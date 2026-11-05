@@ -1,14 +1,14 @@
 // Per-frame drawing of everything that changes: garrisons, buildings, defences, flags, marching armies, ships and flights.
 // Everything is drawn at map scale: a soldier is about the height of a village house, a tank about a house long.
 // All of it is pushed into instanced pools; nothing here allocates.
-import { DEF_KINDS, HW, armyPos, tileAtW, type GameState, type World } from '@riskrts/shared';
+import { DEF_KINDS, HW, armyPos, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { FxSystem } from './fxSystem';
 import { F_MAP } from './fxSystem';
 import type { Models } from './models';
 import type { LineBatch } from './pools';
 import { FLAGD, K, facCol } from './palette';
-import { sectorPoint } from './sectors';
+import { sectorPoint } from '@riskrts/shared';
 import type { Terrain } from './terrain';
 import { lerp } from './util';
 
@@ -21,6 +21,8 @@ export class DynamicDraw {
   private factT = 0; private holdT = 0;
   /** Highlighted sector while the fortify tab is open: [region, sector] or null. */
   marker: [number, number] | null = null;
+  /** Map layer (0 all, 1 troops, 2 industry) and the selected region (its borders always show their front lines). */
+  layer = 0; sel = -1;
   constructor(private readonly world: World, private readonly terrain: Terrain, private readonly m: Models, private readonly lines: LineBatch, private readonly fx: FxSystem) {}
 
   private hAt(x: number, z: number, fallback: number) { const i = tileAtW(x, z); return i >= 0 && this.world.land[i] ? this.terrain.tileH[i] : fallback; }
@@ -34,38 +36,70 @@ export class DynamicDraw {
       const y = this.terrain.anchorH(def.id), f = t.owner;
       if (rig.dist < 45) this.defences(g, def.id, y, T);
       if (t.battle >= 0 && near) continue;
-      const P = (lx: number, ly: number, lz: number, sx: number, sy: number, sz: number, c: typeof K.pole, pool?: Parameters<Models['part']>[11]) => m.part(x, y, z, 0, lx, ly * BLD, lz, sx * BLD, sy * BLD, sz * BLD, c, pool);
+      // buildings stand on their own plots around the town, larger than the troops so they read at map zoom (larger still on the industry layer)
+      const B = this.layer === 2 ? BLD * 1.9 : this.layer === 1 ? BLD * .9 : BLD * 1.5, O = this.layer === 2 ? 1.35 : 1.2, showB = this.layer !== 1;
+      const P = (lx: number, ly: number, lz: number, sx: number, sy: number, sz: number, c: typeof K.pole, pool?: Parameters<Models['part']>[11]) => m.part(x, y, z, 0, lx, ly * B, lz, sx * B, sy * B, sz * B, c, pool);
       if (t.capitalOf >= 0 && t.capitalOf === f) {
         P(-.12, .45, -.32, .035, .9, .035, K.pole); P(-.12, .91, -.32, .05, .03, .05, K.flash);
-        for (let k = 0; k < 6; k++) { const w = Math.sin(T * 3 + k * .8 + def.id) * .012 * k / 5; m.part(x, y, z, 0, -.095 + k * .03, .4, -.32 + w, .03, .11, .01, k % 2 ? facCol[f] : FLAGD[f]); }
+        for (let k = 0; k < 6; k++) { const w = Math.sin(T * 3 + k * .8 + def.id) * .012 * k / 5; m.part(x, y, z, 0, -.095 + k * .03, .4 * B / BLD, -.32 + w, .03 * B / BLD, .11 * B / BLD, .01, k % 2 ? facCol[f] : FLAGD[f]); }
       } else if (t.capitalOf >= 0) P(-.12, .3, -.32, .035, .6, .035, K.pole);
-      if (t.factory) {
-        const fx = .5, fz = -.22;
+      if (t.factory && showB) {
+        const fx = .5 * O + .1, fz = -.22 * O;
         P(fx, .15, fz, .5, .3, .38, K.brick);
-        for (let k = 0; k < 3; k++) P(fx - .085 + k * .08, .34, fz, .13, .07, .38, K.brick2);
-        P(fx + .08, .33, fz - .08, .1, .66, .1, K.brick2); P(fx + .08, .68, fz - .08, .12, .04, .12, K.gun);
-        for (let k = 0; k < 3; k++) P(fx - .075 + k * .075, .16, fz + .095, .07, .08, .01, K.flash, m.glowPool);
+        for (let k = 0; k < 3; k++) P(fx - .085 * B / BLD + k * .08 * B / BLD, .34, fz, .13, .07, .38, K.brick2);
+        P(fx + .08 * B / BLD, .33, fz - .08 * B / BLD, .1, .66, .1, K.brick2); P(fx + .08 * B / BLD, .68, fz - .08 * B / BLD, .12, .04, .12, K.gun);
+        for (let k = 0; k < 3; k++) P(fx - .075 * B / BLD + k * .075 * B / BLD, .16, fz + .095 * B / BLD, .07, .08, .01, K.flash, m.glowPool);
       }
-      if (t.barracks) {
-        const bx = -.5, bz = -.18;
+      if (t.barracks && showB) {
+        const bx = -.5 * O - .1, bz = -.18 * O;
         P(bx, .08, bz, .6, .16, .3, K.bar); P(bx, .19, bz, .64, .06, .34, K.roof); P(bx, .235, bz, .4, .04, .2, K.roof);
-        for (let k = 0; k < 4; k++) P(bx - .11 + k * .075, .09, bz + .076, .05, .05, .01, K.flash, m.glowPool);
+        for (let k = 0; k < 4; k++) P(bx - .11 * B / BLD + k * .075 * B / BLD, .09, bz + .076 * B / BLD, .05, .05, .01, K.flash, m.glowPool);
       }
-      if (t.airfield) m.airfield(x + .05, this.hAt(x + .05, z + .62, y), z + .62, Math.PI / 2, f, .7, t.battle >= 0 ? 0 : t.units.plane, T);
+      if (t.airfield && showB) m.airfield(x + .05, this.hAt(x + .05, z + .62 * O, y), z + .62 * O, Math.PI / 2, f, this.layer === 2 ? .95 : .8, t.battle >= 0 ? 0 : t.units.plane, T);
       if (rig.dist < 45) this.works(t, def.id, y);
-      if (t.battle >= 0) continue;
-      this.garrison(x, y, z, f, t.units, S);
+      if (this.layer !== 2) this.frontLines(g, def.id, y, rig.dist);
+      if (this.layer === 2) continue;
+      // the main army in the middle, each corps at its border (a region in battle keeps only what is not fighting)
+      if (t.battle < 0 || !near) this.garrison(x, y, z, f, t.fr ? mainOf(t) : t.units, S);
+      if (t.fr) for (const [ks, c] of Object.entries(t.fr)) {
+        const p = sectorPoint(this.world, def.id, +ks), dx = x - p.x, dz = z - p.z, L = Math.hypot(dx, dz) || 1, px = p.x + dx / L * .22, pz = p.z + dz / L * .22;
+        this.garrison(px, this.hAt(px, pz, y), pz, f, c.u, S * .9, Math.atan2(-dx, -dz));
+      }
+    }
+  }
+
+  /**
+   * Front lines along each border: a corps there draws a solid line in its colour, thicker the stronger it is, with teeth
+   * facing the neighbour; an unmanned border facing a foreign power is dashed (only for the selected region, or up close).
+   */
+  private frontLines(g: GameState, rid: number, y0: number, dist: number) {
+    const t = g.regions[rid], R = this.world.regions[rid], m = this.m, f = t.owner; if (f < 0) return;
+    const close = dist < 60 || this.layer === 1 || rid === this.sel;
+    for (const n of R.adj) {
+      const c = t.fr?.[n], foe = g.regions[n].owner !== f;
+      if (!c && !(foe && (rid === this.sel || (this.layer === 1 && g.viewer === f)))) continue;
+      if (c && !close) continue;
+      const p = sectorPoint(this.world, rid, n), face = Math.atan2(p.x - R.cx, p.z - R.cz), y = this.hAt(p.x, p.z, y0) + .03;
+      const L = 1.5, zoom = Math.max(1, dist / 30);
+      if (c) {
+        const st = groundUnits(c.u), w = (.06 + .018 * Math.min(8, st)) * zoom, col = facCol[f];
+        m.part(p.x, y, p.z, face, 0, 0, 0, L, .04, w, col, m.glowPool);
+        // teeth towards the enemy, like the hatching of a trench map
+        if (foe) for (let k = 0; k < 6; k++) m.part(p.x, y, p.z, face, -L / 2 + L * (k + .5) / 6, 0, w * .5 + .05 * zoom, .07 * zoom, .04, .1 * zoom, col, m.glowPool);
+      } else for (let k = 0; k < 6; k++) m.part(p.x, y, p.z, face, -L / 2 + L * (k + .5) / 6, 0, 0, L / 12, .03, .05 * zoom, K.flare, m.glowPool);
     }
   }
 
   /** A small formation: up to 12 riflemen, then gun teams, field guns and tanks beside them. */
-  private garrison(x: number, y: number, z: number, f: number, u: GameState['regions'][number]['units'], S: number) {
-    const m = this.m;
+  private garrison(x: number, y: number, z: number, f: number, u: Units, S: number, face = 0) {
+    const m = this.m, co = Math.cos(face), si = Math.sin(face);
+    // local (lx along the line, lz forward) to world
+    const at = (lx: number, lz: number): [number, number] => [x + lx * co + lz * si, z - lx * si + lz * co];
     const inf = u.inf ? Math.min(12, Math.max(1, Math.ceil(u.inf / 2))) : 0, cols = 4, sp = .055;
-    for (let k = 0; k < inf; k++) { const cx = (k % cols) - (cols - 1) / 2, cz = Math.floor(k / cols); m.soldier(x + cx * sp, y, z + .05 + cz * sp, 0, f, S, false, 0); }
-    for (let k = 0; k < Math.min(3, u.mg); k++) m.unit('mg', x - .09 + k * .09, y, z - .07, 0, f, S * .9, 0, 0);
-    for (let k = 0; k < Math.min(3, u.art); k++) m.unit('art', x - .28, y, z + .02 + k * .1, .35, f, S * .9, 0, 0);
-    for (let k = 0; k < Math.min(3, u.tank); k++) m.unit('tank', x + .3, y, z + .02 + k * .13, -.4, f, S * .9, 0, 0);
+    for (let k = 0; k < inf; k++) { const cx = (k % cols) - (cols - 1) / 2, cz = Math.floor(k / cols); const [wx, wz] = at(cx * sp, .05 - cz * sp); m.soldier(wx, y, wz, face, f, S, false, 0); }
+    for (let k = 0; k < Math.min(3, u.mg); k++) { const [wx, wz] = at(-.09 + k * .09, .12); m.unit('mg', wx, y, wz, face, f, S * .9, 0, 0); }
+    for (let k = 0; k < Math.min(3, u.art); k++) { const [wx, wz] = at(-.28, -.02 - k * .1); m.unit('art', wx, y, wz, face + .35, f, S * .9, 0, 0); }
+    for (let k = 0; k < Math.min(3, u.tank); k++) { const [wx, wz] = at(.3, -.02 - k * .13); m.unit('tank', wx, y, wz, face - .4, f, S * .9, 0, 0); }
   }
 
   /** Fixed defences stand on their border sector, facing the neighbour they guard. */

@@ -21,9 +21,15 @@
 - WebRTC needs a STUN server (Google's public one is used by default). Strict symmetric NATs or some corporate networks also need a TURN relay; pass `config: { iceServers: [...] }` to `new Peer(...)` in `client/src/net/peer.ts`.
 - If the host closes the tab the game ends for everyone. A dedicated server removes this.
 
-## Moving to a dedicated server later
+## Dedicated server
 
-1. Create `packages/server` that imports `@riskrts/shared`.
-2. Implement `Channel` on top of `ws`.
-3. Run the `HostSession` loop there (it only needs `createGame`, `step`, `applyCommand`, `makeSnapshot`).
-4. In the client, add a `joinServer(url)` that returns a `Channel` and builds a `GuestSession`. Nothing in the UI or renderer changes.
+`packages/server` runs the same simulation in Node behind a WebSocket and speaks the same protocol (`ClientMsg` / `ServerMsg`), so the client uses its ordinary `GuestSession`.
+
+```bash
+npm start -w @riskrts/server          # PORT=8787 DATA=./data SPECTATOR_DELAY=20
+```
+
+- **Persistent wars.** Each war is a `World` (`server/src/world.ts`), saved to `DATA/worlds/<id>.json` after every convoy and on shutdown, and restored on start. A player who leaves keeps their seat: the computer stands in (keeping their stances and doctrines) until they come back with the seat token their browser stored, from any device. Casual wars wait while nobody is connected; ranked wars keep running.
+- **Ranked.** Fixed rules (3 attacks at once, normal pace, Officer computers), no pause, one power per player. When a ranked war ends, the winner takes Elo from every other human (`server/src/ladder.ts`, `DATA/ladder.json`).
+- **Spectators.** Full-vision snapshots without anyone's sealed orders, delayed by `SPECTATOR_DELAY` seconds so watching cannot be used to scout. Their orders are refused.
+- **Client.** Title screen → *Online server*: the address is remembered; the default comes from `VITE_SERVER_URL` at build time. Behind TLS use `wss://` (a reverse proxy such as Caddy or nginx in front of port 8787).

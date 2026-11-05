@@ -7,6 +7,7 @@ import { HostLobby } from './HostLobby';
 import { GuestLobby, JoinScreen } from './JoinScreen';
 import { SoloSetup } from './SoloSetup';
 import { Title } from './Title';
+import { ServerScreen } from './ServerScreen';
 import { Toast } from './Toast';
 import { netSet } from './netStore';
 
@@ -35,6 +36,7 @@ export function App() {
       {screen === 'host' && <HostLobby />}
       {screen === 'join' && <JoinScreen />}
       {screen === 'lobby' && <GuestLobby />}
+      {screen === 'server' && <ServerScreen />}
       {screen === 'game' && <Game />}
       <Toast />
     </>

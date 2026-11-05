@@ -32,6 +32,8 @@ export interface FactionState {
   docOffer?: number; docDue?: number;
   /** How far this power trusts each other power's word (0..1); broken treaties lower it. */
   trust?: number[];
+  /** Its player is away (dedicated server): the computer stands in but keeps the player's stances. */
+  away?: boolean;
 }
 
 export type TreatyKind = 'cease' | 'nap' | 'ally';

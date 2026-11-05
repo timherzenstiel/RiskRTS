@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome, weatherAt } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
 import { buildWorld } from '@riskrts/shared';
+import { GuestSession } from '../game/session';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
 import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
@@ -63,7 +64,7 @@ export function TopBar() {
               {SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)}
             </div>
           ) : (
-            <span className="speedro" title="The host controls the game speed">{speed === 0 ? 'Paused' : `${speed}×`}</span>
+            <span className="speedro" title={session instanceof GuestSession && session.spectator ? 'Watching with full vision, a little delayed' : 'The host controls the game speed'}>{session instanceof GuestSession && session.spectator ? 'Spectating' : speed === 0 ? 'Paused' : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ranked' : ''}</span>
           )}
           <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
           <button className="ico" aria-label="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>

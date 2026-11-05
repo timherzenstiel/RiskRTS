@@ -1,0 +1,23 @@
+{
+  "name": "@riskrts/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dedicated server for Fronts of 1914: persistent worlds, ranked games and spectators over WebSocket.",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@riskrts/shared": "*",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

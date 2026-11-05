@@ -113,6 +113,8 @@ export class HostSession implements Session {
 /** Mirrors a host's game over a Channel. Never simulates; only displays what the host sends. */
 export class GuestSession implements Session {
   readonly kind = 'guest' as const;
+  /** Dedicated server: watching with full vision (orders are refused), or a ranked war. */
+  spectator = false; ranked = false;
   readonly state: GameState = createMirror();
   speed = 1;
   readonly canControlTime = false;

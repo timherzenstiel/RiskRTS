@@ -5,7 +5,7 @@ import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
 
-export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game';
+export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
 export type Tab = 'rec' | 'build' | 'fort' | 'march';
 export type OrderKind = 'march' | 'air';
 export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy';

@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { LobbyState } from '@riskrts/shared';
 import type { LobbyGuest, LobbyHost } from '../net/lobby';
+import type { ServerLink } from '../net/server';
 
 interface Net {
   host: LobbyHost | null;
@@ -15,15 +16,18 @@ interface Net {
   leaving: boolean;
   /** Room code from an invite link, consumed by the join screen. */
   pendingCode: string | null;
+  /** Connection to a dedicated server. */
+  server: ServerLink | null;
 }
 
-export const useNet = create<Net>(() => ({ host: null, guest: null, guestClose: null, lobby: null, hostLost: false, leaving: false, pendingCode: null }));
+export const useNet = create<Net>(() => ({ host: null, guest: null, guestClose: null, lobby: null, hostLost: false, leaving: false, pendingCode: null, server: null }));
 export const netSet = (p: Partial<Net>) => useNet.setState(p);
 
 /** Close every lobby/connection object. Safe to call repeatedly. */
 export function closeNet() {
-  const { host, guest } = useNet.getState();
+  const { host, guest, server } = useNet.getState();
   try { host?.close(); } catch { /* already closed */ }
+  try { server?.close(); } catch { /* already closed */ }
   try { guest?.leave(); } catch { /* already closed */ }
-  useNet.setState({ host: null, guest: null, guestClose: null, lobby: null, hostLost: false });
+  useNet.setState({ host: null, guest: null, guestClose: null, lobby: null, hostLost: false, server: null });
 }

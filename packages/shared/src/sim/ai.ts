@@ -175,7 +175,7 @@ function levers(g: GameState, f: FactionState, mine: RegionState[]) {
   const fid = f.id, target = shellTarget(g, fid), P = paceOf(g);
   if (f.shells < target && f.supply >= 6 && rnd(g) < .5) produce(g, fid, 'shells', Math.min(Math.ceil((target - f.shells) / SHELLS.perSupply), Math.floor(f.supply / 3)));
   const capital = mine.find(r => r.capitalOf === fid);
-  if (capital && capital.stance !== 3) setStance(g, fid, capital.id, 3);
+  if (capital && capital.stance !== 3 && !f.away) setStance(g, fid, capital.id, 3);
   for (const b of g.battles) {
     if (b.ended || !(b.def === fid || b.sides.includes(fid))) continue;
     const att = b.def !== fid, [me, foe] = sidePower(b, fid);

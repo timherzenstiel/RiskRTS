@@ -374,3 +374,32 @@ def house_ruin(name='house_ruin', tall=False):
     return k.done()
 
 def house_ruin_b(): return house_ruin('house_ruin_b', tall=True)
+
+# ---------------------------------------------------------------- low-detail versions (mid zoom: ~60-150 triangles each)
+def tree_broad_lo():
+    k = Kit('tree_broad_lo', jitter=.06); rng = random.Random(21)
+    k.limb((0, 0, 0), (.02, .4, 0), .05, .034, B['timber2'], seg=4, cap=False)
+    for (x, y, z, r) in ((0, .62, 0, .26), (-.14, .54, .1, .17), (.15, .52, -.08, .18), (-.06, .78, -.06, .16), (.1, .7, .12, .15)):
+        clump(k, x, y, z, r, .46 + (-x - z) * .5 + (y - .55) * .8, seg=4)
+    return k.done()
+
+def tree_pine_lo():
+    k = Kit('tree_pine_lo', jitter=.05)
+    k.limb((0, 0, 0), (0, .25, 0), .035, .028, B['timber2'], seg=4, cap=False)
+    for i in range(4):
+        y = .2 + i * .19; R = .3 * (1 - i / 4) + .05
+        k.cyl(0, y + .08, 0, R, R * .15, .26, leaf(k, .42 + i * .03), True, seg=6, smooth=False)
+    return k.done()
+
+def house_lo(name, roof, slate=False):
+    k = Kit(name, jitter=.04)
+    H = .95
+    k.box(0, .07, 0, 1.03, .14, 1.03, B['plinth'])
+    k.box(0, .14 + H / 2, 0, 1, H - .02, 1, B['plaster'], house=True)
+    for xx in (-.25, .25): k.box(xx, .62, .505, .18, .24, .02, B['window'])
+    if roof == 'x': k.roof(0, H + .1, 0, 1.2, .6, 1.12, jit(k.rng, B['tile']), axis='x', thick=.04); k.box(.3, H + .55, -.12, .13, .42, .13, B['brick2'])
+    else: k.roof(0, H + .16, 0, 1.12, .48, 1.12, jit(k.rng, B['slate1']), axis='z', thick=.04); [k.box(sd * .36, H + .6, 0, .13, .42, .13, B['brick']) for sd in (-1, 1)]
+    return k.done()
+
+def house_a_lo(): return house_lo('house_a_lo', 'x')
+def house_b_lo(): return house_lo('house_b_lo', 'z')

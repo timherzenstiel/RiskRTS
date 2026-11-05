@@ -9,7 +9,7 @@ import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
 import { COAST_GLSL, coastTexture } from './coast';
-import { borderField, type BorderField } from './borderField';
+import { borderDistAt, borderField, type BorderField } from './borderField';
 import { warUniforms, type MeshKey, type MeshPools } from './meshPools';
 
 /** Tiles per side of a close-up detail chunk (see detail.ts). */
@@ -80,6 +80,8 @@ export const uNear = { value: 0 };
 const FAR_CH = 40;
 /** Modelled scenery is instanced per 16x16-tile chunk so the camera frustum (and the shadow camera) cull it finely. */
 const SCN_CH = 16;
+/** Below this camera distance the full scenery models replace the low-detail ones. */
+const SCN_NEAR = 6;
 
 /** Far-ground material: region colours (linear-filtered, so borders read as painted), brush noise, rock on steep slopes,
  *  wet sand where the land runs into the sea. Fragments under a drawn close-up chunk are discarded (detail.ts paints there). */
@@ -181,6 +183,7 @@ export class Terrain {
   /** Modelled trees and houses (built once the baked models load), chunked so off-screen chunks are culled. */
   private readonly sceneryMeshes: THREE.InstancedMesh[] = [];
   private sceneryOn = false;
+  private sceneryBand = -1;
   hasScenery = false;
   private readonly treeMesh: THREE.InstancedMesh;
   private readonly houseMesh: THREE.InstancedMesh;
@@ -425,18 +428,25 @@ export class Terrain {
       const s0 = (w + d) / 2, sy = s0 * (big ? .95 : .78);
       q.setFromAxisAngle(up, yaw); m4.compose(v.set(x, this.surfaceAt(x, z) - .002, z), q, sc.set(yaw ? d : w, sy, yaw ? w : d));
       put(key, x, z, m4, tc.copy(wc));
-      put(big ? 'house_ruin_b' : 'house_ruin', x, z, m4, tc.copy(wc).multiplyScalar(.85));
+      // a ruin twin only where shelling can reach (war damage spreads up to three tiles from a border)
+      if (borderDistAt(this.border, x, z) < 3.2) put(big ? 'house_ruin_b' : 'house_ruin', x, z, m4, tc.copy(wc).multiplyScalar(.85));
     }
     for (const [x, y, z, size] of this.churches) {
       q.setFromAxisAngle(up, 0); const S = size === 3 ? .16 : .12; m4.compose(v.set(x, y, z), q, sc.set(S, S * 1.1, S));
       put('church', x, z, m4, tc.setRGB(1, 1, 1));
     }
-    for (const g of groups.values()) {
-      const geo = mp.geometry(g.key); if (!geo) continue;
-      const n = g.c.length / 3, wk = g.key === 'house_a' || g.key === 'house_b' ? mp.houseMat : g.key.startsWith('house_ruin') ? mp.ruinMat : mp.mat;
+    // two sets: full models up close, low-detail trees and houses at mid zoom (ruins, churches and the rest are shared)
+    const LO: Partial<Record<MeshKey, MeshKey>> = { tree_broad: 'tree_broad_lo', tree_pine: 'tree_pine_lo', house_a: 'house_a_lo', house_b: 'house_b_lo' };
+    for (const g of groups.values()) for (const set of [0, 1] as const) {
+      const key = set === 1 ? LO[g.key] ?? g.key : g.key;
+      if (set === 1 && key === g.key) continue;
+      const geo = mp.geometry(key); if (!geo) continue;
+      const n = g.c.length / 3, wk = key.startsWith('house_ruin') ? mp.ruinMat : key.startsWith('house_') ? mp.houseMat : mp.mat;
       const im = new THREE.InstancedMesh(geo, wk, n);
       im.instanceMatrix.array.set(g.m); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(g.c), 3);
       im.castShadow = im.receiveShadow = true; im.computeBoundingSphere(); im.visible = false;
+      // 0: close only, 1: mid only, 2: both (models with no low-detail version)
+      im.userData.band = LO[g.key] ? set : 2;
       this.sceneryMeshes.push(im); this.add(im);
     }
   }
@@ -578,7 +588,12 @@ export class Terrain {
   setCameraDistance(dist: number) {
     // modelled trees and houses up to the front band; the light box versions further out
     const on = this.hasScenery && dist < 24;
-    if (on !== this.sceneryOn) { this.sceneryOn = on; for (const m of this.sceneryMeshes) m.visible = on; this.treeMesh.visible = !on; this.houseMesh.visible = !on; }
+    const band = dist < SCN_NEAR ? 0 : 1;
+    if (on !== this.sceneryOn || band !== this.sceneryBand) {
+      this.sceneryOn = on; this.sceneryBand = band;
+      for (const m of this.sceneryMeshes) m.visible = on && (m.userData.band === 2 || m.userData.band === band);
+      this.treeMesh.visible = !on; this.houseMesh.visible = !on;
+    }
     uNear.value = 1 - clamp((dist - 9) / 14, 0, 1);
     // line railways on the strategic map; up close the painted ground draws them (groundPaint.ts)
     const o = (1 - clamp((dist - 22) / 18, 0, 1)) * clamp((dist - 13) / 4, 0, 1);

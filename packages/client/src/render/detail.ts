@@ -190,18 +190,9 @@ export class GroundDetail {
       }
       if (T.cityT[i]) continue;
       if (T.fieldT[i]) {
-        // hedgerows where the field meets other ground
-        const L = c > 0 && land[i - 1] && !T.fieldT[i - 1] && !river[i - 1], Rr = c < COLS - 1 && land[i + 1] && !T.fieldT[i + 1] && !river[i + 1];
-        const U = i >= COLS && land[i - COLS] && !T.fieldT[i - COLS], D = i + COLS < N && land[i + COLS] && !T.fieldT[i + COLS];
-        const hedge = (x: number, z: number, along: boolean) => { for (let n = 0; n < 6; n++) { const t = (n + .5) / 6 - .5, hx = along ? x + t * TS : x, hz = along ? z : z + t * TS; add(hx, yAt(hx, hz), hz, along ? .06 : .022, .022 + hash2(i, n) * .012, along ? .022 : .06, shade(C.hedge, .85 + hash2(n, i) * .35)); } };
-        if (L) hedge(x0 - TS / 2 + .012, z0, false); if (Rr) hedge(x0 + TS / 2 - .012, z0, false);
-        if (U) hedge(x0, z0 - TS / 2 + .012, true); if (D) hedge(x0, z0 + TS / 2 - .012, true);
-        if (hs(3) < .035) { // farmstead
-          const fx = jx(4), fz = jz(4), h = yAt(fx, fz);
-          add(fx, h, fz, .055, .035, .045, C.wall); add(fx, h + .035, fz - .011, .062, .012, .026, shade(C.roof, 1.2)); add(fx, h + .035, fz + .011, .062, .012, .026, shade(C.roof, .8)); add(fx, h + .047, fz, .062, .006, .008, C.roof);
-          add(fx - .012, h, fz + .023, .012, .02, .003, C.trunk); add(fx + .015, h + .016, fz + .023, .01, .008, .003, C.door);
-          add(fx + .07, h, fz + .01, .06, .045, .04, C.barn); add(fx + .07, h + .045, fz + .01, .066, .012, .046, shade(C.roof, .9));
-          add(fx - .05, h, fz + .05, .025, .02, .02, C.hay); add(fx - .02, h, fz + .06, .02, .018, .018, shade(C.hay, .85));
+        if (hs(3) < .035) { // farmstead (the house and barn are modelled scenery, terrain.ts): hay by the yard
+          const fx = jx(4), fz = jz(4);
+          add(fx - .05, yAt(fx - .05, fz + .05), fz + .05, .025, .02, .02, C.hay); add(fx - .02, yAt(fx - .02, fz + .06), fz + .06, .02, .018, .018, shade(C.hay, .85));
         } else if (hs(5) < .25) for (let n = 0; n < 3; n++) { const x = jx(5) + n * .02, z = jz(5) + (n % 2) * .015; add(x, yAt(x, z), z, .014, .012, .014, shade(C.hay, .9 + n * .08)); }
         continue;
       }
@@ -216,11 +207,6 @@ export class GroundDetail {
       }
       const arid = bio === 7 || bio === 8, tufts = arid ? C.tuftS : C.tuftT;
       for (let n = 0; n < 3; n++) if (hs(n) < .6) { const x = jx(n), z = jz(n); add(x, yAt(x, z), z, .008, .01 + hs(n + 20) * .01, .008, pick(tufts, hs(n + 30)), hs(n + 31) * 3); }
-      if (hs(40) < (bio === 5 ? .45 : .2)) { // bush clump
-        const x = jx(40), z = jz(40), y = yAt(x, z), b = pick(C.bush, hs(43)), w = .03 + hs(41) * .02;
-        add(x, y, z, w, w * .6, w, shade(b, .85), hs(42) * 3); add(x - w * .2, y + w * .3, z - w * .2, w * .65, w * .45, w * .65, shade(b, 1.3), hs(44) * 3);
-        if (hs(45) < .6) add(x + w * .55, y, z + w * .2, w * .6, w * .45, w * .6, b, hs(46) * 3);
-      }
       if ((H[i] > .5 || arid) && hs(47) < (arid ? .2 : .3)) boulder(47, .02 + hs(48) * .03, arid);
       // grazing cattle on temperate pasture
       if (bio === 9 && hs(60) < .03) for (let n = 0; n < 3; n++) {

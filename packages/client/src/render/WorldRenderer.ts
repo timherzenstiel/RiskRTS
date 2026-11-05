@@ -9,7 +9,8 @@ import type { CreateRenderer, PixelScale, RendererCallbacks, WorldRendererApi } 
 import { Ambient } from './ambient';
 import { AIR_Y, BS, BattleView } from './battleView';
 import { CameraRig, bandOf } from './camera';
-import { DynamicDraw } from './dynamic';
+import { CLOSE_PAINT, DynamicDraw } from './dynamic';
+import { Trenches } from './trenches';
 import { GroundDetail } from './detail';
 import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, FxSystem } from './fxSystem';
 import { Sprites } from './sprites';
@@ -52,6 +53,7 @@ class WorldRenderer implements WorldRendererApi {
   private cursorCls = '';
   private readonly lit: Pool; private readonly glow: Pool;
   private readonly detail: GroundDetail;
+  private readonly trenches: Trenches;
   private readonly lines: LineBatch;
   private readonly sprites: Sprites;
   private readonly models: Models;
@@ -103,6 +105,7 @@ class WorldRenderer implements WorldRendererApi {
       this.lit = new Pool(this.scene, 120000, litMaterial(), true);
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);
       this.detail = new GroundDetail(this.scene, this.world, this.terrain);
+      this.trenches = new Trenches(this.scene, this.terrain);
       this.lines = new LineBatch(this.scene, 8000);
       this.sprites = new Sprites(this.scene);
       this.models = new Models(this.lit, this.glow);
@@ -231,7 +234,8 @@ class WorldRenderer implements WorldRendererApi {
 
     this.syncPaint(g, ui.sel, ui.hover);
     this.shroud.update(g, this.now);
-    if (this.frameNo % 30 === 0) this.terrain.setWar(g);
+    if (this.frameNo % 30 === 0 || this.frameNo < 3) { this.terrain.setWar(g); this.trenches.update(g); }
+    this.trenches.setVisible(this.rig.dist < CLOSE_PAINT + 1);
     const speed = s ? s.speed : 1, fdt = dt * (speed > 0 ? Math.min(speed, 4) : .5);
     this.updateBattles(g, dt, fdt);
     if (s) this.processFx(s);
@@ -260,7 +264,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input.dispose(); this.labels.dispose();
     for (const v of this.views.values()) v.dispose();
     this.views.clear();
-    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.meshes.dispose(); this.impostors.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.lines.dispose(); this.sprites.dispose();
+    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.meshes.dispose(); this.impostors.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.trenches.dispose(); this.lines.dispose(); this.sprites.dispose();
     this.post.dispose(); this.rig.dispose();
     this.canvas.classList.remove('order', 'drag', 'smooth');
     // The context is deliberately not force-lost: the page may mount a new renderer on the same canvas.

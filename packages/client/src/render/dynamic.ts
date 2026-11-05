@@ -2,6 +2,7 @@
 // Everything is drawn at map scale: a soldier is about the height of a village house, a tank about a house long.
 // All of it is pushed into instanced pools; nothing here allocates.
 import * as THREE from 'three';
+import { toBorderDist } from './borderField';
 import { DEF_KINDS, HW, armyPos, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { FxSystem } from './fxSystem';
@@ -14,12 +15,16 @@ import type { Terrain } from './terrain';
 import { lerp } from './util';
 
 /** Map scale of figures and vehicles (1 = battlefield model size). */
+/** Below this camera distance the close-up ground paints trenches, wire and borders itself. */
+export const CLOSE_PAINT = 15;
 export const MAP_S = .5;
 /** Map scale of buildings relative to their original model size. */
 const BLD = .5;
 
 export class DynamicDraw {
   private factT = 0; private holdT = 0;
+  /** Camera distance of the frame being drawn. */
+  private dist = 99;
   /** Highlighted sector while the fortify tab is open: [region, sector] or null. */
   marker: [number, number] | null = null;
   /** Map layer (0 all, 1 troops, 2 industry) and the selected region (its borders always show their front lines). */
@@ -30,7 +35,7 @@ export class DynamicDraw {
 
   /** Garrison figures, flags, factories, barracks, airfields, trenches and fixed defences. */
   regions(g: GameState, rig: CameraRig, T: number) {
-    const m = this.m, near = rig.dist < 26, cull = rig.dist * 3 + 8, S = MAP_S;
+    const m = this.m, near = rig.dist < 26, cull = rig.dist * 3 + 8, S = MAP_S; this.dist = rig.dist;
     for (const def of this.world.regions) {
       const t = g.regions[def.id], x = def.cx, z = def.cz;
       if (Math.abs(x - rig.tx) > cull || Math.abs(z - rig.tz) > cull) continue;
@@ -59,7 +64,8 @@ export class DynamicDraw {
         for (let k = 0; k < 4; k++) P(bx - .11 * B / BLD + k * .075 * B / BLD, .09, bz + .076 * B / BLD, .05, .05, .01, K.flash, m.glowPool);
       }
       if (t.airfield && showB) m.airfield(x + .05, this.hAt(x + .05, z + .62 * O, y), z + .62 * O, Math.PI / 2, f, this.layer === 2 ? .95 : .8, t.battle >= 0 ? 0 : t.units.plane, T);
-      if (rig.dist < 45) this.works(t, def.id, y);
+      // up close the painted ground digs the trenches, parapets and wire in along the whole border (groundPaint.ts)
+      if (rig.dist < 45 && rig.dist >= CLOSE_PAINT) this.works(t, def.id, y);
       if (this.layer !== 2) this.frontLines(g, def.id, y, rig.dist);
       if (this.layer === 2) continue;
       // the main army in the middle, each corps at its border (a region in battle keeps only what is not fighting)
@@ -82,6 +88,8 @@ export class DynamicDraw {
       const c = t.fr?.[n], foe = g.regions[n].owner !== f;
       if (!c && !(foe && (rid === this.sel || (this.layer === 1 && g.viewer === f)))) continue;
       if (c && !close) continue;
+      // up close the dug-in trench shows the front; the staff-map bar would cover the troops
+      if (dist < CLOSE_PAINT) continue;
       const p = sectorPoint(this.world, rid, n), face = Math.atan2(p.x - R.cx, p.z - R.cz), y = this.hAt(p.x, p.z, y0) + .03;
       const L = 1.5, zoom = Math.max(1, dist / 30);
       if (c) {
@@ -126,10 +134,13 @@ export class DynamicDraw {
     const bySec = new Map<number, number>();
     for (const d of t.defs) {
       const n = t.defs.filter(o => o.s === d.s).length, k = bySec.get(d.s) ?? 0; bySec.set(d.s, k + 1);
-      const p = sectorPoint(W, rid, d.s), off = (k - (n - 1) / 2) * .16 * (d.s < 0 ? 1.4 : 1);
-      const x = p.x + p.ux * off, z = p.z + p.uz * off, y = this.hAt(x, z, y0);
+      const p = sectorPoint(W, rid, d.s), off = (k - (n - 1) / 2) * (this.dist < CLOSE_PAINT ? .3 : .16) * (d.s < 0 ? 1.4 : 1);
+      let x = p.x + p.ux * off, z = p.z + p.uz * off;
+      // up close, border defences stand just behind the fire trench the ground digs along that border
+      if (d.s >= 0 && this.dist < CLOSE_PAINT) [x, z] = toBorderDist(this.terrain.border, x, z, .78);
+      const y = this.hAt(x, z, y0);
       const face = d.s < 0 ? 0 : Math.atan2(x - R.cx, z - R.cz), hold = d.f !== t.owner;
-      const S = .72 * (.75 + .25 * Math.max(.2, d.hp / 80));
+      const S = (this.dist < CLOSE_PAINT ? .46 : .72) * (.75 + .25 * Math.max(.2, d.hp / 80));
       if (d.k === 'pill') m.pillbox(x, y, z, face, d.f, S, hold);
       else if (d.k === 'bunk') m.bunker(x, y, z, face, d.f, S * .8, hold);
       else if (d.k === 'fort') m.emplacement(x, y, z, face, d.f, S);

@@ -3,12 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "description": "Fronts of 1914: real-time, Risiko-style WWI strategy with auto-battles",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w @riskrts/client",
     "build": "npm run build -w @riskrts/client",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   },
-  "engines": {"node": ">=20"}
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "world-atlas": "^2.0.2"
+  }
 }

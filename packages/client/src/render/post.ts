@@ -29,17 +29,17 @@ const GRADE = {
     vec3 c=pow(lin,vec3(1./2.2));
     float l=dot(c,vec3(.299,.587,.114));
     // saturation and split-toning
-    c=mix(vec3(l),c,mix(.66,.82,uLook));
+    c=mix(vec3(l),c,mix(.86,.98,uLook));
     vec3 sh=mix(vec3(1.05,.97,.84),vec3(.9,.97,1.08),uLook), hi=mix(vec3(1.05,1.,.86),vec3(1.05,1.02,.96),uLook);
     c*=mix(sh,hi,smoothstep(.1,.75,l));
     // gritty contrast: crushed blacks, rolled-off highlights
-    float k=mix(1.12,1.22,uLook); c=(c-.48)*k+.48; c=max(c-.015,0.);
+    float k=mix(1.1,1.18,uLook); c=(c-.4)*k+.4+.035; c=max(c-.01,0.);
     c=c/(1.+max(c-.85,0.)*1.4);
     // grain, stronger in the shadows
     c+=(h21(gl_FragCoord.xy+fract(uTime*7.1)*97.)-.5)*.045*(1.-l*.6);
     // vignette
     float v=smoothstep(1.25,.35,length((vUv-.5)*vec2(1.1,1.)));
-    c*=mix(.74,1.,v);
+    c*=mix(.86,1.,v);
     // ordered dither onto a reduced palette
     c=floor(clamp(c,0.,1.)*uLevels+bayer(gl_FragCoord.xy))/uLevels;
     gl_FragColor=vec4(pow(c,vec3(2.2)),1.);

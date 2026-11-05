@@ -3,7 +3,7 @@
 // border with another region and which region lies across it. The ground shader draws border lines, trenches, wire and
 // no-man's-land from these instead of from tile edges, and a tiny per-region table gives owners, trench levels and shell damage.
 import * as THREE from 'three';
-import { COLS, ROWS, type World } from '@riskrts/shared';
+import { COLS, HH, HW, ROWS, TS, type World } from '@riskrts/shared';
 
 export const BF_SS = 4;
 /** Distance encoding: value = tiles * BF_SCALE, so 255 is ~2 tiles. */
@@ -31,6 +31,24 @@ vec2 bIds(vec2 t){ vec2 v=texture2D(uBId,t).rg*255.+.5; return floor(v)-1.; }
 vec4 bTab(float r, float n){ return texture2D(uBTab,(vec2(n,r)+.5)/vec2(${nReg}.,${nReg + 1}.)); }
 float bOwner(float r){ return floor(bTab(${nReg}.,r).r*255.+.5)-1.; }
 `;
+
+/** Bilinear distance to the nearest region border (tiles) at world (x, z), from the CPU copy of the field. */
+export function borderDistAt(B: BorderField, x: number, z: number): number {
+  const fx = (x + HW) / TS * BF_SS - .5, fy = (z + HH) / TS * BF_SS - .5, ix = Math.floor(fx), iy = Math.floor(fy);
+  if (ix < 0 || iy < 0 || ix >= B.W - 1 || iy >= B.H - 1) return 9;
+  const tx = fx - ix, ty = fy - iy, i = iy * B.W + ix, D = B.dist;
+  return (D[i] * (1 - tx) + D[i + 1] * tx) * (1 - ty) + (D[i + B.W] * (1 - tx) + D[i + B.W + 1] * tx) * ty;
+}
+
+/** Move (x, z) across the border field until it lies `want` tiles from the border (a few gradient steps). */
+export function toBorderDist(B: BorderField, x: number, z: number, want: number): [number, number] {
+  for (let it = 0; it < 24; it++) {
+    const d = borderDistAt(B, x, z), e = .01, gx = (borderDistAt(B, x + e, z) - borderDistAt(B, x - e, z)) / (2 * e), gz = (borderDistAt(B, x, z + e) - borderDistAt(B, x, z - e)) / (2 * e);
+    const g2 = gx * gx + gz * gz; if (g2 < 1e-6 || Math.abs(d - want) < .02) break;
+    const k = Math.max(-.12, Math.min(.12, (want - d) / g2)); x += gx * k; z += gz * k;
+  }
+  return [x, z];
+}
 
 export function borderField(world: World): BorderField {
   const S = BF_SS, W = COLS * S, H = ROWS * S, n = W * H, nReg = world.regions.length;

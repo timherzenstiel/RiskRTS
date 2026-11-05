@@ -25,7 +25,7 @@ const BACK = 160;
 export class CameraRig {
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, BACK * 2 + 60);
   readonly sun = new THREE.DirectionalLight(0xf6e8c8, 2.9);
-  readonly hemi = new THREE.HemisphereLight(0xd2d0c2, 0x3a3226, 1.05);
+  readonly hemi = new THREE.HemisphereLight(0xd8d6c8, 0x463c2c, 1.3);
   private aspect = 1;
   /** Current (smoothed) and goal focus/distance. */
   tx = 12; tz = -16; dist = 70; gx = 12; gz = -16; gdist = 70;

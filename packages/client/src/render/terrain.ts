@@ -33,7 +33,7 @@ const TREEC: Partial<Record<Biome, THREE.Color[]>> = {
 };
 const TREE_P: Partial<Record<Biome, number>> = { taiga: .38, temperate: .22, jungle: .5, savanna: .07, tundra: .03 };
 const FIELDC = ['#958646', '#66743a', '#735a3e', '#848446', '#5a6a35', '#9c8c52'].map(col);
-const WALLS = ['#b4aa92', '#a69b80', '#9c9078', '#bdb7a4'].map(col);
+const WALLS = ['#d8cfb8', '#cfc2a4', '#c9b99c', '#e2dccb'].map(col);
 const ROOFS = ['#74392b', '#7d4a35', '#45474a', '#5a4434', '#66382b'].map(col);
 const WHITE = col('#ffffff'), RED = col('#ff6b4a'), RIVERC = col('#38535a'), CITYC = col('#878272'), ROADC = col('#7a6a4c'), TRUNK = col('#3e2c1e');
 
@@ -300,12 +300,13 @@ export class Terrain {
     for (const [name, lon, lat, size] of CITIES) {
       const ci = tileAtLL(lon, lat); if (ci < 0 || !land[ci]) continue;
       const cx = wxLon(lon), cz = wzLat(lat); this.cities.push({ name, size, x: cx, z: cz, tile: ci });
-      const n = size === 3 ? 96 : size === 2 ? 50 : 18, R = size === 3 ? .44 : size === 2 ? .31 : .17;
+      const n = size === 3 ? 240 : size === 2 ? 110 : 30, R = size === 3 ? .4 : size === 2 ? .28 : .16;
       for (let k = 0; k < n; k++) {
         const a = rng.next() * 6.283, r = Math.sqrt(rng.next()) * R, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
         const ti = tileAtW(x, z); if (ti < 0 || !land[ti]) continue;
         for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const j = ti + dr * COLS + dc; if (j >= 0 && j < N && land[j]) this.cityT[j] = 1; }
         const y = tileH[ti], w = .05 + rng.next() * .05, d = .05 + rng.next() * .05, h = .04 + rng.next() * .05 + (size === 3 && r < .12 ? .05 : 0), rot = rng.next() < .5, ww = rot ? d : w, dd = rot ? w : d;
+        if (this.homes.some(([hx, , hz, hw, , hd]) => Math.abs(hx - x) < (hw + ww) / 2 + .012 && Math.abs(hz - z) < (hd + dd) / 2 + .012)) continue;
         const wc = WALLS[Math.floor(rng.next() * 4)]; houses.push([x, y + h / 2, z, ww, h, dd, wc]); this.homes.push([x, y, z, ww, h, dd, wc]);
         const rc = ROOFS[Math.floor(rng.next() * 5)]; houses.push([x, y + h + .008, z, ww + .012, .016, dd + .012, rc]); houses.push([x, y + h + .022, z, ww * .55, .014, dd + .006, rc]);
       }
@@ -321,11 +322,20 @@ export class Terrain {
         for (let q = 0; q < n; q++) {
           const a = rng.next() * 6.283, r = Math.sqrt(rng.next()) * .11, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, ti = tileAtW(x, z); if (ti < 0 || !land[ti] || river[ti]) continue;
           const y = tileH[ti], w = .04 + rng.next() * .03, d = .04 + rng.next() * .035, h = .03 + rng.next() * .03, rot = rng.next() < .5, ww = rot ? d : w, dd = rot ? w : d;
+          if (this.homes.some(([hx, , hz, hw, , hd]) => Math.abs(hx - x) < (hw + ww) / 2 + .012 && Math.abs(hz - z) < (hd + dd) / 2 + .012)) continue;
           const wc = WALLS[Math.floor(rng.next() * 4)]; houses.push([x, y + h / 2, z, ww, h, dd, wc]); this.homes.push([x, y, z, ww, h, dd, wc]); const rc = ROOFS[Math.floor(rng.next() * 5)];
           houses.push([x, y + h + .007, z, ww + .01, .013, dd + .01, rc]); houses.push([x, y + h + .018, z, ww * .5, .011, dd + .004, rc]);
         }
         if (rng.next() < .45) { const y = tileH[i]; houses.push([cx + .07, y + .05, cz - .06, .018, .1, .018, WALLS[3]]); houses.push([cx + .07, y + .11, cz - .06, .02, .025, .02, ROOFS[2]]); }
       }
+    }
+    // farmsteads in the fields: a farmhouse and a timber barn (modelled scenery)
+    for (const i of landIdx) {
+      if (!fieldT[i] || this.cityT[i] || hash2(i, 91) > .03) continue;
+      const x = tx(i % COLS) + (hash2(i, 92) - .5) * TS * .5, z = tz((i / COLS) | 0) + (hash2(i, 93) - .5) * TS * .5, y = tileH[i];
+      this.homes.push([x, y, z, .055, .04, .045, WALLS[Math.floor(hash2(i, 94) * 4)]]);
+      this.homes.push([x + .075, y, z + .01, .06, .045, .042, col('#8a6a48')]);
+      houses.push([x, y + .02, z, .055, .04, .045, WALLS[0]]); houses.push([x + .075, y + .022, z + .01, .06, .045, .042, col('#6a2c21')]);
     }
     // railways and the roads that follow them
     const rpts: number[] = [], rcols: number[] = [], RAIL = col('#2b2722'), TIE = col('#6b5a40'), pairs = new Set<string>();
@@ -403,8 +413,10 @@ export class Terrain {
     }
     for (const [x, y, z, w, h, d, wc] of this.homes) {
       const big = h > .07, key: MeshKey = big ? 'house_b' : 'house_a', yaw = w >= d ? 0 : Math.PI / 2;
-      q.setFromAxisAngle(up, yaw); m4.compose(v.set(x, this.surfaceAt(x, z) - .002, z), q, sc.set(yaw ? d : w, h * .85, yaw ? w : d));
-      put(key, x, z, m4, tc.copy(wc).multiplyScalar(.75));
+      // height follows the footprint (a cottage is about as tall as it is wide, a townhouse a little taller), not the box height
+      const s0 = (w + d) / 2, sy = s0 * (big ? .95 : .78);
+      q.setFromAxisAngle(up, yaw); m4.compose(v.set(x, this.surfaceAt(x, z) - .002, z), q, sc.set(yaw ? d : w, sy, yaw ? w : d));
+      put(key, x, z, m4, tc.copy(wc));
     }
     for (const [x, y, z, size] of this.churches) {
       q.setFromAxisAngle(up, 0); const S = size === 3 ? .16 : .12; m4.compose(v.set(x, y, z), q, sc.set(S, S * 1.1, S));

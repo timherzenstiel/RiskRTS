@@ -190,12 +190,9 @@ export class GroundDetail {
       }
       if (T.cityT[i]) continue;
       if (T.fieldT[i]) {
-        if (hs(3) < .035) { // farmstead
-          const fx = jx(4), fz = jz(4), h = yAt(fx, fz);
-          add(fx, h, fz, .055, .035, .045, C.wall); add(fx, h + .035, fz - .011, .062, .012, .026, shade(C.roof, 1.2)); add(fx, h + .035, fz + .011, .062, .012, .026, shade(C.roof, .8)); add(fx, h + .047, fz, .062, .006, .008, C.roof);
-          add(fx - .012, h, fz + .023, .012, .02, .003, C.trunk); add(fx + .015, h + .016, fz + .023, .01, .008, .003, C.door);
-          add(fx + .07, h, fz + .01, .06, .045, .04, C.barn); add(fx + .07, h + .045, fz + .01, .066, .012, .046, shade(C.roof, .9));
-          add(fx - .05, h, fz + .05, .025, .02, .02, C.hay); add(fx - .02, h, fz + .06, .02, .018, .018, shade(C.hay, .85));
+        if (hs(3) < .035) { // farmstead (the house and barn are modelled scenery, terrain.ts): hay by the yard
+          const fx = jx(4), fz = jz(4);
+          add(fx - .05, yAt(fx - .05, fz + .05), fz + .05, .025, .02, .02, C.hay); add(fx - .02, yAt(fx - .02, fz + .06), fz + .06, .02, .018, .018, shade(C.hay, .85));
         } else if (hs(5) < .25) for (let n = 0; n < 3; n++) { const x = jx(5) + n * .02, z = jz(5) + (n % 2) * .015; add(x, yAt(x, z), z, .014, .012, .014, shade(C.hay, .9 + n * .08)); }
         continue;
       }

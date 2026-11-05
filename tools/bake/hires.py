@@ -347,29 +347,6 @@ def sandbag_ring(k, cx, cz, R, n, rows=2, y0=.0, gap=None):
             if gap and abs(math.atan2(math.sin(a - gap), math.cos(a - gap))) < .45: continue
             k.ball(cx + math.sin(a) * R, y0 + .009 + r * .014, cz + math.cos(a) * R, .013, P['bag'] if (i + r) % 3 else P['bag2'], sy=.55, seg=6)
 
-def pillbox_hi():
-    k = Kit('pill')
-    k.cyl(0, .032, 0, .09, .082, .064, P['concrete'], seg=12, smooth=False)
-    k.cyl(0, .069, 0, .085, .06, .012, P['concrete2'], seg=12, smooth=False)
-    k.ring(0, .064, 0, .085, .003, P['concrete2'], axis='y', seg=16, seg2=3)
-    k.box(0, .047, .084, .06, .012, .02, P['black'], bevel=.002); k.box(0, .055, .086, .07, .004, .018, P['concrete2'], bevel=.001)
-    k.limb((.012, .047, .07), (.012, .047, .1), .003, .003, P['gun'], seg=5)
-    sandbag_ring(k, 0, 0, .105, 18, 2, gap=0.0)
-    k.box(-.04, .02, -.088, .03, .04, .02, P['black'])   # rear door
-    return k.done()
-
-def bunker_hi():
-    k = Kit('bunk')
-    k.poly([(-.15, 0, -.11), (.15, 0, -.11), (.15, 0, .1), (-.15, 0, .1)], P['mud'], thick=-.004)
-    k.box(0, .022, -.005, .27, .044, .19, P['mud'], bevel=.02)
-    k.box(0, .055, .025, .22, .04, .12, P['concrete'], bevel=.006)
-    k.box(0, .078, .02, .2, .01, .1, P['concrete2'], bevel=.003)
-    for sd in (-1, 1):
-        k.box(sd * .055, .055, .086, .06, .012, .006, P['black']); k.limb((sd * .055, .056, .08), (sd * .055, .056, .11), .003, .003, P['gun'], seg=5)
-    for i in range(9): k.ball(-.12 + i * .03, .046, .097, .013, P['bag'] if i % 2 else P['bag2'], sy=.55, seg=6)
-    k.box(0, .025, -.105, .05, .04, .02, P['black']); k.box(0, .05, -.105, .06, .008, .025, P['timber2'])
-    return k.done()
-
 # ---------------------------------------------------------------- buildings (footprints match render/dynamic.ts plots)
 def windows(k, x0, x1, y, z, n, w, h, face=1):
     for i in range(n):
@@ -486,25 +463,6 @@ def shrub():
     for (x, y, z, r) in ((0, .12, 0, .2), (-.14, .08, .06, .14), (.12, .09, -.05, .15), (.03, .2, .05, .12)): blob(k, x, y, z, r, LEAF, sy=.8)
     return k.done()
 
-def house_a():
-    """Cottage, unit footprint (x, z in -.5...5), walls 1 high: the town scales it per house."""
-    k = Kit('house_a', jitter=.06)
-    k.box(0, .5, 0, 1, 1, 1, WALL, house=True, bevel=.02)
-    k.roof(0, 1, 0, 1.12, .62, 1.14, P['red'] if True else P['slate'], axis='x', thick=.05)
-    k.box(.28, 1.35, .12, .14, .5, .14, P['brick2'], bevel=.01)
-    k.box(0, .3, .505, .2, .55, .02, P['timber2']); windows_unit(k, (-.3, .3), .6, .505, .16, .2)
-    for sd in (-1, 1): windows_unit(k, (-.25, .25), .55, sd * .505, .14, .18, sd, axis='z')
-    return k.done()
-
-def house_b():
-    k = Kit('house_b', jitter=.06)
-    k.box(0, .5, 0, 1, 1, 1, WALL, house=True, bevel=.02)
-    k.roof(0, 1, 0, 1.08, .45, 1.1, P['slate'], axis='z', thick=.05)
-    for yy in (.3, .72): windows_unit(k, (-.32, 0, .32), yy, .505, .14, .2)
-    k.box(0, .2, .505, .18, .38, .02, P['timber2'])
-    for sd in (-1, 1): k.box(sd * .3, 1.32, 0, .12, .3, .12, P['brick2'], bevel=.01)
-    return k.done()
-
 def windows_unit(k, xs, y, z, w, h, face=1, axis='x'):
     for x in xs:
         if axis == 'x':
@@ -512,18 +470,11 @@ def windows_unit(k, xs, y, z, w, h, face=1, axis='x'):
         else:
             k.box(z, y, x, .02, h + .04, w + .04, P['stone']); k.box(z + face * .008, y, x, .02, h, w, P['window'])
 
-def church():
-    k = Kit('church', jitter=.05)
-    k.box(0, .35, -.1, .6, .7, 1.2, P['stone'], bevel=.02); k.roof(0, .7, -.1, .66, .38, 1.24, P['slate'], axis='z', thick=.04)
-    k.box(0, .7, .62, .36, 1.4, .36, P['stone'], bevel=.02); k.cyl(0, 1.62, .62, .24, .0, .5, P['slate'], seg=4, smooth=False)
-    k.box(0, 1.15, .805, .1, .18, .02, P['window']); k.box(0, .25, .805, .14, .3, .02, P['timber2'])
-    for i in range(4): windows_unit(k, (-.3 + i * .2,), .42, .2, .07, .2, 1, axis='z'); windows_unit(k, (-.3 + i * .2,), .42, -.2, .07, .2, -1, axis='z')
-    return k.done()
-
 def build():
+    import buildings as bl
     figs = [figure('soldier', 'stand'), figure('soldier_walk_a', 'walk_a'), figure('soldier_walk_b', 'walk_b'), figure('soldier_kneel', 'kneel'),
             figure('soldier_aim', 'stand', 'aim'), figure('soldier_kneel_aim', 'kneel', 'aim'), figure('soldier_throw', 'walk_a', 'throw'),
             figure('soldier_prone', 'stand', 'up', 'prone'), figure('soldier_dead', 'stand', 'ready', 'dead')]
     return figs + helmets_hi() + [vickers(), field_gun75(), tank_mk4(), tank_ft(), tank_a7v(), biplane(), propeller()] + markings() + \
-        [pillbox_hi(), bunker_hi(), factory(), barracks(), hangar()] + \
-        [tree_broad(), tree_pine(), tree_palm(), tree_acacia(), shrub(), house_a(), house_b(), church()]
+        [bl.pillbox_hi(), bl.bunker_hi(), factory(), barracks(), hangar()] + \
+        [tree_broad(), tree_pine(), tree_palm(), tree_acacia(), shrub(), bl.house_a(), bl.house_b(), bl.church()]

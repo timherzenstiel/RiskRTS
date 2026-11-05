@@ -307,7 +307,9 @@ def main():
     hi = hires.build()
     objs = lo + hi
     print('baking ambient occlusion ...')
-    bake_ao(objs, ground_for=lambda o: not (o.name.startswith(('helm', 'plane', 'prop', 'mark'))))  # scenery bakes with the ground too
+    big = {'house_a', 'house_b', 'church'}   # modelled in a unit frame (scaled down per house): occlusion reaches further
+    bake_ao([o for o in objs if o.name not in big], ground_for=lambda o: not (o.name.startswith(('helm', 'plane', 'prop', 'mark'))))  # scenery bakes with the ground too
+    bake_ao([o for o in objs if o.name in big], dist=.16, strength=.55)
     for o in objs:
         o.select_set(True)
         tris = sum(len(p.vertices) - 2 for p in o.data.polygons)

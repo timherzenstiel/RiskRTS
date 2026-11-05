@@ -18,7 +18,8 @@ export const trenchX = (z: number) => 1.8 + ((Math.floor((z + 40) / 3)) % 2 ? .6
 const FX_CAP = 900;
 export const paceOf = (g: GameState) => PACES[g.cfg?.pace ?? 1] ?? PACES[1];
 /** Seconds without fresh troops after which a front settles into trench warfare, and when the lull is deepest. */
-const LULL_FROM = 60, LULL_FULL = 180, LULL_ROF = .4;
+export const LULL_FROM = 60;
+const LULL_FULL = 180, LULL_ROF = .4;
 /** Share of the men lost in battle who are wounded and come back. */
 export const WOUNDED_SHARE = .3;
 /** Morale ceiling for a power at a given war weariness. */

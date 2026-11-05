@@ -5,6 +5,8 @@ import { forcePower, frontsOf, hops, offensives, rnd, worksAt, world } from './c
 import { assault, build, fortify, patrol, recon, recruit, sabotage, sendAir, sendArmy, shift, spy } from './commands';
 import { buildRail, hasRail, railOpen } from './rails';
 import { activeSpies } from './fog';
+import { atPeace, cancel, enemiesOf, offer, treatyOf } from './diplomacy';
+import { decoy, raid } from './levers';
 import { rush, techOn } from './tech';
 import { TECH, techDayFor, type TechKey } from '../data/tech';
 import { dateOf } from '../data/calendar';
@@ -51,6 +53,7 @@ export function aiThink(g: GameState, f: FactionState) {
   manpower(g, f);
   railways(g, f, mine);
   research(g, f);
+  diplomacy(g, f, mine);
   const P = nationOf(f.id).ai, W = world();
   const cap = g.cfg?.attackCap ?? 0;
   let guard = 50;
@@ -111,13 +114,18 @@ export function aiThink(g: GameState, f: FactionState) {
     if (attacks >= 2 + (cap ? 0 : 1) || !room()) break; if (groundUnits(t.units) < 3) continue;
     const avail = forcePower({ ...t.units, plane: 0 }, t.men, pw) * (.6 + .4 * t.mor / 100) * .85; let best: RegionState | null = null, bs = -1e9;
     for (const n of enemyNb(V, t, f.id)) {
-      if (g.armies.some(a => a.owner === f.id && a.to === n.id)) continue;
+      if (g.armies.some(a => a.owner === f.id && a.to === n.id && !a.decoy)) continue;
+      if (atPeace(g, f.id, n.owner)) continue;
       const dp = defPower(n, t.id), margin = avail - dp * 1.3 * P.aggr - 1.5; if (margin <= 0) continue;
       const sea = W.seaLane.has(t.id + '|' + n.id) || W.regions[n.id].seaAdj.length > 0;
       const s = margin + (missionWants(g, f, n.id) ? 6 : 0) + (n.capitalOf >= 0 ? 3 : 0) - dp * .2 + rnd(g) * 2 + (sea ? 2 * (P.navy - 1) : 0);
       if (s > bs) { bs = s; best = n; }
     }
-    if (best && !sendArmy(g, f.id, t.id, best.id, .85)) attacks++;
+    if (best && !sendArmy(g, f.id, t.id, best.id, .85)) {
+      attacks++;
+      // a feint elsewhere to draw the enemy's eye
+      if (rnd(g) < .25 && f.supply >= 3) { const o = mine.find(x => x !== t && x.battle < 0 && enemyNb(V, x, f.id).length); if (o) { const own = world().regions[o.id].adj.find(j => g.regions[j].owner === f.id && enemyNb(V, g.regions[j], f.id).length); decoy(g, f.id, o.id, own !== undefined && rnd(g) < .5 ? own : enemyNb(V, o, f.id)[0].id); } }
+    }
   }
   // aircraft: support our running attacks first, otherwise raid the weakest enemy region in range
   for (const t of mine) {
@@ -128,7 +136,7 @@ export function aiThink(g: GameState, f: FactionState) {
       const s = 10 + rnd(g) * 3; if (s > bs) { bs = s; best = b.region; }
     }
     if (best < 0 && room() && rnd(g) < .5) for (const r of V.regions) {
-      if (r.owner === f.id || r.battle >= 0 || hops(t.id, r.id) > 2) continue;
+      if (r.owner === f.id || r.battle >= 0 || hops(t.id, r.id) > 2 || atPeace(g, f.id, r.owner)) continue;
       const s = -defPower(r) - (r.defs.some(d => d.k === 'flak') ? 6 : 0) + (missionWants(g, f, r.id) ? 3 : 0) + rnd(g) * 2;
       if (s > bs) { bs = s; best = r.id; }
     }
@@ -235,4 +243,30 @@ function research(g: GameState, f: FactionState) {
   const want: TechKey[] = nationOf(f.id).ai.doctrines.includes('tankcorps') ? ['tank', 'air', 'trench3'] : ['air', 'trench3', 'tank', 'heavy'];
   const k = want.find(t => !techOn(g, f.id, t) && techDayFor(f.id, t, f.rushed) - g.day < 400 && TECH.some(x => x.key === t));
   if (k) rush(g, f.id, k);
+}
+
+/** Diplomacy: seek a ceasefire when weary and fighting on several fronts, an alliance against a common enemy; raid quiet fronts. */
+function diplomacy(g: GameState, f: FactionState, mine: RegionState[]) {
+  const foes = enemiesOf(g, f.id), live = g.factions.filter(x => x.alive && x.id !== f.id);
+  if (rnd(g) < .04 && foes.size >= 2 && f.ww > 35) {
+    // make peace with the enemy we gain least from (not our target)
+    const m = f.mission, cand = [...foes.keys()].filter(x => !(m?.type === 'destroy' && m.target === x) && !treatyOf(g, f.id, x)).sort((a, b) => (foes.get(a) ?? 0) - (foes.get(b) ?? 0));
+    if (cand.length) offer(g, f.id, cand[0], 'cease');
+  }
+  if (rnd(g) < .005 && foes.size) {
+    const common = live.find(x => !treatyOf(g, f.id, x.id) && [...foes.keys()].some(e => e !== x.id && enemiesOf(g, x.id).has(e)));
+    if (common) offer(g, f.id, common.id, 'ally');
+  }
+  // alliances of convenience: give notice when the common enemy is gone, or when the ally grows too strong or is our target
+  const count = (x: number) => g.regions.filter(r => r.owner === x).length;
+  for (const t of g.treaties) {
+    if (t.kind === 'cease' || t.ends !== undefined || (t.a !== f.id && t.b !== f.id)) continue;
+    const other = t.a === f.id ? t.b : t.a, m = f.mission;
+    const target = m?.type === 'destroy' && m.target === other, strong = count(other) > Math.max(12, count(f.id) * 1.6);
+    const common = [...foes.keys()].some(e => enemiesOf(g, other).has(e));
+    if ((target || strong) ? rnd(g) < .03 : (!common && rnd(g) < .01)) cancel(g, f.id, other);
+  }
+  // trench raids from quiet fronts
+  for (const b of g.battles) if (!b.ended && b.sides.includes(f.id) && b.age - (b.lastJoin ?? 0) > 70 && rnd(g) < .08) raid(g, f.id, b.id);
+  void mine;
 }

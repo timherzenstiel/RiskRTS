@@ -14,6 +14,9 @@ import { mountainRegion } from '../data/terrain';
 import { buildRail, cutRails, hasRail, marchFactor, railOpen, weatherMarch } from './rails';
 import { activeSpies } from './fog';
 import { chooseDoctrine, hasDoc, rush, techOn } from './tech';
+import { answer, cancel, offer, treatyCheck } from './diplomacy';
+import { decoy, decoyArrives, raid } from './levers';
+import { PHRASES } from './types';
 import { techDayFor, type TechKey } from '../data/tech';
 import { monthStr } from '../data/calendar';
 import { bombedNow } from './economy';
@@ -150,9 +153,10 @@ export function formArmy(g: GameState, fid: number, fromId: number, toId: number
   return a;
 }
 
-export function sendArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number): string | null {
+export function sendArmy(g: GameState, fid: number, fromId: number, toId: number, frac: number, brk?: boolean): string | null {
   const B = g.regions[toId];
   if (B) { const cap = capCheck(g, fid, toId); if (cap) return cap; }
+  if (B && g.regions[fromId]?.owner === fid) { const t = treatyCheck(g, fid, toId, brk); if (t) return t; }
   const a = formArmy(g, fid, fromId, toId, frac); if (typeof a === 'string') return a;
   g.armies.push(a);
   emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(a.units) });
@@ -160,7 +164,7 @@ export function sendArmy(g: GameState, fid: number, fromId: number, toId: number
 }
 
 /** Fly aircraft to a region up to AIR_RANGE borders away: strike an enemy, support a battle, or rebase. */
-export function sendAir(g: GameState, fid: number, fromId: number, toId: number, frac: number, rail = false, factory = false): string | null {
+export function sendAir(g: GameState, fid: number, fromId: number, toId: number, frac: number, rail = false, factory = false, brk?: boolean): string | null {
   const W = world(), A = g.regions[fromId], B = g.regions[toId];
   if (!A || !B || fromId === toId) return 'Pick another region as the target.';
   if (A.owner !== fid) return 'Select one of your own regions first.';
@@ -177,6 +181,7 @@ export function sendAir(g: GameState, fid: number, fromId: number, toId: number,
     if (!W.regions[toId].adj.some(n => railOpen(g, toId, n))) return `No working railway runs through ${W.regions[toId].name}.`;
   }
   const cap = capCheck(g, fid, toId); if (cap) return cap;
+  const tc = treatyCheck(g, fid, toId, brk); if (tc) return tc;
   const n = Math.max(1, Math.min(A.units.plane, Math.round(A.units.plane * Math.max(.05, Math.min(1, frac)))));
   const men = takeForce(A.units, A.men, 'plane', n);
   const fl = launch(g, fid, fromId, toId, { ...emptyUnits(), plane: n }, false, { ...emptyUnits(), plane: men }); if (rail) fl.strike = 'rail'; else if (factory) fl.strike = 'factory';
@@ -297,6 +302,7 @@ export function sabotage(g: GameState, fid: number, region: number, to: number):
 export function arrive(g: GameState, a: Army) {
   if (a.scout) { scoutArrives(g, a); return; }
   if (a.strike) { railStrike(g, a); return; }
+  if (a.decoy) { decoyArrives(g, a); return; }
   const t = g.regions[a.to], len = Math.hypot(a.dx, a.dz) || 1, dir = { x: -a.dx / len, z: -a.dz / len };
   // fatigue: more than two borders in a row, or straight out of a battle, costs morale when the troops have to fight
   if (!a.air && ((a.legs ?? 1) > 2 || a.tired) && (frontsOf(g, t.id).length || t.owner !== a.owner)) a.mor = Math.max(5, a.mor - FATIGUE_MORALE);
@@ -344,8 +350,14 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     }
     case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
     case 'fortify': { const r = g.regions[c.region]; if (!r) return 'Invalid order.'; return fortify(g, fid, r, c.kind, c.sector); }
-    case 'march': return sendArmy(g, fid, c.from, c.to, c.frac);
-    case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail, !!c.factory);
+    case 'march': return sendArmy(g, fid, c.from, c.to, c.frac, c.brk);
+    case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail, !!c.factory, c.brk);
+    case 'decoy': return decoy(g, fid, c.from, c.to);
+    case 'raid': return raid(g, fid, c.battle);
+    case 'offer': return offer(g, fid, c.to, c.kind);
+    case 'answer': return answer(g, fid, c.id, c.yes);
+    case 'cancel': return cancel(g, fid, c.to);
+    case 'say': { if (!(c.p >= 0 && c.p < PHRASES.length) || !(c.to === -1 || (c.to >= 0 && c.to < g.factions.length && c.to !== fid))) return 'Invalid order.'; emit(g, { k: 'say', from: fid, to: c.to, p: c.p }); return null; }
     case 'rush': return rush(g, fid, c.tech);
     case 'doctrine': return chooseDoctrine(g, fid, c.doc);
     case 'rail': return buildRail(g, fid, c.region, c.to);

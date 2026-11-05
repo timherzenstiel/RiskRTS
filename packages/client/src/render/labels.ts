@@ -86,7 +86,7 @@ export class Labels {
         this.root.appendChild(el); l = { el, n: el.firstChild as HTMLSpanElement, count: '', shown: true, tf: '', seen: 0 }; this.armies.set(a.id, l);
       }
       l.seen = ctx.frame;
-      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : a.decoy ? 'Feint' : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; }
       const [x, z] = armyPos(a), [y0, y1] = ctx.armyH(a);
       this.place(l, ctx, x, lerp(y0, y1, a.t) + Math.sin(a.t * Math.PI) * .4 + .85, z);
     }

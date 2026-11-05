@@ -1,6 +1,6 @@
 // Right-hand region file: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
 import { useState } from 'react';
-import { WEATHER, railOpen, railsOf, weatherAt, activeSpies, techOn } from '@riskrts/shared';
+import { WEATHER, TREATY_NAMES, railOpen, railsOf, weatherAt, activeSpies, techOn, treatyOf } from '@riskrts/shared';
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useSim, useUi, dateStr, type Tab } from '../game/store';
 import { click } from './actions';
@@ -141,13 +141,14 @@ export function Drawer() {
           {(myNb.length > 0 || airBases.length > 0) && <><AttackBudget /><SharePicker /></>}
           {myNb.length > 0 && <Briefing g={g} me={me} target={sel} from={myNb} />}
           {myNb.length > 0 && <div className="lbl"><span>Attack from</span></div>}
-          {myNb.map(i => <NeighbourRow key={i} from={i} to={sel} list={i} label="Attack" />)}
+          {(() => { const t = treatyOf(g, me, r.owner); return t ? <p className="note budget full">{TREATY_NAMES[t.kind]} with {F.name}. Attacking breaks it: war weariness and lost trust.</p> : null; })()}
+          {myNb.map(i => <NeighbourRow key={i} from={i} to={sel} list={i} brk={!!treatyOf(g, me, r.owner)} label={treatyOf(g, me, r.owner) ? 'Break treaty' : 'Attack'} />)}
           {airBases.length > 0 && <div className="lbl"><span>Air strike from</span></div>}
           {airBases.map(x => (
             <div className="it nb" key={x.id}>
               <i className="dot" style={{ '--c': FACTIONS[me].color } as React.CSSProperties} />
               <div className="tx"><b>{W.regions[x.id].name}</b><small>{x.units.plane} squadron{x.units.plane === 1 ? '' : 's'} · {hops(x.id, sel)} border{hops(x.id, sel) > 1 ? 's' : ''} away</small></div>
-              <button className="buy atk" onClick={() => ui().air(x.id, sel)}>Strike</button>
+              <button className="buy atk" onClick={() => treatyOf(g, me, r.owner) ? ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, brk: true }) : ui().air(x.id, sel)}>{treatyOf(g, me, r.owner) ? 'Break & strike' : 'Strike'}</button>
               {r.factory && techOn(g, me, 'bomb') && <button className="buy plain" title="Bomb the factory: no supply, shells or tanks from it for three convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, factory: true })}>Factory</button>}
               {techOn(g, me, 'railAir') && railsOf(g, sel).some(([n]) => railOpen(g, sel, n)) && <button className="buy plain" title="Bomb the railways of this region: they stay cut for two convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, rail: true })}>Rails</button>}
             </div>

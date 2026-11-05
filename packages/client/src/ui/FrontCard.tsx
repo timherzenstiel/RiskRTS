@@ -67,6 +67,7 @@ export function FrontControls({ g, me, b, compact }: { g: GameState; me: number;
         {helpers.slice(0, compact ? 2 : 3).map(r => (
           <button key={r.id} className="btn sm" title={`Send half the troops of ${W.regions[r.id].name} straight into this front`} onClick={() => send({ t: 'reinforce', from: r.id, battle: b.id, frac: .5 })}>Reinforce from {W.regions[r.id].name}</button>
         ))}
+        {b.age - (b.lastJoin ?? 0) > 60 && <button className="btn sm" title="Trench raid: a battalion risks 10–40% losses to bring back prisoners, a report on the enemy's rear and −5 enemy morale" disabled={(b.raidT?.[me] ?? -1e9) > b.age - 30} onClick={() => send({ t: 'raid', battle: b.id })}>Raid</button>}
         <button className="btn sm danger" disabled={st === 3} title={st === 3 ? 'Troops holding at all costs do not retreat' : att ? 'Fall back over the border you came from' : 'Give up this front: the survivors fall back to a neighbouring region'} onClick={() => send({ t: 'withdraw', battle: b.id })}>Withdraw</button>
       </div>
     </div>

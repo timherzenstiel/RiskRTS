@@ -38,3 +38,4 @@ export const MenuIcon = () => <svg viewBox="0 0 24 24" width="20" height="20" ar
 export const PauseIcon = () => <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z" /></svg>;
 export const SwordsIcon = ({ size = 14 }: { size?: number }) => <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>;
 export const SupplyIcon = () => <i className="sup" aria-hidden="true" />;
+export const HandshakeIcon = () => <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M2 11l4-4 4 2 3-2 4 1 5 4" /><path d="M6 7l-1 7 5 5c1 1 2 1 3 0l5-5" /><path d="M10 14l2 2M12 12l2 2M14 10.5l2 2" /></svg>;

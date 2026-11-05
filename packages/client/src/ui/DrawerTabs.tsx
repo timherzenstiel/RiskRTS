@@ -1,7 +1,7 @@
 // The order tabs of the region drawer: Recruit, Build, Fortify, March (with air strikes and reconnaissance).
 import {
   AIR_RANGE, COST, DT, FACTIONS, FORMATION, MAX_SAND, MAX_TRENCH, MAX_WIRE, SHELLS, SLOT_USE, UNIT_TYPES, UT, buildWorld, fortCost, groundUnits, hops, offensives, slotsMax, slotsUsed, worksAt,
-  nationalUnit, NATIONS, unitCost, unitName, buildCostOf, RAIL_BUILD, hasRail, isMountain, monthStr, techOn, techDayFor,
+  nationalUnit, NATIONS, unitCost, unitName, treatyOf, buildCostOf, RAIL_BUILD, hasRail, isMountain, monthStr, techOn, techDayFor,
   type FortKind, type RegionState, type UnitType,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -184,7 +184,7 @@ export function knownTroops(r: RegionState, mine: boolean): string {
 }
 
 /** One neighbour line that marches `from` -> `to`; `list` is the region shown on the line (the neighbour of the drawer's region). */
-export function NeighbourRow({ from, to, list, label }: { from: number; to: number; list: number; label: string }) {
+export function NeighbourRow({ from, to, list, label, brk }: { from: number; to: number; list: number; label: string; brk?: boolean }) {
   const sim = useSim(); const march = useUi.getState().march;
   if (!sim) return null;
   const { g, me } = sim; const W = buildWorld(); const src = g.regions[from]; const shown = g.regions[list]; const F = FACTIONS[shown.owner];
@@ -198,7 +198,7 @@ export function NeighbourRow({ from, to, list, label }: { from: number; to: numb
       <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />
       <div className="tx"><b>{W.regions[list].name}</b><small>{info}{sea ? ' · by sea' : ''}{isMountain(from, to) ? ' · over mountains' : ''}</small></div>
       <button className={'buy ' + (label === 'Attack' ? 'atk' : 'plain')} disabled={disabled}
-        title={src.battle >= 0 ? 'Troops in a battle cannot leave' : groundUnits(src.units) < 2 ? 'Needs at least 2 ground formations' : undefined} onClick={() => march(from, to)}>{label}</button>
+        title={src.battle >= 0 ? 'Troops in a battle cannot leave' : groundUnits(src.units) < 2 ? 'Needs at least 2 ground formations' : brk ? 'This breaks the treaty: war weariness and lost trust' : undefined} onClick={() => march(from, to, brk)}>{label}</button>
     </div>
   );
 }
@@ -267,6 +267,28 @@ function ReconSection({ region, id }: { region: RegionState; id: number }) {
   );
 }
 
+/** Decoy marches: rivals watching see an army that is not there; into an own border region it fakes a concentration. */
+function Feints({ region, id }: { region: RegionState; id: number }) {
+  const sim = useSim(); if (!sim || region.battle >= 0) return null;
+  const { g, me } = sim, W = buildWorld(), supply = g.factions[me].supply;
+  const adj = W.regions[id].adj;
+  return (
+    <>
+      <div className="lbl"><span>Deception · a decoy march costs {COST.decoy} supply</span></div>
+      {adj.slice(0, 6).map(n => {
+        const own = g.regions[n].owner === me;
+        return (
+          <div className="it nb" key={'d' + n}>
+            <span className="ic"><Icon k="inf" size={18} /></span>
+            <div className="tx"><b>Feint {own ? 'to' : 'on'} {W.regions[n].name}</b><small>{own ? 'Rivals see an army arrive and a big concentration there until they scout it' : 'Rivals see an army marching on them; it melts away on arrival'}</small></div>
+            <button className="buy plain" disabled={supply < COST.decoy} onClick={() => useUi.getState().order({ t: 'decoy', from: id, to: n })}><SupplyIcon />{COST.decoy}</button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /** "No report", "Report: 3 days old", "Our agent is there". */
 export function reportAge(g: { day: number }, r: RegionState): string {
   if (r.spied) return 'our agent is there';
@@ -289,7 +311,8 @@ export function MarchTab({ region, id }: { region: RegionState; id: number }) {
         {active ? 'Cancel · pick a target on the map' : 'Pick a target on the map'}
       </button>
       <div className="lbl"><span>Neighbouring regions · infantry and tanks attack across direct borders only</span></div>
-      {adj.map(i => <NeighbourRow key={i} from={id} to={i} list={i} label={g.regions[i].owner === me ? 'Reinforce' : 'Attack'} />)}
+      {adj.map(i => { const peace = g.regions[i].owner !== me && !!treatyOf(g, me, g.regions[i].owner); return <NeighbourRow key={i} from={id} to={i} list={i} brk={peace} label={g.regions[i].owner === me ? 'Reinforce' : peace ? 'Break treaty' : 'Attack'} />; })}
+      <Feints region={region} id={id} />
       <AirSection region={region} id={id} />
       <ReconSection region={region} id={id} />
       <p className="note">Shortcut: right-click a region on the map.</p>

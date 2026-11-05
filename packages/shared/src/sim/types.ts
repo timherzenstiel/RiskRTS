@@ -30,7 +30,18 @@ export interface FactionState {
   rushed?: TechKey[]; rushY?: number;
   /** A doctrine choice waiting: the war year offered and the game time by which the War Office picks instead. */
   docOffer?: number; docDue?: number;
+  /** How far this power trusts each other power's word (0..1); broken treaties lower it. */
+  trust?: number[];
 }
+
+export type TreatyKind = 'cease' | 'nap' | 'ally';
+export const TREATY_NAMES: Record<TreatyKind, string> = { cease: 'Ceasefire', nap: 'Non-aggression pact', ally: 'Alliance' };
+/** A treaty between two powers: a ceasefire runs until a day; a pact or alliance runs until cancelled (it then ends on `ends`). */
+export interface Treaty { a: number; b: number; kind: TreatyKind; until?: number; ends?: number }
+/** An offer waiting for an answer until game time `exp`. */
+export interface Offer { id: number; from: number; to: number; kind: TreatyKind; exp: number }
+/** Quick phrases powers can send each other in game. */
+export const PHRASES = ['Peace in our time?', 'Stay out of my way.', 'Together against the common enemy!', 'You will regret this.', 'We have no quarrel with you.', 'Good luck, old friend.'] as const;
 
 /** Battle stance of a garrison or an attacking army: balanced, aggressive, defensive, hold at all costs. */
 export type Stance = 0 | 1 | 2 | 3;
@@ -83,6 +94,8 @@ export interface RegionState {
   supplyQ?: number;
   /** The factory was bombed: it produces nothing until this day. */
   bombed?: number;
+  /** A fake concentration: rivals estimate `men` more here, until `until`, unless their latest report is newer than `day`. */
+  fake?: { men: number; day: number; until: number };
 }
 
 export interface Army {
@@ -105,6 +118,8 @@ export interface Army {
   rail?: boolean;
   /** Aircraft on a strike against the rail links or the factory of the target region. */
   strike?: 'rail' | 'factory';
+  /** A decoy: no troops, but rivals watching see `fake` battalions marching. */
+  decoy?: boolean; fake?: number;
 }
 
 export interface Agent {
@@ -153,6 +168,8 @@ export interface Battle {
   lostT: Record<number, Units>; mor0: Record<number, number>; reach: number; craters: number;
   /** Second line already used (elastic defence) per faction. */
   fell?: Record<number, number>;
+  /** Battle time of each faction's last trench raid here. */
+  raidT?: Record<number, number>;
 }
 
 /** After-action report of a finished battle. */
@@ -200,6 +217,10 @@ export type GameEvent =
   | { k: 'doctrine'; faction: number; doc: DoctrineKey }
   | { k: 'bombed'; faction: number; region: number; owner: number }
   | { k: 'fallback'; faction: number; region: number }
+  | { k: 'raid'; faction: number; region: number; ok: boolean; target: number }
+  | { k: 'offer'; id: number; from: number; to: number; kind: TreatyKind }
+  | { k: 'treaty'; a: number; b: number; kind: TreatyKind; what: 'signed' | 'declined' | 'ended' | 'broken' | 'notice'; by?: number }
+  | { k: 'say'; from: number; to: number; p: number }
   | { k: 'over'; winner: number | null; reason?: string };
 
 export interface GameStats { won: number[]; lost: number[] }
@@ -240,6 +261,8 @@ export interface GameState {
   reports: Report[];
   /** Rail links cut until a day ("a|b" with a < b), and links under construction [a, b, ready day]. */
   railCut: Record<string, number>; railNew: [number, number, number][];
+  /** Treaties in force and offers waiting for an answer. */
+  treaties: Treaty[]; offers: Offer[];
   /** Fog-of-war views only: the faction this view was made for. */
   viewer?: number;
   over: boolean; winner: number | null;
@@ -265,13 +288,21 @@ export type Command =
   | { t: 'spy'; to: number }
   /** Move part of the defenders of a region from its other fronts to the front in battle `battle`. */
   | { t: 'shift'; region: number; battle: number }
-  | { t: 'march'; from: number; to: number; frac: number }
+  | { t: 'march'; from: number; to: number; frac: number; brk?: boolean }
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */
-  | { t: 'air'; from: number; to: number; frac: number; rail?: boolean; factory?: boolean }
+  | { t: 'air'; from: number; to: number; frac: number; rail?: boolean; factory?: boolean; brk?: boolean }
   /** Bring one unlock forward by six months (one rush per war year). */
   | { t: 'rush'; tech: TechKey }
   /** Adopt one of the doctrines offered for the war year. */
   | { t: 'doctrine'; doc: DoctrineKey }
+  /** Deception: march a decoy army (rivals see troops that are not there); a trench raid from a quiet front. */
+  | { t: 'decoy'; from: number; to: number }
+  | { t: 'raid'; battle: number }
+  /** Diplomacy: offer a treaty, answer an offer, cancel a pact or alliance, send a quick phrase (`to` -1 = everyone). */
+  | { t: 'offer'; to: number; kind: TreatyKind }
+  | { t: 'answer'; id: number; yes: boolean }
+  | { t: 'cancel'; to: number }
+  | { t: 'say'; to: number; p: number }
   /** Storm the holdout defences in one of your own contested regions with its garrison. */
   | { t: 'assault'; region: number }
   /** Battle levers: barrage level of your guns, send the attackers over the top, stance, reinforce a front, withdraw. */

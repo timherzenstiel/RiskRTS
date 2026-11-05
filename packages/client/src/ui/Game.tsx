@@ -8,6 +8,7 @@ import { Feed } from './Feed';
 import { Hint } from './Hint';
 import { Minimap } from './Minimap';
 import { Overlays } from './Overlays';
+import { OfferBanner } from './Diplomacy';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -75,6 +76,7 @@ export function Game() {
       <Stage />
       <TopBar />
       <Drawer />
+      <OfferBanner />
       <div id="leftcol"><Feed /><Minimap /></div>
       <div id="bottom"><BattleCard /><Hint /></div>
       <Connection />

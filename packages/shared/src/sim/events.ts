@@ -2,9 +2,9 @@
 import { FACTIONS, cap } from '../data/factions';
 import { world } from './core';
 import { techDef, doctrineDef } from '../data/tech';
-import type { GameEvent, GameState } from './types';
+import { PHRASES, TREATY_NAMES, type GameEvent, type GameState } from './types';
 
-export interface Described { text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
+export interface Described { text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number; offer?: number }
 
 export function describeEvent(g: GameState, e: GameEvent, me: number): Described | null {
   const R = (i: number) => world().regions[i].name, F = (i: number) => FACTIONS[i];
@@ -62,6 +62,30 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
     case 'fallback':
       if (e.faction === me) return { text: `Our defenders at ${R(e.region)} fall back to the second line and steady.`, cls: 'me', region: e.region };
       if (g.battles.some(b => b.region === e.region && b.sides.includes(me))) return { text: `The enemy at ${R(e.region)} falls back to a second line.`, cls: '', region: e.region };
+      return null;
+    case 'raid':
+      if (e.faction === me) return { text: e.ok ? `Our trench raid at ${R(e.region)} comes back with prisoners${e.target >= 0 ? ` and a report on ${R(e.target)}` : ''}.` : `Our trench raid at ${R(e.region)} was beaten back.`, cls: e.ok ? 'good' : 'bad', region: e.region };
+      if (e.ok && (g.regions[e.region].owner === me || g.battles.some(b => b.region === e.region && b.sides.includes(me)))) return { text: `An enemy raiding party got into our trenches at ${R(e.region)}.`, cls: 'bad', region: e.region };
+      return null;
+    case 'offer':
+      if (e.to === me) return { text: `${cap(F(e.from).the)} offers a ${TREATY_NAMES[e.kind].toLowerCase()}.`, cls: 'me', offer: e.id };
+      return null;
+    case 'treaty': {
+      const other = e.a === me ? e.b : e.b === me ? e.a : -1, n = TREATY_NAMES[e.kind];
+      if (e.what === 'broken') {
+        if (e.by === me) return { text: `We broke the ${n.toLowerCase()} with ${F(other).the}. The world will remember.`, cls: 'bad' };
+        if (other >= 0) return { text: `${cap(F(e.by!).the)} has broken the ${n.toLowerCase()} and attacks us!`, cls: 'bad' };
+        return { text: `${cap(F(e.by!).the)} breaks its ${n.toLowerCase()} with ${F(e.by === e.a ? e.b : e.a).the}.`, cls: '' };
+      }
+      if (other < 0) return e.what === 'signed' ? { text: `${cap(F(e.a).the)} and ${F(e.b).the} sign a ${n.toLowerCase()}.`, cls: '' } : null;
+      if (e.what === 'signed') return { text: `${n} with ${F(other).the} signed.`, cls: 'good' };
+      if (e.what === 'declined') return e.by === me ? null : { text: `${cap(F(other).the)} declines our offer of a ${n.toLowerCase()}.`, cls: 'bad' };
+      if (e.what === 'notice') return { text: `${e.by === me ? 'We have' : cap(F(other).the) + ' has'} given notice on the ${n.toLowerCase()}: it ends in three convoys.`, cls: 'me' };
+      return { text: `The ${n.toLowerCase()} with ${F(other).the} has ended.`, cls: 'me' };
+    }
+    case 'say':
+      if (e.from === me) return { text: `To ${e.to < 0 ? 'all powers' : F(e.to).the}: "${PHRASES[e.p]}"`, cls: 'me' };
+      if (e.to === me || e.to < 0) return { text: `${F(e.from).short}: "${PHRASES[e.p]}"`, cls: '' };
       return null;
     case 'air':
       if (e.faction === me) return { text: `${e.units} squadron${e.units === 1 ? '' : 's'} take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };

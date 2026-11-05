@@ -8,6 +8,7 @@ import { moraleCap } from './battle';
 import { spiesOnConvoy } from './fog';
 import { linkQuality, railsOnConvoy } from './rails';
 import { calendarTick, hasDoc } from './tech';
+import { allied, diploConvoy } from './diplomacy';
 import { weatherAt } from '../data/terrain';
 import { ownsCont, checkElim, checkMissions } from './missions';
 import type { GameState } from './types';
@@ -109,18 +110,21 @@ function rise(g: GameState, r: GameState['regions'][number]) {
  * two of its own regions) leads back to its capital, a factory region or its home territory. Recomputes `cut` for every region.
  */
 export function updateSupplyLines(g: GameState, announce = false) {
-  const W = world(), N = g.regions.length, src: number[] = [];
-  for (const r of g.regions) if (r.owner >= 0 && r.contested < 0 && (r.capitalOf === r.owner || r.factory || r.home === r.owner)) src.push(r.id);
-  // two passes: over links of full quality (rails, hub-to-hub sea lanes) for full supply, then over any link for thin supply
-  const reach = (min: number) => {
-    const seen = new Uint8Array(N), q = [...src]; for (const i of src) seen[i] = 1;
+  const W = world(), N = g.regions.length;
+  const isSrc = (r: GameState['regions'][number]) => r.owner >= 0 && r.contested < 0 && (r.capitalOf === r.owner || r.factory || r.home === r.owner);
+  // per power, two passes: over links of full quality (rails, hub-to-hub sea lanes) for full supply, then over any link for
+  // thin supply. Supply lines may run through allied regions.
+  const full = new Uint8Array(N), thin = new Uint8Array(N);
+  const reach = (o: number, min: number, out: Uint8Array) => {
+    const seen = new Uint8Array(N), q: number[] = [];
+    for (const r of g.regions) if (r.owner === o && isSrc(r)) { seen[r.id] = 1; q.push(r.id); }
     for (let h = 0; h < q.length; h++) {
-      const i = q[h], o = g.regions[i].owner;
-      for (const j of W.regions[i].adj) if (!seen[j] && g.regions[j].owner === o && linkQuality(g, o, i, j) >= min) { seen[j] = 1; q.push(j); }
+      const i = q[h];
+      for (const j of W.regions[i].adj) { const oj = g.regions[j].owner; if (!seen[j] && (oj === o || allied(g, o, oj)) && linkQuality(g, o, i, j) >= min) { seen[j] = 1; q.push(j); } }
     }
-    return seen;
+    for (let i = 0; i < N; i++) if (seen[i] && g.regions[i].owner === o) out[i] = 1;
   };
-  const full = reach(2), thin = reach(1);
+  for (const f of g.factions) { reach(f.id, 2, full); reach(f.id, 1, thin); }
   for (const r of g.regions) {
     r.supplyQ = r.owner < 0 ? 0 : full[r.id] ? 2 : thin[r.id] ? 1 : 0;
     const cut = r.owner >= 0 && !thin[r.id];
@@ -145,6 +149,7 @@ export function supplyTick(g: GameState) {
   const prevDay = g.day; g.day += 7;
   railsOnConvoy(g);
   calendarTick(g, prevDay);
+  diploConvoy(g);
   updateSupplyLines(g, true);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) {

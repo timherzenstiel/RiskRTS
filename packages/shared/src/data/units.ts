@@ -56,6 +56,8 @@ export const COST = {
   pill: 3, fort: 5, flak: 3, bunk: 6, sand: 1, wire: 2,
   /** Reconnaissance: a cavalry patrol over one border, a reconnaissance flight, a spy. */
   patrol: 1, recon: 3, spy: 4,
+  /** A decoy army marching to deceive rivals. */
+  decoy: 1,
 } as const;
 export const TRENCH_COST = [3, 5, 8] as const;
 export const MAX_TRENCH = 3, MAX_SAND = 2, MAX_WIRE = 2;

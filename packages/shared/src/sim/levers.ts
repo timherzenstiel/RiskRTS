@@ -1,12 +1,15 @@
 // Battle levers: the handful of decisions a commander makes per front while the battle fights itself.
 // Barrage level, over the top, stance, reinforcing a front from a neighbouring region, and withdrawing.
-import { SHELLS, groundUnits, isDef } from '../data/units';
-import { MARCH_MIN, MARCH_SPEED, emit, mkArmy, world } from './core';
+import { COST, FORMATION, SHELLS, groundUnits, isDef } from '../data/units';
+import { recordIntel } from './fog';
+import { setStopAttack } from './diplomacy';
+import { marchFactor } from './rails';
+import { MARCH_MIN, MARCH_SPEED, emit, mkArmy, rnd, world } from './core';
 import { weatherMarch } from './rails';
-import { forceIn, goOverTheTop } from './battle';
+import { forceIn, goOverTheTop, LULL_FROM } from './battle';
 import { formArmy } from './commands';
-import { stanceIn } from './rules';
-import type { Barrage, Battle, GameState, Stance } from './types';
+import { stanceIn, statsOf } from './rules';
+import type { Army, Barrage, Battle, GameState, Stance } from './types';
 
 const live = (g: GameState, id: number): Battle | undefined => g.battles.find(b => b.id === id && !b.ended);
 const fights = (b: Battle, f: number) => b.def === f || b.sides.includes(f);
@@ -57,6 +60,11 @@ export function reinforce(g: GameState, fid: number, from: number, bid: number, 
 export function withdraw(g: GameState, fid: number, bid: number): string | null {
   const b = live(g, bid); if (!b || !fights(b, fid)) return NOT_HERE;
   if (stanceIn(b, fid) === 3) return 'Your troops hold at all costs. Change their stance before ordering a retreat.';
+  return pullOut(g, b, fid);
+}
+setStopAttack((g, bid, f) => { const b = live(g, bid); if (b) pullOut(g, b, f); });
+
+function pullOut(g: GameState, b: Battle, fid: number): string | null {
   const f = forceIn(b, fid, false, g); if (groundUnits(f.u) <= 0) return 'None of your troops are left on this front.';
   const W = world(), adj = W.regions[b.region].adj.filter(j => g.regions[j].owner === fid && j !== b.region);
   if (!adj.length) return 'There is no region of yours next to this front to fall back to.';
@@ -82,4 +90,52 @@ export function produce(g: GameState, fid: number, kind: 'shells', n: number): s
 export function mobilise(g: GameState, fid: number, level: number): string | null {
   if (level !== 0 && level !== 1 && level !== 2) return 'Invalid order.';
   g.factions[fid].mob = level; return null;
+}
+
+/** Days a fake concentration fools rivals (unless they scout it), and battalions a decoy pretends to be. */
+export const DECOY = { days: 35, min: 5, spread: 10 } as const;
+
+/** March a decoy army: no troops, but rivals watching either region see an army on the way. */
+export function decoy(g: GameState, fid: number, from: number, to: number): string | null {
+  const W = world(), A = g.regions[from], B = g.regions[to], f = g.factions[fid];
+  if (!A || !B) return 'Unknown region.';
+  if (A.owner !== fid) return 'Decoys march out of your own regions.';
+  if (!W.regions[from].adj.includes(to)) return `${W.regions[to].name} does not border ${W.regions[from].name}.`;
+  if (f.supply < COST.decoy) return `Not enough supply: a decoy costs ${COST.decoy}.`;
+  f.supply -= COST.decoy;
+  const a = mkArmy(g, fid, from, to, MARCH_SPEED, MARCH_MIN); a.decoy = true; a.fake = DECOY.min + Math.floor(rnd(g) * DECOY.spread);
+  a.dur *= marchFactor(g, fid, from, to).k; g.armies.push(a);
+  return null;
+}
+
+/** A decoy arrives: in an own region it becomes a fake concentration that inflates rivals' estimates; elsewhere it melts away. */
+export function decoyArrives(g: GameState, a: Army) {
+  const t = g.regions[a.to];
+  if (t.owner === a.owner) t.fake = { men: (a.fake ?? 8) * FORMATION.inf.men, day: g.day, until: g.day + DECOY.days };
+}
+
+/** Seconds between two trench raids of one side on the same front. */
+export const RAID_COOLDOWN = 30;
+
+/** A trench raid from a front gone quiet: a battalion risks 10–40% losses to bring back a report and shake the enemy. */
+export function raid(g: GameState, fid: number, bid: number): string | null {
+  const b = live(g, bid); if (!b || !fights(b, fid)) return NOT_HERE;
+  if (b.age - (b.lastJoin ?? 0) < LULL_FROM) return 'Raids go out from fronts that have settled into trench warfare. This one is still in full swing.';
+  if ((b.raidT?.[fid] ?? -1e9) > b.age - RAID_COOLDOWN) return 'The last raid has only just come back. Give the men a moment.';
+  const pick = b.agents.filter(a => a.f === fid && a.type === 'inf' && !a.dead && !a.out);
+  if (!pick.length) return 'No infantry of yours on this front to send.';
+  const a = pick[Math.floor(rnd(g) * pick.length)], s = statsOf(g, fid, 'inf'), k = .1 + rnd(g) * .3;
+  const before = a.hp; a.hp = Math.max(.01 * s.hp, a.hp - s.hp * k);
+  const lost = (before - a.hp) / s.hp * (a.men ?? FORMATION.inf.men);
+  b.lost[fid] = (b.lost[fid] ?? 0) + lost; ((b.lostT ??= {})[fid] ??= { inf: 0, mg: 0, art: 0, tank: 0, plane: 0 }).inf += lost;
+  (b.raidT ??= {})[fid] = b.age;
+  const nests = b.agents.filter(x => x.f !== fid && !x.dead && (x.type === 'pill' || x.type === 'bunk')).length;
+  const ok = rnd(g) < Math.max(.3, .8 - .12 * nests);
+  const target = fid === b.def ? b.from : b.region;
+  if (ok) {
+    for (const f of b.sides) if (f !== fid) b.mor[f] = Math.max(0, (b.mor[f] ?? 70) - 5);
+    if (target >= 0 && g.regions[target].owner !== fid) recordIntel(g, fid, target);
+  }
+  emit(g, { k: 'raid', faction: fid, region: b.region, ok, target });
+  return null;
 }

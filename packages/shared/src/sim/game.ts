@@ -9,6 +9,7 @@ import { arrive } from './commands';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
+import { diploStep } from './diplomacy';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
 import { TICK_SECONDS } from '../data/units';
@@ -32,7 +33,7 @@ export function createGame(opt: GameOptions): GameState {
     v: 4, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
     factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start, men: 0, mob: 0, unrestT: 0 })),
-    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], over: false, winner: null, nextId: 1,
+    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], treaties: [], offers: [], over: false, winner: null, nextId: 1,
     stats: { won: Array(NUM_FACTIONS).fill(0), lost: Array(NUM_FACTIONS).fill(0) },
     events: [], fx: opt.fx === false ? null : [],
   };
@@ -102,7 +103,7 @@ function fill4(s: GameState): GameState {
     if (f.men === undefined) { let m = 0; for (const t of s.regions) if (t.owner === f.id) for (const k of UNIT_TYPES) m += t.men[k]; f.men = Math.round(m * MANPOWER.startMult * nationOf(f.id).pool); }
     f.mob ??= 0; f.unrestT ??= 0;
   }
-  s.railCut ??= {}; s.railNew ??= [];
+  s.railCut ??= {}; s.railNew ??= []; s.treaties ??= []; s.offers ??= [];
   return s;
 }
 
@@ -113,7 +114,7 @@ export function step(g: GameState, dt: number) {
   if (g.supplyT >= TICK_SECONDS) { g.supplyT -= TICK_SECONDS; supplyTick(g); }
   for (let i = g.armies.length - 1; i >= 0; i--) { const a = g.armies[i]; a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); } }
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
-  updateSpies(g); doctrineDeadlines(g);
+  updateSpies(g); doctrineDeadlines(g); diploStep(g);
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) { if (!f.alive || !f.ai) continue; f.aiT -= dt; if (f.aiT <= 0) { f.aiT = (2.5 + rnd(g) * 1.8) * d.ai; aiThink(g, f); } }

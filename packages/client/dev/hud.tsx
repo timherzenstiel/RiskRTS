@@ -9,6 +9,7 @@ import { Feed } from '../src/ui/Feed';
 import { Overlays } from '../src/ui/Overlays';
 import { Toast } from '../src/ui/Toast';
 import { FrontControls } from '../src/ui/FrontCard';
+import { OfferBanner } from '../src/ui/Diplomacy';
 import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
 import '../src/ui/styles.css';
 
@@ -33,6 +34,6 @@ function Card() {
 }
 function Hud() {
   const hasDrawer = useUi(s => s.sel >= 0);
-  return <div id="app" className={hasDrawer ? 'has-drawer' : ''}><TopBar /><Drawer /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
+  return <div id="app" className={hasDrawer ? 'has-drawer' : ''}><TopBar /><Drawer /><OfferBanner /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
 }
 createRoot(document.getElementById('root')!).render(<Hud />);

@@ -5,7 +5,7 @@ import { dateStr, useSim, useUi } from '../game/store';
 import { buildWorld } from '@riskrts/shared';
 import { click } from './actions';
 import { Scoreboard } from './Scoreboard';
-import { MenuIcon, PauseIcon } from './icons';
+import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
 
 const SPEEDS = [1, 2, 4];
 
@@ -65,6 +65,7 @@ export function TopBar() {
           ) : (
             <span className="speedro" title="The host controls the game speed">{speed === 0 ? 'Paused' : `${speed}×`}</span>
           )}
+          <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
           <button className="ico" aria-label="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
         </div>
       </div>

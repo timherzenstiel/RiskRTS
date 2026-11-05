@@ -19,6 +19,7 @@ export * from './sim/battle';
 export * from './sim/levers';
 export * from './sim/rails';
 export * from './sim/tech';
+export * from './sim/diplomacy';
 export * from './sim/rules';
 export * from './sim/fog';
 export * from './sim/events';

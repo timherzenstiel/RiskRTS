@@ -47,6 +47,7 @@ class WorldRenderer implements WorldRendererApi {
   private readonly water: Water;
   private readonly shroud: Shroud;
   private readonly meshes: MeshPools;
+  private cursorCls = '';
   private readonly lit: Pool; private readonly glow: Pool;
   private readonly detail: GroundDetail;
   private readonly lines: LineBatch;
@@ -116,7 +117,8 @@ class WorldRenderer implements WorldRendererApi {
     this.curOwner = new Int16Array(R).fill(-2); this.curHl = new Int8Array(R).fill(-1); this.dirty = new Uint8Array(R);
     this.rig.snap();
 
-    this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); });
+    this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); },
+      (id) => { cb.onSelect(id); const u = useUi.getState(), st = this.session?.state; if (st && st.regions[id].owner === this.session!.me) u.setTab('deploy'); });
     this.labelCtx = {
       g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
@@ -207,7 +209,15 @@ class WorldRenderer implements WorldRendererApi {
     const dt = clamp(dtReal, 0, .05), ui = useUi.getState(), s = this.session, g = s ? s.state : null;
     this.now += dt; this.frameNo++;
     if (ui.quality !== this.lastStoreQ) { this.lastStoreQ = ui.quality; if (ui.quality !== this.quality) this.setQuality(ui.quality); }
-    if (ui.orderMode !== this.orderCursor) { this.orderCursor = ui.orderMode; this.canvas.classList.toggle('order', ui.orderMode); }
+    { // context cursor: attack / march / air / no-go while giving orders, spade while fortifying, binoculars over unknown land
+      let c = '';
+      const me = s?.me ?? -1, hov = ui.hover, sel = ui.sel, rs = g && hov >= 0 ? g.regions[hov] : null;
+      if (ui.orderMode) c = ui.orderKind === 'air' ? 'c-air' : !rs ? 'c-no' : sel >= 0 && !this.world.regions[sel].adj.includes(hov) ? 'c-no' : rs.owner === me ? 'c-move' : 'c-atk';
+      else if (ui.tab === 'fort' && sel >= 0 && g?.regions[sel].owner === me) c = 'c-fort';
+      else if (rs && rs.owner !== me && (rs.vis ?? 3) < 2) c = 'c-scout';
+      if (c !== this.cursorCls) { if (this.cursorCls) this.canvas.classList.remove(this.cursorCls); if (c) this.canvas.classList.add(c); this.cursorCls = c; }
+      if (ui.orderMode !== this.orderCursor) { this.orderCursor = ui.orderMode; this.canvas.classList.toggle('order', ui.orderMode); }
+    }
 
     const [px, pz] = this.input.pan();
     this.rig.update(dt, px, pz);

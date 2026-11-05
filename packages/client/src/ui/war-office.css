@@ -388,3 +388,22 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 #labels.band0 .tl .nm{font-size:12.5px;letter-spacing:.12em}
 #labels.band0 .tl .bd{display:none}
 @media (max-width:760px){ .radar .zoom-seg{display:none} }
+
+/* ---- cursors (design §3.4) ---- */
+#view{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24"%3E%3Cpath d="M2 2l0 18 5-5 4 8 3-1.5-4-8 7 0z" fill="%23d4b060" stroke="%231b1407" stroke-width="1.5" stroke-linejoin="round"/%3E%3C/svg%3E") 2 2,default}
+#view.drag{cursor:grabbing}
+#view.c-atk{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Cg fill="none" stroke="%23000" stroke-width="4"%3E%3Ccircle cx="16" cy="16" r="9"/%3E%3Cpath d="M16 2v8M16 22v8M2 16h8M22 16h8"/%3E%3C/g%3E%3Cg fill="none" stroke="%23e0553f" stroke-width="2"%3E%3Ccircle cx="16" cy="16" r="9"/%3E%3Cpath d="M16 2v8M16 22v8M2 16h8M22 16h8"/%3E%3C/g%3E%3Ccircle cx="16" cy="16" r="2" fill="%23e0553f"/%3E%3C/svg%3E") 16 16,crosshair}
+#view.c-move{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Cpath d="M10 4h7v14l9 3v5H8z" fill="%239fe070" stroke="%230c1208" stroke-width="2" stroke-linejoin="round"/%3E%3Cpath d="M8 26h18" stroke="%230c1208" stroke-width="2"/%3E%3C/svg%3E") 12 26,pointer}
+#view.c-air{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Cg fill="none" stroke="%23000" stroke-width="4"%3E%3Cpath d="M16 3v26M3 16h26"/%3E%3Crect x="9" y="9" width="14" height="14"/%3E%3C/g%3E%3Cg fill="none" stroke="%23e0a83a" stroke-width="2"%3E%3Cpath d="M16 3v26M3 16h26"/%3E%3Crect x="9" y="9" width="14" height="14"/%3E%3C/g%3E%3C/svg%3E") 16 16,crosshair}
+#view.c-no{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="28" height="28"%3E%3Ccircle cx="14" cy="14" r="10" fill="none" stroke="%23000" stroke-width="5"/%3E%3Ccircle cx="14" cy="14" r="10" fill="none" stroke="%23c8402e" stroke-width="3"/%3E%3Cpath d="M7 7l14 14" stroke="%23c8402e" stroke-width="3"/%3E%3C/svg%3E") 14 14,not-allowed}
+#view.c-fort{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Cpath d="M20 2h6v4h-2v9h-2V6h-2z" fill="%236b4a2c" stroke="%231b1407"/%3E%3Cpath d="M19 15h8l-1 9-3 4-3-4z" fill="%23a8abae" stroke="%231b1407" stroke-width="1.5"/%3E%3C/svg%3E") 23 28,cell}
+#view.c-scout{cursor:url("data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Cg stroke="%230c1208" stroke-width="1.5"%3E%3Crect x="5" y="10" width="9" height="14" rx="3" fill="%233a3c36"/%3E%3Crect x="18" y="10" width="9" height="14" rx="3" fill="%233a3c36"/%3E%3Crect x="13" y="13" width="6" height="5" fill="%23d4b060"/%3E%3C/g%3E%3Ccircle cx="9.5" cy="21" r="2.6" fill="%239fe070"/%3E%3Ccircle cx="22.5" cy="21" r="2.6" fill="%239fe070"/%3E%3C/svg%3E") 16 16,help}
+#labels .tl.cp{cursor:pointer}
+#labels .tl.cp:hover .n{box-shadow:0 0 0 1px #000,0 0 0 2px var(--brass-hi)}
+
+/* ---- Red Alert look: blued steel instead of olive gunmetal ---- */
+#app.look-ra{--plate:#3a3f46;--plate-hi:#5d6570;--plate-lo:#1c2026;--plate-2:#2e333a;--well:#15181c;--brass:#7d97b8;--brass-hi:#a9c2e0;--brass-lo:#4c5f78;--khaki:#d5dbe2;--accent:#a9c2e0;--lcd:#8fd6ff;--lcd-dim:#3e6f8e;--lcd-bg:#081018}
+#app.look-ra .glass,#app.look-ra .plate{background:var(--rv) 3px 3px/10px 10px no-repeat,var(--rv) calc(100% - 3px) 3px/10px 10px no-repeat,var(--rv) 3px calc(100% - 3px)/10px 10px no-repeat,var(--rv) calc(100% - 3px) calc(100% - 3px)/10px 10px no-repeat,var(--brushed),linear-gradient(180deg,#464c55,#373c44 60%,#2d3238)}
+#app.look-ra #top.strip{background:var(--brushed),linear-gradient(180deg,#4b525c,#3a4048 60%,#2c3137)}
+#app.look-ra .seg button[aria-pressed=true],#app.look-ra #side .tab[aria-selected=true],#app.look-ra .btn.primary{background:linear-gradient(180deg,#a9c2e0,#6f8bb0);color:#0a1420;border-color:#2a3a50}
+#app.look-ra .lcd b,#app.look-ra .ticker{text-shadow:0 0 7px rgba(143,214,255,.5)}

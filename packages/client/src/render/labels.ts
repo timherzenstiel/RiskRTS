@@ -59,7 +59,8 @@ export class Labels {
   setLayer(l: number) { if (l === this.layer) return; this.layer = l; this.root.classList.toggle('ly1', l === 1); this.root.classList.toggle('ly2', l === 2); }
 
   constructor(private readonly root: HTMLElement, private readonly world: World, private readonly cities: CityInfo[], private readonly cityH: (c: CityInfo) => number,
-    private readonly onBattleClick: (regionId: number, battleId: number) => void) {
+    private readonly onBattleClick: (regionId: number, battleId: number) => void,
+    private readonly onCorpsClick: (regionId: number, post: number) => void = () => {}) {
     this.regions = world.regions.map((r) => {
       const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="bd"></span><span class="nm"></span>';
       const n = el.children[0] as HTMLSpanElement, bd = el.children[1] as HTMLSpanElement, nm = el.children[2] as HTMLSpanElement; nm.textContent = r.name; root.appendChild(el);
@@ -148,6 +149,8 @@ export class Labels {
         let l = this.corps.get(key);
         if (!l) {
           const el = document.createElement('div'); el.className = 'tl cp'; el.innerHTML = '<span class="n"></span><span class="nm"></span>';
+          const rid = r.id; el.style.pointerEvents = 'auto'; el.title = 'Open the deployment of this region';
+          el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.onCorpsClick(rid, post); });
           this.root.appendChild(el); l = { el, n: el.children[0] as HTMLSpanElement, nm: el.children[1] as HTMLSpanElement, key: '', shown: true, tf: '', seen: 0 }; this.corps.set(key, l);
         }
         l.seen = ctx.frame;

@@ -57,7 +57,7 @@ function Fatal() {
 
 export function Game() {
   useGameKeys();
-  const hasDrawer = useUi(s => s.sel >= 0); const session = useUi(s => s.session); const over = useSim()?.g.over ?? false;
+  const hasDrawer = useUi(s => s.sel >= 0); const look = useUi(s => s.look); const session = useUi(s => s.session); const over = useSim()?.g.over ?? false;
 
   // Single-player autosave every 45 s of play (the wall clock only advances while the game is not paused).
   useEffect(() => {
@@ -71,7 +71,7 @@ export function Game() {
   useEffect(() => { if (offer && !useUi.getState().overlay) useUi.getState().setOverlay('doctrine'); }, [offer]);
 
   return (
-    <div id="app" className={hasDrawer ? 'has-drawer' : ''}>
+    <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (look ? ' look-ra' : '')}>
       <Stage />
       <TopBar />
       <Sidebar />

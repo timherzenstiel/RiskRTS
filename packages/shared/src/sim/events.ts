@@ -1,6 +1,7 @@
 // Turns structured game events into text for a given viewer, so server and clients phrase them identically.
 import { FACTIONS, cap } from '../data/factions';
 import { world } from './core';
+import { techDef, doctrineDef } from '../data/tech';
 import type { GameEvent, GameState } from './types';
 
 export interface Described { text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
@@ -51,6 +52,17 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (e.owner === me) return { text: e.by === 'air' ? `Enemy bombers have cut the railways of ${R(e.region)}.` : `Saboteurs have blown up a railway line in ${R(e.region)}.`, cls: 'bad', region: e.region };
       return null;
     case 'railBuilt': return e.faction === me ? { text: `The railway between ${R(e.a)} and ${R(e.b)} is open.`, cls: 'good', region: e.b } : null;
+    case 'tech': return e.faction === me ? { text: `New in the field: ${techDef(e.tech).name}. ${techDef(e.tech).desc}.`, cls: 'good' } : null;
+    case 'docOffer': return e.faction === me ? { text: `${e.year}: the General Staff asks for this year's doctrine.`, cls: 'me' } : null;
+    case 'doctrine': return e.faction === me ? { text: `Doctrine adopted: ${doctrineDef(e.doc).name}.`, cls: 'me' } : { text: `${cap(F(e.faction).the)} adopts ${doctrineDef(e.doc).name.toLowerCase()}.`, cls: '' };
+    case 'bombed':
+      if (e.faction === me) return { text: `Our bombers hit the factory of ${R(e.region)}. It will be out of action for three convoys.`, cls: 'good', region: e.region };
+      if (e.owner === me) return { text: `Enemy bombers have wrecked the factory of ${R(e.region)}.`, cls: 'bad', region: e.region };
+      return null;
+    case 'fallback':
+      if (e.faction === me) return { text: `Our defenders at ${R(e.region)} fall back to the second line and steady.`, cls: 'me', region: e.region };
+      if (g.battles.some(b => b.region === e.region && b.sides.includes(me))) return { text: `The enemy at ${R(e.region)} falls back to a second line.`, cls: '', region: e.region };
+      return null;
     case 'air':
       if (e.faction === me) return { text: `${e.units} squadron${e.units === 1 ? '' : 's'} take off from ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to };
       if (g.regions[e.to].owner === me) return { text: `Enemy aircraft spotted heading for ${R(e.to)}!`, cls: 'bad', region: e.to };

@@ -1,7 +1,7 @@
 // The order tabs of the region drawer: Recruit, Build, Fortify, March (with air strikes and reconnaissance).
 import {
   AIR_RANGE, COST, DT, FACTIONS, FORMATION, MAX_SAND, MAX_TRENCH, MAX_WIRE, SHELLS, SLOT_USE, UNIT_TYPES, UT, buildWorld, fortCost, groundUnits, hops, offensives, slotsMax, slotsUsed, worksAt,
-  nationalUnit, NATIONS, unitCost, unitName, buildCostOf, RAIL_BUILD, hasRail, isMountain, monthStr,
+  nationalUnit, NATIONS, unitCost, unitName, buildCostOf, RAIL_BUILD, hasRail, isMountain, monthStr, techOn, techDayFor,
   type FortKind, type RegionState, type UnitType,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -29,14 +29,15 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
       {pool < FORMATION.inf.men && <p className="note budget full">The manpower pool is nearly empty ({Math.floor(pool)} men). Mobilise on the nation screen, or wait for the next age class.</p>}
       {UNIT_TYPES.map((k, i) => {
         const c = unitCost(g, me, k), men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
-        const locked = (k === 'tank' && !region.factory) || (k === 'plane' && !region.airfield) || region.cut || !!region.strike;
+        const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
+        const locked = !!early || (k === 'tank' && !region.factory) || (k === 'plane' && !region.airfield) || region.cut || !!region.strike;
         const noMen = pool < men;
         return (
           <div className={'it' + (nat ? ' nat' : '')} key={k}>
             <span className="ic"><Icon k={k} /></span>
-            <div className="tx"><b>{unitName(g, me, k)}<kbd>{i + 1}</kbd></b><small>{nat ? NATIONS[me].unitDesc : UDESC[k]} · {men} men</small></div>
+            <div className="tx"><b>{unitName(g, me, k)}<kbd>{i + 1}</kbd></b><small>{early ? `Arrives ${monthStr(techDayFor(me, tech!, g.factions[me].rushed))} · see the war calendar` : `${nat ? NATIONS[me].unitDesc : UDESC[k]} · ${men} men`}</small></div>
             <div className="buys">
-              <button className="buy" disabled={supply < c || locked || noMen} title={locked ? (region.cut ? 'Cut off from supply' : region.strike ? 'On strike' : `Build ${k === 'tank' ? 'a factory' : 'an airfield'} here first`) : noMen ? `Needs ${men} men from the pool` : `Raise one ${FORMATION[k].one} (Shift-click raises 5)`}
+              <button className="buy" disabled={supply < c || locked || noMen} title={locked ? (early ? 'Not available yet' : region.cut ? 'Cut off from supply' : region.strike ? 'On strike' : `Build ${k === 'tank' ? 'a factory' : 'an airfield'} here first`) : noMen ? `Needs ${men} men from the pool` : `Raise one ${FORMATION[k].one} (Shift-click raises 5)`}
                 aria-label={`Raise one ${FORMATION[k].one}, costs ${c}`} onClick={e => recruit(id, k, e.shiftKey ? 5 : 1)}>+1 <SupplyIcon />{c}</button>
               <button className="buy five" disabled={supply < c * 5 || locked || pool < men * 5} aria-label={`Raise five ${FORMATION[k].many}, costs ${c * 5}`} onClick={() => recruit(id, k, 5)}>×5</button>
             </div>
@@ -66,7 +67,7 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
     <>
       <BuildRow icon="factory" name="Factory" desc={`+2 supply and +${NATIONS[sim.me].factoryShells} shells per convoy · unlocks tanks · a supply depot`} label={region.factory ? 'Built' : <><SupplyIcon />{buildCostOf(sim.me, 'factory')}</>} disabled={region.factory || supply < buildCostOf(sim.me, 'factory')} onBuy={() => build(id, 'factory')} />
       <BuildRow icon="barracks" name="Barracks" desc="One volunteer battalion per convoy (stops when the war weariness is high)" label={region.barracks ? 'Built' : <><SupplyIcon />{COST.barracks}</>} disabled={region.barracks || supply < COST.barracks} onBuy={() => build(id, 'barracks')} />
-      <BuildRow icon="airfield" name="Airfield" desc="Unlocks squadrons and reconnaissance flights here" label={region.airfield ? 'Built' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || supply < COST.airfield} onBuy={() => build(id, 'airfield')} />
+      {(() => { const early = !techOn(sim.g, sim.me, 'air'); return <BuildRow icon="airfield" name="Airfield" desc={early ? `Military aviation arrives ${monthStr(techDayFor(sim.me, 'air', sim.g.factions[sim.me].rushed))}` : 'Unlocks squadrons and reconnaissance flights here'} label={region.airfield ? 'Built' : early ? 'Later' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || early || supply < COST.airfield} onBuy={() => build(id, 'airfield')} />; })()}
       <Railways region={region} id={id} />
       <div className="lbl"><span>Munitions · {Math.floor(sim.g.factions[sim.me].shells ?? 0)} shells in stock</span></div>
       <div className="it">
@@ -127,11 +128,13 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
         <>
           <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `Works facing ${W.regions[sector].name} only fight attacks from there · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
           {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
-            const c = fortCost(region, k, sector), w = worksAt(region, sector);
+            const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
+            const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
+            const early = need && !techOn(g, me, need);
             const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
             const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
-            const label = c === null ? 'Max' : !room ? 'Full' : <><SupplyIcon />{c}</>;
-            return <BuildRow key={k} icon={k} name={FNAME[k]} pips={pips} desc={FDESC[k]} label={label} disabled={c === null || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
+            const label = c === null ? 'Max' : early ? 'Later' : !room ? 'Full' : <><SupplyIcon />{c}</>;
+            return <BuildRow key={k} icon={k} name={FNAME[k]} pips={pips} desc={early ? `Arrives ${monthStr(techDayFor(me, need!, g.factions[me].rushed))}` : FDESC[k]} label={label} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
           })}
         </>
       ) : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}

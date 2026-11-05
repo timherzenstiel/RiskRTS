@@ -3,16 +3,21 @@
 import { AS, COST, isDef, type AgentType, type UnitStats, type UnitType } from '../data/units';
 import { nationOf, nationalUnit } from '../data/nations';
 import { isMountain, weatherAt } from '../data/terrain';
+import { hasDoc, techOn } from './tech';
 import type { Agent, Battle, GameState, Stance } from './types';
 
 const statCache = new Map<string, UnitStats>();
 /** Stats of a unit or defence type as fielded by a power on the current day (national variants included). */
 export function statsOf(g: GameState, f: number, t: AgentType): UnitStats {
   if (isDef(t)) return AS(t);
-  const nat = nationalUnit(f, t, g.day), key = f + t + (nat ? 1 : 0);
+  const nat = nationalUnit(f, t, g.day);
+  // technologies and doctrines that change a unit's stats
+  const tk2 = t === 'tank' && techOn(g, f, 'tank2'), air2 = t === 'plane' && techOn(g, f, 'air2'), airD = t === 'plane' && hasDoc(g, f, 'air'), inf = t === 'inf' && hasDoc(g, f, 'infiltration');
+  const key = f + t + (nat ? 1 : 0) + (tk2 ? 2 : 0) + (air2 ? 4 : 0) + (airD ? 8 : 0) + (inf ? 16 : 0);
   let s = statCache.get(key); if (s) return s;
   const b = AS(t), m = nat ? nationOf(f).mult : {};
-  s = { ...b, hp: b.hp * (m.hp ?? 1), dmg: b.dmg * (m.dmg ?? 1), rof: b.rof * (m.rof ?? 1), speed: b.speed * (m.speed ?? 1) };
+  const hp = (tk2 ? 1.3 : 1) * (air2 ? 1.2 : 1) * (airD ? 1.3 : 1), dmg = (air2 ? 1.2 : 1) * (airD ? 1.3 : 1);
+  s = { ...b, hp: b.hp * (m.hp ?? 1) * hp, dmg: b.dmg * (m.dmg ?? 1) * dmg, rof: b.rof * (m.rof ?? 1), speed: b.speed * (m.speed ?? 1) * (inf ? 1.15 : 1) };
   statCache.set(key, s); return s;
 }
 
@@ -39,15 +44,28 @@ export function takenMod(g: GameState, b: Battle, t: Agent): number {
 }
 /** Speed factor of attackers crawling through barbed wire (storm battalions cross most of it unhindered). */
 export function wireSlow(g: GameState, f: number, t: AgentType): number {
-  return t === 'inf' && nationOf(f).flags.storm && nationalUnit(f, 'inf', g.day) ? 1 - .5 * .4 : .5;
+  if (t !== 'inf') return .5;
+  if (nationOf(f).flags.storm && nationalUnit(f, 'inf', g.day)) return 1 - .5 * .4;
+  return hasDoc(g, f, 'infiltration') ? 1 - .5 * .7 : .5;
 }
+/** Shells per gun shot relative to the base (artillery dominance saves a quarter). */
+export const shellMod = (g: GameState, f: number) => hasDoc(g, f, 'artillery') ? .75 : 1;
+/** Extra trench depth counted in battle for the defenders (defence in depth: a second line). */
+export const depthBonus = (g: GameState, f: number) => hasDoc(g, f, 'depth') ? 1 : 0;
+/** Combined arms: a side with tanks and infantry on one front hits harder (from 1918; more with the doctrine). */
+export function combinedMod(g: GameState, f: number, hasBoth: boolean) {
+  if (!hasBoth) return 1;
+  return hasDoc(g, f, 'combined') ? 1.25 : techOn(g, f, 'combined') ? 1.1 : 1;
+}
+/** War weariness from losses (peace offensive takes 30% off). */
+export const wwLossMod = (g: GameState, f: number) => nationOf(f).wwLoss * (hasDoc(g, f, 'peace') ? .7 : 1);
 /** Suppression a shell from side `f` causes, relative to the base. */
 export const suppMod = (_g: GameState, f: number) => nationOf(f).flags.krupp ? 1.1 : 1;
 /** Morale loss multiplier when holding at all costs. */
 export const holdMorale = (f: number) => nationOf(f).hold;
 
 /** Supply cost of a unit for a power. */
-export const unitCost = (_g: GameState, f: number, t: UnitType) => t === 'tank' ? Math.round(COST.tank * nationOf(f).tankCost) : COST[t];
+export const unitCost = (g: GameState, f: number, t: UnitType) => t === 'tank' ? Math.round(COST.tank * nationOf(f).tankCost * (hasDoc(g, f, 'tankcorps') ? .7 : 1)) : COST[t];
 /** Supply cost of a building for a power. */
 export const buildCostOf = (f: number, kind: 'factory' | 'barracks' | 'airfield') => COST[kind] + (kind === 'factory' ? nationOf(f).factoryCost : 0);
 

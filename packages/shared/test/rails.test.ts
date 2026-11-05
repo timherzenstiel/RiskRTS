@@ -53,6 +53,7 @@ describe('rail network', () => {
     expect(applyCommand(g, 0, { t: 'sabotage', region: D, to: P })).toBeNull();
     expect(railOpen(g, D, P)).toBe(false); expect(g.spies[0].hot).toBeGreaterThan(g.day);
     g.regions[F].units.plane = 3; g.regions[F].airfield = true; fill(g);
+    expect(applyCommand(g, 0, { t: 'air', from: F, to: D, frac: 1, rail: true })).toMatch(/not available/); g.day = dayOf(1917, 6);
     expect(applyCommand(g, 0, { t: 'air', from: F, to: D, frac: 1, rail: true })).toBeNull();
     run(g, 8); expect(railOpen(g, D, id('Austria-Hungary'))).toBe(false);
     run(g, 20 * 4); expect(railOpen(g, D, P)).toBe(true);

@@ -586,3 +586,23 @@ button.ww:hover b{color:var(--accent)}
 .wx.w3{background:rgba(230,170,80,.22);color:#f2cf8e}
 .clock .wx{margin-left:-4px}
 .wk.rail{border-color:rgba(233,220,180,.4)}
+/* war calendar and doctrines */
+.datebtn{background:transparent;border:0;color:inherit;font:inherit;cursor:pointer;padding:0;text-decoration:underline dotted rgba(255,255,255,.3);text-underline-offset:4px}
+.datebtn:hover{color:var(--accent)}
+.cal{display:flex;flex-direction:column;gap:4px;max-height:44vh;overflow:auto;margin:6px 0 10px}
+.cr{display:grid;grid-template-columns:86px 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.18)}
+.cr.on{opacity:.65}
+.cr .cd{font:600 13px var(--f-head);color:var(--accent)}
+.cr.on .cd{color:#9fd49a}
+.cr .ct{display:flex;flex-direction:column}
+.cr .ct small{color:var(--mute);font-size:12px}
+.docs-all{display:flex;flex-direction:column;gap:4px;font-size:13px;margin-bottom:8px}
+.docs-all div{display:flex;gap:8px;align-items:center}
+.docs-all div.me b{color:var(--accent)}
+.docs-all span{color:var(--mute)}
+.doctrines{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.doc{text-align:left;border:1px solid var(--line);background:rgba(0,0,0,.22);border-radius:10px;padding:12px 14px;color:var(--fg);cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.doc:hover,.doc:focus-visible{border-color:var(--accent)}
+.doc b{font:700 17px var(--f-head);display:flex;gap:8px;align-items:center}
+.doc small{color:var(--mute);font-size:13px}
+.cr .ct small,.doc small,.aar-list button small,.nstats span,.brief dd{text-transform:none;letter-spacing:0;font-weight:400}

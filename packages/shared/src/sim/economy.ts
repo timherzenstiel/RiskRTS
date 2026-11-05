@@ -7,6 +7,7 @@ import { addUnits } from './commands';
 import { moraleCap } from './battle';
 import { spiesOnConvoy } from './fog';
 import { linkQuality, railsOnConvoy } from './rails';
+import { calendarTick, hasDoc } from './tech';
 import { weatherAt } from '../data/terrain';
 import { ownsCont, checkElim, checkMissions } from './missions';
 import type { GameState } from './types';
@@ -28,6 +29,8 @@ export const CUT_WEAR = .08, CUT_MORALE = 10;
 /** War weariness that fades per convoy (none under general mobilisation). */
 export const WW_FADE = 1.5;
 
+/** A bombed factory produces nothing until it is repaired. */
+export const bombedNow = (g: GameState, r: GameState['regions'][number]) => (r.bombed ?? -1) > g.day;
 /** Regions that pay: held, not contested, supplied and not on strike. */
 const paying = (g: GameState, fid: number) => g.regions.filter(r => controls(r, fid) && !r.cut && !r.strike);
 
@@ -36,7 +39,8 @@ export function income(g: GameState, fid: number): number {
   const mine = paying(g, fid), W = world();
   let v = Math.max(3, landIncome(mine.length));
   for (const k of CONT_KEYS) if (ownsCont(g, fid, k)) v += CONT[k].bonus;
-  v += 2 * mine.filter(r => r.factory).length;
+  v += 2 * mine.filter(r => r.factory && !bombedNow(g, r)).length;
+  if (hasDoc(g, fid, 'total')) v *= 1.3;
   if (nationOf(fid).flags.empire) v += mine.filter(r => W.regions[r.id].cont !== 'EU').length;
   const ww = g.factions[fid]?.ww ?? 0;
   return Math.max(1, Math.round(v * (1 - WW_INCOME * ww / 100)));
@@ -45,7 +49,7 @@ export function income(g: GameState, fid: number): number {
 /** Shells per convoy: a base output plus every supplied factory and the capital. */
 export function shellIncome(g: GameState, fid: number): number {
   const N = nationOf(fid); let v = SHELLS.base;
-  for (const r of paying(g, fid)) { if (r.factory) v += N.factoryShells; if (r.capitalOf === fid) v += SHELLS.capital; }
+  for (const r of paying(g, fid)) { if (r.factory && !bombedNow(g, r)) v += N.factoryShells; if (r.capitalOf === fid) v += SHELLS.capital; }
   const m = N.shells * (N.shellsUntil && g.day < N.shellsUntil[0] ? N.shellsUntil[1] : 1);
   return Math.max(1, Math.round(v * m));
 }
@@ -57,7 +61,7 @@ export const MANPOWER = { growth: 20, mobGrowth: .5, mobWW: .5, startMult: 3, st
 export function poolGrowth(g: GameState, fid: number): number {
   const N = nationOf(fid), f = g.factions[fid]; let n = 0;
   for (const r of g.regions) if (r.home === fid && controls(r, fid) && !r.strike) n++;
-  let v = n * MANPOWER.growth * N.growth * (1 + MANPOWER.mobGrowth * (f?.mob ?? 0));
+  let v = n * MANPOWER.growth * N.growth * (1 + MANPOWER.mobGrowth * (f?.mob ?? 0)) * (hasDoc(g, fid, 'mass') ? 1.5 : 1);
   if (N.growthUntil && g.day < N.growthUntil[0]) v *= N.growthUntil[1];
   return Math.round(v);
 }
@@ -138,13 +142,14 @@ export const HOLDOUT_WEAR = .065;
 
 /** A convoy reaches every power at the same moment. */
 export function supplyTick(g: GameState) {
-  g.day += 7;
+  const prevDay = g.day; g.day += 7;
   railsOnConvoy(g);
+  calendarTick(g, prevDay);
   updateSupplyLines(g, true);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) {
     if (!f.alive) continue; const inc = income(g, f.id); f.supply += f.ai ? Math.round(inc * d.inc) : inc; f.shells = (f.shells ?? 0) + shellIncome(g, f.id);
-    f.men = (f.men ?? 0) + poolGrowth(g, f.id); f.ww = Math.min(100, f.ww + MANPOWER.mobWW * (f.mob ?? 0));
+    f.men = (f.men ?? 0) + poolGrowth(g, f.id); f.ww = Math.min(100, f.ww + MANPOWER.mobWW * (f.mob ?? 0) + (hasDoc(g, f.id, 'total') ? 1 : 0));
   }
   for (const r of g.regions) {
     const f = g.factions[r.owner];

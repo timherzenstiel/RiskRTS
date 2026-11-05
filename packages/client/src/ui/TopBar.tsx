@@ -54,7 +54,7 @@ export function TopBar() {
 
       <div className="right">
         <div className="glass clock">
-          <span id="date">{dateStr(g.day)}</span>
+          <button id="date" className="datebtn" title="War calendar: unlocks, rushes and doctrines" onClick={() => { click(); ui().setOverlay('calendar'); }}>{dateStr(g.day)}</button>
           {(() => { const sel = useUi.getState().sel, at = sel >= 0 ? sel : g.regions.find(r => r.capitalOf === me)?.id ?? 0, w = weatherAt(at, g.day);
             return <span className={'wx w' + w} title={`Weather in ${buildWorld().regions[at].name}: ${WEATHER[w]}${w === 1 ? ' · marches and assaults 30% slower, shells sink into the mud' : w === 2 ? ' · marches 40% slower, cut-off troops wear down twice as fast' : w === 3 ? ' · cut-off troops wear down 50% faster' : ''}`}>{WEATHER[w]}</span>; })()}
           {session.canControlTime ? (

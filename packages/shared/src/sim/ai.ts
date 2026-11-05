@@ -5,6 +5,9 @@ import { forcePower, frontsOf, hops, offensives, rnd, worksAt, world } from './c
 import { assault, build, fortify, patrol, recon, recruit, sabotage, sendAir, sendArmy, shift, spy } from './commands';
 import { buildRail, hasRail, railOpen } from './rails';
 import { activeSpies } from './fog';
+import { rush, techOn } from './tech';
+import { TECH, techDayFor, type TechKey } from '../data/tech';
+import { dateOf } from '../data/calendar';
 import { charge, mobilise, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
 import { nationOf } from '../data/nations';
 import { unitCost } from './rules';
@@ -47,6 +50,7 @@ export function aiThink(g: GameState, f: FactionState) {
   levers(g, f, mine);
   manpower(g, f);
   railways(g, f, mine);
+  research(g, f);
   const P = nationOf(f.id).ai, W = world();
   const cap = g.cfg?.attackCap ?? 0;
   let guard = 50;
@@ -218,4 +222,17 @@ function railways(g: GameState, f: FactionState, mine: RegionState[]) {
       if (tgt) sendAir(g, f.id, base.id, tgt.id, .5, true);
     }
   }
+  if (techOn(g, f.id, 'bomb') && rnd(g) < .05) {
+    const base = mine.find(t => t.units.plane >= 2 && t.battle < 0);
+    const tgt = base && g.regions.find(r => r.owner !== f.id && r.factory && (r.vis ?? 3) >= 1 && !r.defs.some(d => d.k === 'flak') && Math.abs(W.regions[r.id].cx - W.regions[base.id].cx) < 30 && W.regions[base.id].adj.some(j => j === r.id || W.regions[j].adj.includes(r.id)));
+    if (base && tgt) sendAir(g, f.id, base.id, tgt.id, .6, false, true);
+  }
+}
+
+/** Once a year, a rich power rushes the next development it cares about (tanks for those who like them, else aviation or bunkers). */
+function research(g: GameState, f: FactionState) {
+  if (f.supply < 40 || f.rushY === dateOf(g.day).y || rnd(g) > .1) return;
+  const want: TechKey[] = nationOf(f.id).ai.doctrines.includes('tankcorps') ? ['tank', 'air', 'trench3'] : ['air', 'trench3', 'tank', 'heavy'];
+  const k = want.find(t => !techOn(g, f.id, t) && techDayFor(f.id, t, f.rushed) - g.day < 400 && TECH.some(x => x.key === t));
+  if (k) rush(g, f.id, k);
 }

@@ -86,7 +86,7 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   return {
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
     factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false,
-    supplyQ: undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
+    supplyQ: undefined, bombed: vis >= 1 ? r.bombed : undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
     vis, seen: known ? known.day : undefined, est: vis >= 1 ? estimate(g, r) : undefined,
   };
 }

@@ -62,6 +62,7 @@ describe('manpower', () => {
     expect(g.factions[0].men).toBe(m0 - 200);
     g.factions[0].men = 50;
     expect(applyCommand(g, 0, { t: 'recruit', region: r.id, unit: 'inf' })).toMatch(/manpower/);
+    g.day = dayOf(1918, 6);
     expect(applyCommand(g, 0, { t: 'recruit', region: r.id, unit: 'tank' })).toBeNull(); // a tank platoon is only 25 men
     expect(g.factions[0].men).toBe(25);
   });

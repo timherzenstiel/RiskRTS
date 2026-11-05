@@ -66,6 +66,9 @@ export function Game() {
     return () => clearInterval(t);
   }, [session]);
   useEffect(() => { if (over && session?.kind === 'local') lsDel(SAVE_KEY); }, [over, session]);
+  // a new war year: the General Staff asks for a doctrine (opens once per offer, when no other sheet is up)
+  const offer = useSim()?.g.factions[session?.me ?? 0]?.docOffer;
+  useEffect(() => { if (offer && !useUi.getState().overlay) useUi.getState().setOverlay('doctrine'); }, [offer]);
 
   return (
     <div id="app" className={hasDrawer ? 'has-drawer' : ''}>

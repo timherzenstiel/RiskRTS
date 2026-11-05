@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATION, UNIT_TYPES, WIRE_HP, applyCommand, buildWorld, consolidate, createGame, emptyUnits, fogView, frontsOf, migrateState, run, slotsUsed, startBattle, step,
-  updateSupplyLines, visibility, worksAt, income, type GameState,
+  updateSupplyLines, visibility, worksAt, income, dayOf, type GameState,
 } from '../src';
 
 const W = buildWorld();
@@ -15,6 +15,7 @@ function setup(seed = 21) {
   const A = id('France'), B = id('Germany');
   g.regions[A].owner = 0; g.regions[A].home = 0; g.regions[B].owner = 1; g.regions[B].home = 1;
   g.factions.forEach(f => { f.supply = 100; f.mission = null; });
+  g.day = dayOf(1918, 6); // everything unlocked, fair weather
   updateSupplyLines(g);
   return { g, A, B };
 }

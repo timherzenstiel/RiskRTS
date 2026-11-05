@@ -1,6 +1,6 @@
 // Right-hand region file: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
 import { useState } from 'react';
-import { WEATHER, railOpen, railsOf, weatherAt, activeSpies } from '@riskrts/shared';
+import { WEATHER, railOpen, railsOf, weatherAt, activeSpies, techOn } from '@riskrts/shared';
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useSim, useUi, dateStr, type Tab } from '../game/store';
 import { click } from './actions';
@@ -148,7 +148,8 @@ export function Drawer() {
               <i className="dot" style={{ '--c': FACTIONS[me].color } as React.CSSProperties} />
               <div className="tx"><b>{W.regions[x.id].name}</b><small>{x.units.plane} squadron{x.units.plane === 1 ? '' : 's'} · {hops(x.id, sel)} border{hops(x.id, sel) > 1 ? 's' : ''} away</small></div>
               <button className="buy atk" onClick={() => ui().air(x.id, sel)}>Strike</button>
-              {railsOf(g, sel).some(([n]) => railOpen(g, sel, n)) && <button className="buy plain" title="Bomb the railways of this region: they stay cut for two convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, rail: true })}>Rails</button>}
+              {r.factory && techOn(g, me, 'bomb') && <button className="buy plain" title="Bomb the factory: no supply, shells or tanks from it for three convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, factory: true })}>Factory</button>}
+              {techOn(g, me, 'railAir') && railsOf(g, sel).some(([n]) => railOpen(g, sel, n)) && <button className="buy plain" title="Bomb the railways of this region: they stay cut for two convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, rail: true })}>Rails</button>}
             </div>
           ))}
           <div className="lbl"><span>Reconnaissance · {reportAge(g, r)}</span></div>

@@ -9,7 +9,8 @@ import { FACTIONS } from '../data/factions';
 import { wrapDx } from '../world/build';
 import { consolidate, emit, frontsOf, rnd, updateContested, world, worksAt, worksFor } from './core';
 import { checkElim, checkMissions } from './missions';
-import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, crossSpeed, dealtMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
+import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, combinedMod, crossSpeed, dealtMod, depthBonus, shellMod, wwLossMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
+import { hasDoc, techOn } from './tech';
 import { nationOf } from '../data/nations';
 import { PACES, type Agent, type Army, type Battle, type Defence, type Shell, type GameState, type RegionState, type Stance } from './types';
 
@@ -163,21 +164,24 @@ function nearestEnemy(b: Battle, a: Agent, gunsOnly = false, maxD = 1e9): number
 }
 
 const SMALL_ARMS = new Set<AgentType>(['inf', 'mg', 'pill', 'bunk']), HEAVY = new Set<AgentType>(['art', 'plane', 'fort']);
-interface Tick { bunker: boolean; fl: Field }
+interface Tick { bunker: boolean; fl: Field; both: Record<number, boolean>; creep: boolean }
 
 function damage(g: GameState, b: Battle, t: Agent, dmg: number, src: AgentType, k: Tick, mult: number, sf: number) {
   if (t.dead || t.out) return;
-  dmg *= mult * STANCE_DEALT[stanceIn(b, sf)] * dealtMod(g, b, sf, src, t) * takenMod(g, b, t) * fieldMod(g, b, k.fl, sf, src, t);
+  dmg *= mult * STANCE_DEALT[stanceIn(b, sf)] * dealtMod(g, b, sf, src, t) * takenMod(g, b, t) * fieldMod(g, b, k.fl, sf, src, t) * combinedMod(g, sf, !!k.both[sf]);
+  // creeping barrage: attackers advance behind their shells while the defenders are pinned down
+  if (k.creep && t.f !== b.def && hasDoc(g, t.f, 'creeping')) dmg *= .7;
   const ts = stanceIn(b, t.f); dmg *= ts === 2 ? (t.trench || !t.moving ? STANCE_TAKEN[2] : 1) : STANCE_TAKEN[ts];
   if (t.type === 'plane') dmg *= ANTI_AIR[src];
   else if (isDef(t.type)) { if (SMALL_ARMS.has(src)) dmg *= .3; else if (src === 'tank') dmg *= .8; }
   else if (t.type === 'tank' && SMALL_ARMS.has(src)) dmg *= .25;
   if (t.trench && t.f === b.def) {
-    dmg *= Math.max(.35, .8 - .15 * b.tr);
+    const tr = b.tr + depthBonus(g, b.def);
+    dmg *= Math.max(.3, .8 - .15 * tr);
     if (b.sand && SMALL_ARMS.has(src)) dmg *= 1 - .15 * b.sand;
     if (k.bunker && HEAVY.has(src)) dmg *= .5;
     // deep dugouts: a barrage pins entrenched men down far more than it kills them
-    if (HEAVY.has(src)) dmg *= 1 - .15 * b.tr;
+    if (HEAVY.has(src)) dmg *= 1 - .15 * Math.min(3, tr);
   }
   const before = t.hp; t.hp -= dmg;
   if (!isDef(t.type)) {
@@ -209,7 +213,7 @@ function drawShells(g: GameState, b: Battle, f: number, n: number): boolean {
   b.used[f] = (b.used[f] ?? 0) + n; return true;
 }
 /** Shells one shot costs a side (defending guns fire from prepared stocks at half the rate). */
-export const shotCost = (b: Battle, f: number, g?: GameState) => SHELLS.shot * (f === b.def ? .5 : 1) * (g && supplyQOf(g, b, f) === 1 ? 1.5 : 1);
+export const shotCost = (b: Battle, f: number, g?: GameState) => SHELLS.shot * (f === b.def ? .5 : 1) * (g ? (supplyQOf(g, b, f) === 1 ? 1.5 : 1) * shellMod(g, f) : 1);
 /** Supply quality of the region a side draws its shells through (thin supply loses half again on the way). */
 const supplyQOf = (g: GameState, b: Battle, f: number) => (f === b.def ? g.regions[b.region] : b.from >= 0 ? g.regions[b.from] : undefined)?.supplyQ ?? 2;
 
@@ -237,7 +241,10 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
   let reach = b.reach ?? 99;
   const quiet = b.age - (b.lastJoin ?? 0), lull = quiet <= LULL_FROM ? 1 : Math.max(LULL_ROF, 1 - (1 - LULL_ROF) * (quiet - LULL_FROM) / (LULL_FULL - LULL_FROM));
   const rofK = P.rof / lull;
-  const k: Tick = { bunker: A.some(a => a.type === 'bunk' && !a.dead && a.f === b.def), fl: fieldOf(g, b) };
+  const both: Record<number, boolean> = {}, tk: Record<number, boolean> = {}, inf: Record<number, boolean> = {};
+  for (const a of A) if (!a.dead && !a.out) { if (a.type === 'tank') tk[a.f] = true; else if (a.type === 'inf') inf[a.f] = true; }
+  for (const f in tk) if (inf[f]) both[f] = true;
+  const k: Tick = { bunker: A.some(a => a.type === 'bunk' && !a.dead && a.f === b.def), fl: fieldOf(g, b), both, creep: (b.supp[b.def] ?? 0) > 50 };
   for (const a of A) {
     if (a.dead || a.out) continue; const s = statsOf(g, a.f, a.type);
     a.cd -= dt; a.rt -= dt;
@@ -326,7 +333,8 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
       if (d < sh.sp + 1) pinned.add(o.f);
     }
     // shells landing on a side pin it down: suppressed troops fire less, MGs fall silent
-    for (const f of pinned) b.supp[f] = Math.min(100, (b.supp[f] ?? 0) + BARRAGE.supp * (sh.src === 'plane' ? .8 : 1) * suppMod(g, sh.f));
+    const drill = sh.src !== 'plane' && (b.bar[sh.f] ?? 1) === 2 && techOn(g, sh.f, 'heavy') ? 1.2 : 1;
+    for (const f of pinned) b.supp[f] = Math.min(100, (b.supp[f] ?? 0) + BARRAGE.supp * (sh.src === 'plane' ? .8 : 1) * suppMod(g, sh.f) * drill);
     const u = alongOf(b, sh.x, sh.z); if (u > 2 && u < 18) b.craters = (b.craters ?? 0) + 1;
     if (b.wire > 0) { if (u > 2 && u < 9) b.wire = Math.max(0, b.wire - sh.dmg * .4); }
     boom(g, b, sh.x, sh.z, sh.src === 'plane' ? 1.2 : 1);
@@ -353,6 +361,12 @@ function morale(g: GameState, b: Battle, dt: number) {
     if (men > 0) m -= lost / (men + lost) * 55 * (hold ? holdMorale(f) : 1);
     if (lost <= .01) m += dt * .6;
     b.mor[f] = m = Math.max(0, Math.min(moraleCap(g, f), m));
+    // elastic defence: breaking defenders fall back to a second line once per battle and steady there
+    if (f === b.def && m < 20 && men > 0 && !(b.fell ??= {})[f] && hasDoc(g, f, 'elastic')) {
+      b.fell[f] = 1; b.mor[f] = m = 45;
+      for (const a of b.agents) if (a.f === f && !a.dead && !a.out && !isDef(a.type) && a.type !== 'plane') { a.x -= b.ax * 3; a.z -= b.az * 3; }
+      emit(g, { k: 'fallback', faction: f, region: b.region });
+    }
     // below 15 morale, a shaken battalion now and then lays down its arms
     if (m < 15 && men > 0 && !hold && rnd(g) < dt * .35) {
       const c = b.agents.find(a => a.f === f && !a.dead && !a.out && (a.type === 'inf' || a.type === 'mg'));
@@ -390,7 +404,7 @@ function tallyLosses(g: GameState, b: Battle) {
   for (const [fs, lost] of Object.entries(b.lost)) {
     const f = g.factions[+fs]; if (!f || lost <= 0) continue;
     if (f.alive) f.wounded += lost * WOUNDED_SHARE;
-    f.ww = Math.min(100, f.ww + lost / 400 * nationOf(+fs).wwLoss);
+    f.ww = Math.min(100, f.ww + lost / 400 * wwLossMod(g, +fs));
   }
 }
 

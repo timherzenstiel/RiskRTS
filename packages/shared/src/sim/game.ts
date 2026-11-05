@@ -8,6 +8,7 @@ import { aiThink } from './ai';
 import { arrive } from './commands';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
+import { doctrineDeadlines } from './tech';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
 import { TICK_SECONDS } from '../data/units';
@@ -112,7 +113,7 @@ export function step(g: GameState, dt: number) {
   if (g.supplyT >= TICK_SECONDS) { g.supplyT -= TICK_SECONDS; supplyTick(g); }
   for (let i = g.armies.length - 1; i >= 0; i--) { const a = g.armies[i]; a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); } }
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
-  updateSpies(g);
+  updateSpies(g); doctrineDeadlines(g);
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) { if (!f.alive || !f.ai) continue; f.aiT -= dt; if (f.aiT <= 0) { f.aiT = (2.5 + rnd(g) * 1.8) * d.ai; aiThink(g, f); } }

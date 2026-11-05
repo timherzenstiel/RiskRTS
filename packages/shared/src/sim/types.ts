@@ -2,6 +2,7 @@
 import type { ContKey } from '../data/regions';
 import type { AgentType, DefKind, FortKind, Units, UnitType } from '../data/units';
 import type { DoctrineKey } from '../data/nations';
+import type { TechKey } from '../data/tech';
 
 export type Mission =
   | { type: 'conts' | 'conts1'; conts: ContKey[] }
@@ -25,6 +26,10 @@ export interface FactionState {
   unrestT: number;
   /** Doctrines adopted, one per war year. */
   doctrines?: DoctrineKey[];
+  /** Unlocks brought forward by a rush, and the war year of the last rush. */
+  rushed?: TechKey[]; rushY?: number;
+  /** A doctrine choice waiting: the war year offered and the game time by which the War Office picks instead. */
+  docOffer?: number; docDue?: number;
 }
 
 /** Battle stance of a garrison or an attacking army: balanced, aggressive, defensive, hold at all costs. */
@@ -76,6 +81,8 @@ export interface RegionState {
   strike?: boolean;
   /** Supply quality: 2 full (rail to a source), 1 thin (land or sea only), 0 cut off. */
   supplyQ?: number;
+  /** The factory was bombed: it produces nothing until this day. */
+  bombed?: number;
 }
 
 export interface Army {
@@ -96,8 +103,8 @@ export interface Army {
   legs?: number; tired?: boolean;
   /** Travelling by rail. */
   rail?: boolean;
-  /** Aircraft on a strike against the rail links of the target region. */
-  strike?: 'rail';
+  /** Aircraft on a strike against the rail links or the factory of the target region. */
+  strike?: 'rail' | 'factory';
 }
 
 export interface Agent {
@@ -188,6 +195,11 @@ export type GameEvent =
   | { k: 'rising'; faction: number; region: number; to: number }
   | { k: 'railCut'; faction: number; region: number; by: 'air' | 'spy'; owner: number }
   | { k: 'railBuilt'; faction: number; a: number; b: number }
+  | { k: 'tech'; faction: number; tech: TechKey }
+  | { k: 'docOffer'; faction: number; year: number }
+  | { k: 'doctrine'; faction: number; doc: DoctrineKey }
+  | { k: 'bombed'; faction: number; region: number; owner: number }
+  | { k: 'fallback'; faction: number; region: number }
   | { k: 'over'; winner: number | null; reason?: string };
 
 export interface GameStats { won: number[]; lost: number[] }
@@ -255,7 +267,11 @@ export type Command =
   | { t: 'shift'; region: number; battle: number }
   | { t: 'march'; from: number; to: number; frac: number }
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */
-  | { t: 'air'; from: number; to: number; frac: number; rail?: boolean }
+  | { t: 'air'; from: number; to: number; frac: number; rail?: boolean; factory?: boolean }
+  /** Bring one unlock forward by six months (one rush per war year). */
+  | { t: 'rush'; tech: TechKey }
+  /** Adopt one of the doctrines offered for the war year. */
+  | { t: 'doctrine'; doc: DoctrineKey }
   /** Storm the holdout defences in one of your own contested regions with its garrison. */
   | { t: 'assault'; region: number }
   /** Battle levers: barrage level of your guns, send the attackers over the top, stance, reinforce a front, withdraw. */

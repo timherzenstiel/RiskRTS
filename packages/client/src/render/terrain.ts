@@ -297,7 +297,8 @@ export class Terrain {
   if(texture2D(uCover,(_cc+.5)/vec2(${DCC}.,${DCR}.)).r>.5) discard;`);
     };
     this.treeMesh = new THREE.InstancedMesh(boxGeo, treeMat, Math.max(1, treeRegion.length));
-    this.treeMesh.frustumCulled = false; this.treeMesh.castShadow = this.treeMesh.receiveShadow = true;
+    // no shadow pass for the far box trees: at the zooms they show, their shadows are a few pixels and the pass doubled their cost
+    this.treeMesh.frustumCulled = false; this.treeMesh.castShadow = false; this.treeMesh.receiveShadow = true;
     const perRegion: number[][] = world.regions.map(() => []);
     for (let k = 0; k < treeRegion.length; k++) {
       m4.makeScale(treeData[k * 6 + 3], treeData[k * 6 + 4], treeData[k * 6 + 5]); m4.setPosition(treeData[k * 6], treeData[k * 6 + 1], treeData[k * 6 + 2]);

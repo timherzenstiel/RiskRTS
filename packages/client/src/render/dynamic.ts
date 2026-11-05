@@ -90,6 +90,20 @@ export class DynamicDraw {
         if (foe) for (let k = 0; k < 6; k++) m.part(p.x, y, p.z, face, -L / 2 + L * (k + .5) / 6, 0, w * .5 + .05 * zoom, .07 * zoom, .04, .1 * zoom, col, m.glowPool);
       } else for (let k = 0; k < 6; k++) m.part(p.x, y, p.z, face, -L / 2 + L * (k + .5) / 6, 0, 0, L / 12, .03, .05 * zoom, K.flare, m.glowPool);
     }
+    // a foothold: the attacker holds this border's first line, so their front bulges into the region (design 4a)
+    for (const b of g.battles) {
+      if (b.ended || b.region !== rid || b.stage !== 3 || b.from < 0) continue;
+      const p = sectorPoint(this.world, rid, b.from), col = facCol[b.attacker], zoom = Math.max(1, dist / 30);
+      const ix = R.cx - p.x, iz = R.cz - p.z, il = Math.hypot(ix, iz) || 1, nx = ix / il, nz = iz / il, depth = Math.min(.8, il * .4);
+      const pts: [number, number][] = [];
+      for (let k = 0; k <= 10; k++) { const t = k / 10 * 2 - 1, bow = depth * Math.cos(t * Math.PI / 2); pts.push([p.x + p.ux * t * 1.1 + nx * bow, p.z + p.uz * t * 1.1 + nz * bow]); }
+      for (let k = 0; k < 10; k++) {
+        const [x0, z0] = pts[k], [x1, z1] = pts[k + 1], mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, len = Math.hypot(x1 - x0, z1 - z0), fc = Math.atan2(x1 - x0, z1 - z0);
+        const y = this.hAt(mx, mz, y0) + .035;
+        m.part(mx, y, mz, fc, 0, 0, 0, .07 * zoom, .04, len, col, m.glowPool);
+        if (k % 2 === 0) m.part(mx + nx * .05 * zoom, y, mz + nz * .05 * zoom, fc, 0, 0, 0, .1 * zoom, .04, .06 * zoom, col, m.glowPool); // teeth into the depth
+      }
+    }
   }
 
   /** A small formation: up to 12 riflemen, then gun teams, field guns and tanks beside them. */

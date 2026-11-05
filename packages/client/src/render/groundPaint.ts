@@ -12,7 +12,7 @@ import { uNear } from './terrain';
 export const uPx = { value: 128 };
 
 const GLSL = /* glsl */ `
-uniform sampler2D uNat, uInfo; uniform vec2 uGrid; uniform float uTS, uPx, uNear; uniform vec3 uFac[8];
+uniform sampler2D uNat, uInfo, uWar; uniform vec2 uGrid; uniform float uTS, uPx, uNear; uniform vec3 uFac[8];
 varying vec3 vWP; varying vec3 vWN;
 const vec2 DIRS[8] = vec2[8](vec2(1,0),vec2(-1,0),vec2(0,1),vec2(0,-1),vec2(1,1),vec2(-1,1),vec2(1,-1),vec2(-1,-1));
 float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -101,6 +101,23 @@ vec3 groundPaint(vec3 wp, vec3 wn){
     rock*=.78+.32*step(.5,fract(wp.y*90.+m*1.5));
     c=mix(c,rock,smoothstep(.12,.28,slope));
   }
+  // war: churned mud and craters where the border was shelled; a zig-zag fire trench with a sandbag parapet along held borders
+  { vec4 wr=texture2D(uWar,tuv(p)); float dm=wr.g;
+    if(dm>.01){
+      c=mix(c,dec(vec3(.33,.27,.2))*(.7+.45*m),smoothstep(0.,.55,dm)*.85);
+      vec2 kg=p*16.,ki=floor(kg),kf=fract(kg)-.5-(vec2(h1(ki+1.3),h1(ki+7.1))-.5)*.3; float kr=.16+.22*h1(ki+3.);
+      if(h1(ki)<dm*.75&&length(kf)<kr){ float sd=kf.x+kf.y; c=dec(vec3(.2,.16,.11))*(sd<-.05?.6:sd>.06?1.35:.9); if(length(kf)<kr*.45) c=dec(vec3(.12,.13,.12)); }
+    }
+    float lv=floor(texture2D(uWar,(floor(p/uTS+uGrid*.5)+.5)/uGrid).r*255./80.+.5);
+    if(lv>.5){
+      vec2 tc2=p/uTS+uGrid*.5, t2=floor(tc2), g2=tc2-t2-.5; float rg=floor(infC.b*255.+.5)+256.*floor(infC.a*255.+.5), e=1.;
+      for(int k=0;k<4;k++){ vec2 o=DIRS[k]; vec4 ni=texture2D(uInfo,(t2+.5+o)/uGrid); if(ni.r<.02) continue;
+        float nr=floor(ni.b*255.+.5)+256.*floor(ni.a*255.+.5); if(nr!=rg) e=min(e,.5-dot(g2,o)); }
+      float zz=.07*(abs(fract((p.x-p.y)*5.5)-.5)*4.-1.), d=abs(e-.34-zz), w=.035+.012*lv;
+      if(d<w) c=dec(vec3(.13,.1,.07))*(.7+.4*step(.5,fract((p.x+p.y)*70.)));
+      else if(d<w+.03&&e<.34+zz) c=dec(vec3(.62,.55,.4))*(.75+.35*px)*(fract((p.x*1.3+p.y)*60.)<.5?.85:1.);
+    }
+  }
   // ownership: a tint that fades as you zoom in, a solid line in the owner's colour where owners meet, a dark dashed line between regions
   vec2 g=tc-t-.5; float own=floor(natC.a*255.+.5), reg=floor(infC.b*255.+.5)+256.*floor(infC.a*255.+.5);
   vec3 fc=own>.5?uFac[int(own)-1]:vec3(.5);
@@ -124,7 +141,7 @@ export function groundMaterial(terrain: Terrain): THREE.MeshLambertMaterial {
   const fac = Array.from({ length: 8 }, (_, i) => (facCol[i] ?? new THREE.Color(1, 1, 1)).clone());
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, {
-      uNat: { value: terrain.natTex }, uInfo: { value: terrain.infoTex }, uGrid: { value: new THREE.Vector2(COLS, ROWS) }, uTS: { value: TS },
+      uNat: { value: terrain.natTex }, uInfo: { value: terrain.infoTex }, uWar: { value: terrain.warTex }, uGrid: { value: new THREE.Vector2(COLS, ROWS) }, uTS: { value: TS },
       uPx, uFac: { value: fac }, uNear,
     });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')

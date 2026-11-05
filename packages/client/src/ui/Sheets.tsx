@@ -1,5 +1,7 @@
 // Content of the in-game modals: sealed orders, field manual, menu, end of war.
-import { CONT, FACTIONS, TICK_SECONDS, buildWorld, missionText, totalUnits, type GameState } from '@riskrts/shared';
+import { CONT, FACTIONS, TICK_SECONDS, buildWorld, missionText, missionWants, totalUnits, type GameState } from '@riskrts/shared';
+import { RadarMap } from './RadarMap';
+import { cameoUrl } from './Cameo';
 import { dateStr, useSim, useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
 import { click, quitToTitle } from './actions';
@@ -27,12 +29,22 @@ export function OrdersSheet({ onHelp }: { onHelp: () => void }) {
   const { g, me, session } = sim; const f = g.factions[me]; const first = g.time < 1;
   const [title, text] = f.mission ? missionText(f.mission) : ['Waiting for orders…', 'The War Office is still sealing your orders.'];
   const close = () => { click(); useUi.getState().setOverlay(null); };
+  // briefing radar: the regions the orders want, arrows from the capital to the nearest of them
+  const W = buildWorld(), want = f.mission ? g.regions.filter(r => r.owner !== me && missionWants(g, f, r.id)).map(r => r.id) : [];
+  const cap = g.regions.find(r => r.capitalOf === me)?.id ?? -1, capR = cap >= 0 ? W.regions[cap] : null;
+  const near = capR ? [...want].sort((a, b) => Math.hypot(W.regions[a].cx - capR.cx, W.regions[a].cz - capR.cz) - Math.hypot(W.regions[b].cx - capR.cx, W.regions[b].cz - capR.cz)).slice(0, 3) : [];
   return (
-    <Modal label="Sealed orders" narrow onClose={close}>
-      <div className="kicker">{FACTIONS[me].name} · War Office</div>
-      <div className="orders"><span className="stamp">SECRET</span><h2>{title}</h2><p className="lede">{text}</p><div className="prog"><Progress g={g} me={me} /></div></div>
+    <Modal label="Sealed orders" onClose={close}>
+      <div className="kicker">{FACTIONS[me].name} · War Office · Mission briefing</div>
+      <div className="brief-grid">
+        <div className="brief-l">
+          <RadarMap owners={g.regions.map(r => r.owner)} highlight={want} arrows={cap >= 0 ? near.map(t => [cap, t] as [number, number]) : []} width={460} height={230} label="Briefing map" />
+          <div className="officer"><img src={cameoUrl('inf', me)?.replace(/inf_(\d)/, 'officer_$1') ?? ''} alt="" /><small>Chief of the General Staff</small></div>
+        </div>
+        <div className="orders"><span className="stamp">SECRET</span><h2>{title}</h2><p className="lede typed" key={title}>{text}</p><div className="prog"><Progress g={g} me={me} /></div></div>
+      </div>
       <p className="muted">Every other power holds its own sealed orders. The first to complete them wins the war, so watch the scoreboard at the top of the screen.{session.kind === 'host' ? ' The war keeps running while you read.' : ''}</p>
-      <div className="row"><button className="btn primary" onClick={close}>{first ? 'Open hostilities' : 'Back to the map'}</button>
+      <div className="row"><button className="btn primary" onClick={close}>{first ? 'Accept orders' : 'Back to the map'}</button>
         {first && <button className="btn" onClick={() => { click(); onHelp(); }}>How to play</button>}</div>
     </Modal>
   );

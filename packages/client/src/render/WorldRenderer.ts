@@ -120,7 +120,7 @@ class WorldRenderer implements WorldRendererApi {
     this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); },
       (id) => { cb.onSelect(id); const u = useUi.getState(), st = this.session?.state; if (st && st.regions[id].owner === this.session!.me) u.setTab('deploy'); });
     this.labelCtx = {
-      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0,
+      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
       armyH: (a) => { this.armyTuple[0] = this.terrain.anchorH(a.from); this.armyTuple[1] = this.terrain.anchorH(a.to); return this.armyTuple; },
     };
@@ -228,6 +228,7 @@ class WorldRenderer implements WorldRendererApi {
 
     this.syncPaint(g, ui.sel, ui.hover);
     this.shroud.update(g, this.now);
+    if (this.frameNo % 30 === 0) this.terrain.setWar(g);
     const speed = s ? s.speed : 1, fdt = dt * (speed > 0 ? Math.min(speed, 4) : .5);
     this.updateBattles(g, dt, fdt);
     if (s) this.processFx(s);
@@ -239,7 +240,7 @@ class WorldRenderer implements WorldRendererApi {
     this.post.tune(this.rig.dist, ui.look, this.now); uChrome.value = ui.look ? .75 : .3;
     this.post.render();
 
-    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now;
+    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
     this.labels.update(c);
     let active = 0; if (g) for (const b of g.battles) if (!b.ended) active++;
     const hh = .344 * this.rig.dist;

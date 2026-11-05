@@ -3,7 +3,7 @@
 // Everything static here is generated from the shared world raster with deterministic noise, so every client draws the same map.
 import * as THREE from 'three';
 import {
-  CITIES, COLS, HH, HW, N, RIDGES, ROWS, Rng, SEA, TS, hash2, latOf, lonOf, tileAtLL, tileAtW, tx, tz, vnoise, wxLon, wzLat, type World,
+  CITIES, COLS, HH, HW, N, RIDGES, ROWS, Rng, SEA, TS, hash2, latOf, lonOf, tileAtLL, tileAtW, tx, tz, vnoise, worksAt, wxLon, wzLat, type GameState, type World,
 } from '@riskrts/shared';
 import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
@@ -77,14 +77,14 @@ const FAR_CH = 40;
 
 /** Far-ground material: region colours (linear-filtered, so borders read as painted), brush noise, rock on steep slopes,
  *  wet sand where the land runs into the sea. Fragments under a drawn close-up chunk are discarded (detail.ts paints there). */
-function farMaterial(strat: THREE.DataTexture, nat: THREE.DataTexture, cover: THREE.DataTexture) {
+function farMaterial(strat: THREE.DataTexture, nat: THREE.DataTexture, cover: THREE.DataTexture, war: THREE.DataTexture) {
   const m = new THREE.MeshLambertMaterial();
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uStrat: { value: strat }, uNatL: { value: nat }, uCover: { value: cover }, uNear, uGrid: { value: new THREE.Vector2(COLS, ROWS) } });
+    Object.assign(sh.uniforms, { uStrat: { value: strat }, uNatL: { value: nat }, uCover: { value: cover }, uWar: { value: war }, uNear, uGrid: { value: new THREE.Vector2(COLS, ROWS) } });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normalize(mat3(modelMatrix)*objectNormal);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-uniform sampler2D uStrat, uNatL, uCover; uniform float uNear; uniform vec2 uGrid; varying vec3 vWP; varying vec3 vWN;
+uniform sampler2D uStrat, uNatL, uCover, uWar; uniform float uNear; uniform vec2 uGrid; varying vec3 vWP; varying vec3 vWN;
 float fh(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float fn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(fh(i),fh(i+vec2(1,0)),f.x),mix(fh(i+vec2(0,1)),fh(i+vec2(1,1)),f.x),f.y); }
 float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+3.)*.08; }`)
@@ -101,6 +101,13 @@ float fb(vec2 p){ return fn(p)*.5+fn(p*2.07+13.)*.28+fn(p*4.3+29.)*.14+fn(p*8.9+
   float _sl=1.-normalize(vWN).y;
   vec3 _rock=mix(vec3(.21,.15,.095),vec3(.105,.085,.065),fn(vWP.xz*22.))*(.8+.3*step(.5,fract(vWP.y*60.+_m*2.)));
   _c=mix(_c,mix(_rock,_c,.35*(1.-uNear)),smoothstep(.2,.5,_sl));
+  // war damage: churned no-man's-land and shell craters where a border has been fought over
+  float _dm=texture2D(uWar,_t).g;
+  if(_dm>.01){
+    _c=mix(_c,vec3(.085,.07,.05)*(.75+.5*_m2),smoothstep(.0,.6,_dm)*.8);
+    vec2 _cg=vWP.xz*7.,_ci=floor(_cg),_cf=fract(_cg)-.5; float _cr=.18+.2*fh(_ci+3.);
+    if(fh(_ci)<_dm*.7&&length(_cf)<_cr) _c*=length(_cf+vec2(.06))<_cr?.55:1.25;
+  }
   float _wet=smoothstep(.235,.15,vWP.y);
   _c=mix(_c,vec3(.29,.24,.16)*(.75+.35*_m2),_wet*.75);
   _c*=mix(.55,1.,smoothstep(.04,.18,vWP.y));
@@ -143,6 +150,11 @@ export class Terrain {
   /** Sea tiles that copy a land tile's colours (land tile -> sea tiles). */
   private readonly shoreOf = new Map<number, number[]>();
   private readonly farMeshes: THREE.Mesh[] = [];
+  /** War texture, one texel per tile: r = trench depth on a held border (0-3, x80), g = shell damage (0-255). */
+  readonly warData = new Uint8Array(N * 4);
+  readonly warTex: THREE.DataTexture;
+  private warKey = '';
+  private readonly nearBorder = new Map<string, Int32Array>();
   /** Village and town houses (x, y, z, width, height, depth, wall colour) and churches (x, y, z, size), for the modelled scenery. */
   private readonly homes: [number, number, number, number, number, number, THREE.Color][] = [];
   private readonly churches: [number, number, number, number][] = [];
@@ -238,7 +250,9 @@ export class Terrain {
       for (let h = 0; h < q.length; h++) { const i = q[h]; if (depth[i] >= 2) continue; nb4(i, NB); for (const j of NB) if (j >= 0 && src[j] < 0) { src[j] = src[i]; depth[j] = depth[i] + 1; q.push(j); } }
       for (let i = 0; i < N; i++) if (!land[i] && src[i] >= 0) { let l = this.shoreOf.get(src[i]); if (!l) this.shoreOf.set(src[i], l = []); l.push(i); }
     }
-    const farMat = this.bag.add(farMaterial(this.stratTex, this.natLTex, this.coverTex));
+    this.warTex = this.bag.add(new THREE.DataTexture(this.warData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
+    this.warTex.magFilter = this.warTex.minFilter = THREE.LinearFilter; this.warTex.needsUpdate = true;
+    const farMat = this.bag.add(farMaterial(this.stratTex, this.natLTex, this.coverTex, this.warTex));
     this.buildFarGround(farMat);
     const treeMat = this.bag.add(new THREE.MeshLambertMaterial()), coverTex = this.coverTex;
     // voxel trees give way to the detailed close-up trees wherever the detail layer is drawn
@@ -475,6 +489,41 @@ export class Terrain {
         T[k * 3] = r; T[k * 3 + 1] = g; T[k * 3 + 2] = b;
       }
     }
+  }
+
+  /** Tiles of `rid` within three tiles of its border with `n`, as (tile, depth) pairs. */
+  private borderBand(rid: number, n: number): Int32Array {
+    const key = rid + '|' + n; let b = this.nearBorder.get(key); if (b) return b;
+    const { terrOf, borderNb, land } = this.world, out: number[] = [], seen = new Set<number>(), q: number[] = [];
+    for (const i of this.world.regions[rid].tiles) if (borderNb[i] === n) { q.push(i, 0); seen.add(i); }
+    for (let h = 0; h < q.length; h += 2) {
+      const i = q[h], d = q[h + 1]; out.push(i, d); if (d >= 3) continue; const c = i % COLS;
+      for (const j of [c > 0 ? i - 1 : -1, c < COLS - 1 ? i + 1 : -1, i - COLS, i + COLS]) if (j >= 0 && j < N && land[j] && terrOf[j] === rid && !seen.has(j)) { seen.add(j); q.push(j, d + 1); }
+    }
+    b = Int32Array.from(out); this.nearBorder.set(key, b); return b;
+  }
+
+  /** Trenches along held borders and shell damage (RegionState.cr) into the war texture; cheap when nothing changed. */
+  setWar(g: GameState | null) {
+    if (!g) return;
+    let key = '';
+    for (const r of g.regions) {
+      if (r.cr) for (const n in r.cr) key += r.id + ':' + n + '=' + (r.cr[n] >> 3) + ',';
+      for (const n of this.world.regions[r.id].adj) { const tr = worksAt(r, n).tr, c = r.fr?.[n] ? 1 : 0; if (tr || c) key += r.id + '>' + n + '=' + Math.max(tr, c) + ','; }
+    }
+    if (key === this.warKey) return;
+    this.warKey = key; const D = this.warData; D.fill(0);
+    for (const r of g.regions) for (const n of this.world.regions[r.id].adj) {
+      const lvl = Math.max(worksAt(r, n).tr, r.fr?.[n] ? 1 : 0), dmg = Math.min(1, (r.cr?.[n] ?? 0) / 150);
+      if (!lvl && dmg <= 0) continue;
+      const band = this.borderBand(r.id, n);
+      for (let k = 0; k < band.length; k += 2) {
+        const o = band[k] * 4, d = band[k + 1];
+        if (lvl && d === 0) D[o] = Math.max(D[o], lvl * 80);
+        if (dmg > 0) D[o + 1] = Math.max(D[o + 1], Math.round(dmg * 255 * (1 - d / 4)));
+      }
+    }
+    this.warTex.needsUpdate = true;
   }
 
   /** Call after one or more paintRegion calls. */

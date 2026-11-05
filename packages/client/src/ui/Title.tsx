@@ -5,6 +5,7 @@ import { Sfx } from '../audio/sfx';
 import { NAME_KEY, REPO_URL, SAVE_KEY, VERSION, hasSave, lsDel, lsGet, lsSet } from './storage';
 import { capabilities, useInstall } from './usePwa';
 import { click } from './actions';
+import { TitleBackdrop } from './TitleBackdrop';
 
 export function Title() {
   const [name, setName] = useState(() => lsGet(NAME_KEY) ?? '');
@@ -18,6 +19,7 @@ export function Title() {
   return (
     <main className="screen title">
       <div className="bgfx" aria-hidden="true" style={{ '--title-art': `url(${import.meta.env.BASE_URL}art/title/front-dusk.webp)` } as React.CSSProperties} />
+      <TitleBackdrop />
       <div className="titleplate plate">
         <div className="kicker">The world at war · August 1914</div><h1>Fronts<br />of 1914</h1>
       </div>

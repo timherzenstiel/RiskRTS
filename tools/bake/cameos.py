@@ -87,6 +87,15 @@ def main():
         d = 3.0; cam.location = (0, -(cz) - d * math.cos(pitch), .06 + d * math.sin(pitch)); cam.rotation_euler = (math.pi / 2 - pitch, 0, 0)
         sc.render.filepath = path; bpy.ops.render.render(write_still=True)
 
+    def portrait(path, f, U):
+        """Head and shoulders of a staff officer, front-on, for the mission briefing."""
+        made = [place(lib['soldier'], 0, 0, 0.0, 1, U)]
+        hm = place(lib[HELM_OF[f]], 0, 0, 0.0, 1, U); hm.location.z = .19; made.append(hm)
+        for o in made: o.hide_render = False
+        cam.data.ortho_scale = .12; cam.location = (0, -.4, .165 + .4 * math.tan(.12)); cam.rotation_euler = (math.pi / 2 - .12, 0, 0)
+        sc.render.filepath = path; bpy.ops.render.render(write_still=True)
+        for o in made: bpy.data.objects.remove(o, do_unlink=True)
+
     for f in range(6):
         U, T, F = tint_material(f'u{f}', uni[f]), tint_material(f't{f}', tank[f]), tint_material(f'f{f}', fac[f])
         def crew(spots):
@@ -99,6 +108,12 @@ def main():
             'tank': [(lib[TANK_OF[f]], 0, 0, .45, 1.05 if f == 1 else 1, T)],
             'plane': [(lib['plane'], 0, 0, .55, 1.15, F), (lib['prop'], 0, 0, .55, 1.15, None), (lib[f'mark_{f}'], 0, 0, .55, 1.15, None)],
         }
+        png = os.path.join(OUT, f'officer_{f}.png'); portrait(png, f, U)
+        try:
+            from PIL import Image
+            Image.open(png).convert('RGB').save(png[:-4] + '.webp', quality=82, method=6); os.remove(png)
+        except ImportError:
+            pass
         span = {'inf': .5, 'mg': .44, 'art': .56, 'tank': .56, 'plane': .56}
         for key, parts in groups.items():
             made = []

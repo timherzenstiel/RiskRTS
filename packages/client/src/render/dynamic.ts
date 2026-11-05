@@ -173,6 +173,7 @@ export class DynamicDraw {
   /** Marching columns, ships carrying armies, aircraft in flight and their dashed route lines. */
   armies(g: GameState, T: number) {
     const m = this.m, S = MAP_S;
+    this.dtA = Math.max(0, Math.min(.1, T - this.lastT)); this.lastT = T;
     for (const a of g.armies) {
       const [x, z] = armyPos(a), face = Math.atan2(a.dx, a.dz), c = Math.cos(face), s = Math.sin(face);
       if (a.air) {
@@ -220,6 +221,8 @@ export class DynamicDraw {
   me = -1;
   /** Size factor for route marks so they stay readable when zoomed out (set from the camera distance). */
   zoomK = 1;
+  private lastT = 0;
+  private dtA = 0;
 
   /**
    * A marching column, front to back: tanks in pairs, a block of riflemen three abreast, machine-gun teams, then towed guns.
@@ -231,10 +234,12 @@ export class DynamicDraw {
     const nT = Math.min(8, u.tank), nI = Math.min(45, u.inf), nM = Math.min(6, u.mg), nA = Math.min(5, u.art);
     const TS = .15, IS = .055, MS = .085, AS = .14;
     const len = Math.ceil(nT / 2) * TS + Math.ceil(nI / 3) * IS + Math.ceil(nM / 2) * MS + nA * AS;
-    // a dust trail kicked up behind a column on the march (not for troops waiting at the start line or going by sea)
-    if (!a.sea && !a.wait && a.t > 0 && a.t < 1 && Math.random() < .35 + nT * .05) {
-      const r = Math.random(), bx = x - s * len * (.5 + r * .6), bz = z - c * len * (.5 + r * .6);
-      this.fx.spawn(bx + (Math.random() - .5) * .08, y0 + .03, bz + (Math.random() - .5) * .08, (Math.random() - .5) * .03, .03, (Math.random() - .5) * .03, 0, 1.8, .05, .16, K.dust, F_DUST);
+    // dust kicked up on the march (not for troops waiting at the start line or going by sea): vehicles leave a thin trail
+    // behind them, boots only the odd faint puff. Per second, so it doesn't depend on the frame rate.
+    const veh = nT + nA * .5, rate = veh > 0 ? Math.min(3, .8 + veh * .35) : nI > 0 ? .5 : 0;
+    if (!a.sea && !a.wait && a.t > 0 && a.t < 1 && Math.random() < rate * this.dtA) {
+      const r = Math.random(), bx = x - s * len * (.5 + r * .3), bz = z - c * len * (.5 + r * .3), big = veh > 0;
+      this.fx.spawn(bx + (Math.random() - .5) * .05, y0 + .02, bz + (Math.random() - .5) * .05, (Math.random() - .5) * .02, .015, (Math.random() - .5) * .02, 0, big ? 1.1 : .8, .03, big ? .08 : .05, K.dust, F_DUST);
     }
     let fwd = len / 2;
     // one helper places a figure `fwd` along the march and `side` to the right, standing on the ground

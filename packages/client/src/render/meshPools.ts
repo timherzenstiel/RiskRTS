@@ -5,12 +5,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { uChrome } from './pools';
 
-export type MeshKey = 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
+export type MeshKey = 'soldier_aim' | 'soldier_kneel_aim' | 'soldier_throw' | 'soldier_prone' | 'soldier_dead' | 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
   'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
   'mg' | 'art' | 'tank_mk4' | 'tank_ft' | 'tank_a7v' | 'plane' | 'prop' | 'mark_0' | 'mark_1' | 'mark_2' | 'mark_3' | 'mark_4' | 'mark_5' |
   'pill' | 'bunk' | 'factory' | 'barracks' | 'hangar' |
   'tree_broad' | 'tree_pine' | 'tree_palm' | 'tree_acacia' | 'shrub' | 'house_a' | 'house_b' | 'church';
 const CAP: Record<MeshKey, number> = {
+  soldier_aim: 3000, soldier_kneel_aim: 2500, soldier_throw: 800, soldier_prone: 3000, soldier_dead: 4000,
   soldier: 3000, soldier_walk_a: 3000, soldier_walk_b: 3000, soldier_kneel: 3000, soldier_lo: 14000, soldier_kneel_lo: 6000,
   helm_brodie: 6000, helm_adrian: 6000, helm_cap: 6000, helm_stahl: 12000, helm_kabalak: 6000,
   mg: 2500, art: 2500, tank_mk4: 800, tank_ft: 800, tank_a7v: 800, plane: 600, prop: 600,
@@ -63,9 +64,19 @@ class MeshPool {
     this.M = this.mesh.instanceMatrix.array as Float32Array; this.C = this.mesh.instanceColor!.array as Float32Array;
   }
   /** One instance at (x,y,z), turned by `face` about Y, uniform scale s, optional roll about the model's forward axis. */
-  push(x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0) {
+  push(x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0) {
     if (this.n >= this.max) return;
     const i = this.n++, o = i * 16, M = this.M, co = Math.cos(face) * s, si = Math.sin(face) * s;
+    if (pitch) {
+      // R = RotY(face) * RotX(pitch) * s
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      M[o] = co; M[o + 1] = 0; M[o + 2] = -si; M[o + 3] = 0;
+      M[o + 4] = sp * si; M[o + 5] = cp * s; M[o + 6] = sp * co; M[o + 7] = 0;
+      M[o + 8] = cp * si; M[o + 9] = -sp * s; M[o + 10] = cp * co; M[o + 11] = 0;
+      M[o + 12] = x; M[o + 13] = y; M[o + 14] = z; M[o + 15] = 1;
+      const k = i * 3; this.C[k] = c.r; this.C[k + 1] = c.g; this.C[k + 2] = c.b;
+      return;
+    }
     if (roll) {
       const cr = Math.cos(roll), sr = Math.sin(roll);
       // R = RotY(face) * RotZ(roll) * s
@@ -106,7 +117,7 @@ export class MeshPools {
   }
 
   has(k: MeshKey) { return this.ready && this.pools.has(k); }
-  push(k: MeshKey, x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0) { this.pools.get(k)?.push(x, y, z, face, s, c, roll); }
+  push(k: MeshKey, x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0) { this.pools.get(k)?.push(x, y, z, face, s, c, roll, pitch); }
   begin() { for (const p of this.pools.values()) p.begin(); }
   end() { for (const p of this.pools.values()) p.end(); }
   dispose() { for (const p of this.pools.values()) p.dispose(); for (const g of this.geos.values()) g.dispose(); this.mat.dispose(); }

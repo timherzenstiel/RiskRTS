@@ -48,12 +48,14 @@ export class Shroud {
   float fbm(vec2 p){ return n1(p)*.5+n1(p*2.1+7.)*.26+n1(p*4.3+3.)*.14+n1(p*9.1+1.)*.1; }
   void main(){
     vec2 g=vec2(vXZ.x, vXZ.y-uShift);
-    vec2 t=(g/${TS.toFixed(6)}+uGrid*.5)/uGrid;
+    // domain warp of about a tile, so tile edges never show as blocks up close
+    vec2 wq=vec2(fbm(g*1.7),fbm(g*1.7+11.3))-.5;
+    vec2 t=((g+wq*${(TS * 2.2).toFixed(4)})/${TS.toFixed(6)}+uGrid*.5)/uGrid;
     if(t.x<0.||t.y<0.||t.x>1.||t.y>1.) discard;
     float v=texture2D(uVis,t).r*3.;
     float n=fbm(g*2.3+uTime*.02)-.5;
     float black=1.-smoothstep(.3,.62,v+n*.55);
-    float dim=1.-smoothstep(2.35,2.75,v+n*.25);
+    float dim=1.-smoothstep(2.2,2.85,v+n*.35);
     float stale=smoothstep(1.4,1.9,v)*(1.-smoothstep(2.4,2.8,v));
     vec2 fc=floor(gl_FragCoord.xy); float ck=mod(fc.x+fc.y,2.);
     vec3 col=mix(vec3(0.),vec3(.16,.11,.05),stale);

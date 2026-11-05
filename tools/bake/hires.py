@@ -25,7 +25,7 @@ POSES = {
     'kneel':  dict(kn=((-.017, .056, .046), (.017, .011, -.012)), an=((-.017, .013, .05), (.017, .013, -.062)), d=-.045),
 }
 
-def figure(name, pose):
+def figure(name, pose, arms='ready', lie=None):
     k = Kit(name, jitter=.04); Q = POSES[pose]; d = Q['d']; hy = .095 + d
     # legs: trousers (house colour) to the knee, puttees below, ammunition boots
     for i, sd in enumerate((-1, 1)):
@@ -67,25 +67,48 @@ def figure(name, pose):
         k.ball(sd * .0195, hz, .001, .0045, P['skin'], sy=1.3, seg=6)
         k.box(sd * .0072, hz + .004, .0205, .0045, .0025, .002, P['tar'])
     k.box(0, hz - .009, .0205, .011, .003, .003, P['boot'])
-    # arms: rifle at the ready; right hand on the grip, left hand on the fore-end
+    # arms and rifle. ready: at the ready; aim: shouldered and levelled; up: pointing along the body (prone after rotation);
+    # throw: right arm cocked back with a grenade, rifle slung across the back
     sh = hy + .047
-    rS, rE, rW = (.031, sh, 0), (.043, sh - .028, .018), (.021, sh - .035, .04)
-    lS, lE, lW = (-.031, sh, .002), (-.04, sh - .024, .026), (.001, sh - .03, .066)
+    A = {
+        'ready': ((.043, sh - .028, .018), (.021, sh - .035, .04), (-.04, sh - .024, .026), (.001, sh - .03, .066), sh - .036, .07, 0.0),
+        'aim':   ((.04, sh - .012, .02), (.016, sh + .004, .035), (-.03, sh - .016, .045), (.004, sh + .006, .1), sh + .006, 0.0, -.045),
+        'up':    ((.036, sh + .004, .03), (.016, sh + .03, .03), (-.03, sh + .02, .035), (.006, sh + .07, .035), None, 0.0, 0.0),
+        'throw': ((.05, sh + .02, -.02), (.045, sh + .055, -.035), (-.04, sh - .01, .03), (-.03, sh + .005, .065), None, 0.0, 0.0),
+    }[arms]
+    rE, rW, lE, lW, ry, up, zb = A
+    rS, lS = (.031, sh, 0), (-.031, sh, .002)
     for S_, E_, W_ in ((rS, rE, rW), (lS, lE, lW)):
         k.limb(S_, E_, .0092, .008, P['cloth'], True, seg=7); k.ball(*E_, .0081, P['cloth'], True, seg=7)
         k.limb(E_, W_, .0078, .0064, P['cloth'], True, seg=7)
-        k.limb(W_, (W_[0], W_[1], W_[2] + .002), .0074, .0074, P['cloth2'], True, seg=8)  # cuff
-        k.ball(W_[0], W_[1], W_[2] + .006, .0068, P['skin'], sy=.8, seg=8)
-    # rifle (Lee-Enfield-ish): butt, wrist, fore-end, barrel, bolt, magazine, sling, bayonet
-    ry = sh - .036; up = .07
-    def rp(z, dy=0.0): return (.012, ry + dy + z * up, z)
-    k.limb(rp(-.02, -.01), rp(.02, -.002), .0075, .0055, P['wood'], seg=6)
-    k.limb(rp(.02, -.001), rp(.12, .001), .0052, .0046, P['wood'], seg=6)
-    k.limb(rp(.03, .006), rp(.17, .005), .0022, .0022, P['steel'], seg=6)
-    k.box(.019, ry + .03 * up + .005, .03, .009, .003, .003, P['steel']); k.ball(.024, ry + .03 * up + .005, .03, .0022, P['steel'], seg=6)
-    k.box(.012, ry + .045 * up - .009, .045, .006, .012, .012, P['gun'], bevel=.001)
-    k.limb(rp(.17, .005), rp(.215, .004), .0016, .0008, P['steel'], seg=4)
-    k.limb(rp(-.01, -.012), rp(.1, -.006), .0012, .0012, P['leather'], seg=4)
+        k.ball(W_[0], W_[1], W_[2] + .004, .0068, P['skin'], sy=.8, seg=8)
+    if arms == 'throw':
+        k.ball(rW[0], rW[1] + .008, rW[2] - .004, .0075, P['steel'], seg=8)                       # grenade
+        k.limb((.03, hy + .06, -.04), (-.03, hy - .01, -.045), .0045, .004, P['wood'], seg=6)    # slung rifle
+        k.limb((.03, hy + .06, -.044), (.045, hy + .085, -.046), .0018, .0018, P['steel'], seg=5)
+    elif arms == 'up':
+        # rifle along the body axis: after the prone rotation it points forward along the ground
+        def rq(t, dx=0.0): return (.012 + dx, sh - .01 + t, .04)
+        k.limb(rq(-.02), rq(.02), .0075, .0055, P['wood'], seg=6); k.limb(rq(.02), rq(.12), .0052, .0046, P['wood'], seg=6)
+        k.limb(rq(.03), rq(.17), .0022, .0022, P['steel'], seg=6); k.limb(rq(.17), rq(.21), .0016, .0008, P['steel'], seg=4)
+    else:
+        def rp(z, dy=0.0): return (.012, ry + dy + z * up, z + zb)
+        k.limb(rp(-.02, -.01), rp(.02, -.002), .0075, .0055, P['wood'], seg=6)
+        k.limb(rp(.02, -.001), rp(.12, .001), .0052, .0046, P['wood'], seg=6)
+        k.limb(rp(.03, .006), rp(.17, .005), .0022, .0022, P['steel'], seg=6)
+        k.box(.019, ry + .03 * up + .005, .03 + zb, .009, .003, .003, P['steel']); k.ball(.024, ry + .03 * up + .005, .03 + zb, .0022, P['steel'], seg=6)
+        k.box(.012, ry + .045 * up - .009, .045 + zb, .006, .012, .012, P['gun'], bevel=.001)
+        k.limb(rp(.17, .005), rp(.215, .004), .0016, .0008, P['steel'], seg=4)
+        k.limb(rp(-.01, -.012), rp(.1, -.006), .0012, .0012, P['leather'], seg=4)
+    if lie:
+        # lay the whole figure down: 'prone' face down, head forward; 'dead' on the back, sprawled a little to one side
+        import bmesh as _bm
+        from mathutils import Matrix as _M
+        ang = math.pi / 2 if lie == 'prone' else -math.pi / 2
+        _bm.ops.rotate(k.bm, verts=k.bm.verts, cent=(0, 0, 0), matrix=_M.Rotation(ang, 3, 'X'))
+        if lie == 'dead': _bm.ops.rotate(k.bm, verts=k.bm.verts, cent=(0, 0, 0), matrix=_M.Rotation(.35, 3, 'Y') @ _M.Rotation(.5, 3, 'Z'))
+        zmin = min(v.co.z for v in k.bm.verts)
+        _bm.ops.translate(k.bm, verts=k.bm.verts, vec=(0, 0, -zmin))
     return k.done()
 
 def helmets_hi():
@@ -497,7 +520,9 @@ def church():
     return k.done()
 
 def build():
-    figs = [figure('soldier', 'stand'), figure('soldier_walk_a', 'walk_a'), figure('soldier_walk_b', 'walk_b'), figure('soldier_kneel', 'kneel')]
+    figs = [figure('soldier', 'stand'), figure('soldier_walk_a', 'walk_a'), figure('soldier_walk_b', 'walk_b'), figure('soldier_kneel', 'kneel'),
+            figure('soldier_aim', 'stand', 'aim'), figure('soldier_kneel_aim', 'kneel', 'aim'), figure('soldier_throw', 'walk_a', 'throw'),
+            figure('soldier_prone', 'stand', 'up', 'prone'), figure('soldier_dead', 'stand', 'ready', 'dead')]
     return figs + helmets_hi() + [vickers(), field_gun75(), tank_mk4(), tank_ft(), tank_a7v(), biplane(), propeller()] + markings() + \
         [pillbox_hi(), bunker_hi(), factory(), barracks(), hangar()] + \
         [tree_broad(), tree_pine(), tree_palm(), tree_acacia(), shrub(), house_a(), house_b(), church()]

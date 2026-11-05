@@ -359,6 +359,26 @@ export class Models {
     if (hi) this.soldier(tx, y, tz, face + .2, f, S, false, 0, POSE_HANG);
   }
 
+  /**
+   * An infantryman in battle, posed from what he is doing (design 1.2): marching (stride frames), firing from the trench
+   * (rifle shouldered), pinned in the open (prone, or kneeling to fire), throwing a grenade. Falls back to `soldier` without meshes.
+   */
+  infantry(x: number, y: number, z: number, face: number, f: number, S: number, st: { walk: number; recoil: number; trench: boolean; id: number }) {
+    const M = this.mesh;
+    if (!M?.has('soldier_aim') || !this.hiMesh || st.walk) { this.soldier(x, y, z, face, f, S, false, st.walk); return; }
+    const U = UNI[f] ?? K.khaki, helm = HELM_OF[f] ?? 'helm_stahl', h = (st.id * 2654435761 >>> 0) % 9, firing = st.recoil > .05;
+    if (st.trench) {
+      if (firing && h === 0) { M.push('soldier_throw', x, y, z, face, S, U); M.push(helm, x, y + .188 * S, z, face, S, U); return; }
+      M.push(firing ? 'soldier_aim' : 'soldier', x, y, z, face, S, U); M.push(helm, x, y + .19 * S, z, face, S, U); return;
+    }
+    if (h < 3) { // kneeling to fire
+      M.push(firing ? 'soldier_kneel_aim' : 'soldier_kneel', x, y, z, face, S, U); M.push(helm, x, y + .145 * S, z, face, S, U); return;
+    }
+    // prone: the helmet tips forward with the head
+    M.push('soldier_prone', x, y, z, face, S, U);
+    M.push(helm, x + Math.sin(face) * .19 * S, y + .06 * S, z + Math.cos(face) * .19 * S, face, S, U, 0, Math.PI / 2);
+  }
+
   /** Draw any unit type. `recoil` (0..1) pulls an artillery barrel back after a shot. */
   unit(type: UnitType, x: number, y: number, z: number, face: number, f: number, S: number, walk: number, recoil: number) {
     if (type === 'inf') { this.soldier(x, y, z, face, f, S, false, walk); return; }
@@ -594,6 +614,13 @@ export class Models {
   }
 
   corpse(x: number, y: number, z: number, face: number, f: number, S = 1) {
+    if (this.mesh?.has('soldier_dead') && this.hiMesh) {
+      const U = UNI[f] ?? K.khaki, a = face + .4;
+      this.mesh.push('soldier_dead', x, y, z, a, S, U);
+      // the helmet knocked off, lying beside him
+      this.mesh.push(HELM_OF[f] ?? 'helm_stahl', x + Math.cos(a) * .07 * S, y + .004 * S, z - Math.sin(a) * .07 * S, a + 1.3, S, U, .25);
+      return;
+    }
     this.at(x, y, z, face + .4, S); const b = this.b;
     b(0, .014, 0, .07, .028, .15, DEADC[f]); b(0, .02, .09, .04, .035, .04, K.skin);
     if (!this.hi) return;

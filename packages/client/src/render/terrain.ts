@@ -9,6 +9,7 @@ import { boxGeo } from './pools';
 import { DisposeBag, clamp, col, lerp } from './util';
 import { facCol } from './palette';
 import { COAST_GLSL, coastTexture } from './coast';
+import { borderField, type BorderField } from './borderField';
 import type { MeshKey, MeshPools } from './meshPools';
 
 /** Tiles per side of a close-up detail chunk (see detail.ts). */
@@ -168,6 +169,8 @@ export class Terrain {
   private readonly nearBorder = new Map<string, Int32Array>();
   /** Signed distance to the smooth coastline (coast.ts), shared by the ground shaders and the water. */
   readonly coastTex: THREE.DataTexture;
+  /** Smooth region borders, owners, trench levels and damage per border for the close-up ground (borderField.ts). */
+  readonly border: BorderField;
   /** Village and town houses (x, y, z, width, height, depth, wall colour) and churches (x, y, z, size), for the modelled scenery. */
   private readonly homes: [number, number, number, number, number, number, THREE.Color][] = [];
   private readonly churches: [number, number, number, number][] = [];
@@ -266,6 +269,8 @@ export class Terrain {
     this.warTex = this.bag.add(new THREE.DataTexture(this.warData, COLS, ROWS, THREE.RGBAFormat, THREE.UnsignedByteType));
     this.warTex.magFilter = this.warTex.minFilter = THREE.LinearFilter; this.warTex.needsUpdate = true;
     this.coastTex = this.bag.add(coastTexture(world));
+    this.border = borderField(world);
+    for (const t of [this.border.distTex, this.border.idTex, this.border.tableTex]) this.bag.add(t);
     const farMat = this.bag.add(farMaterial(this.stratTex, this.natLTex, this.coverTex, this.warTex, this.coastTex));
     this.buildFarGround(farMat);
     const treeMat = this.bag.add(new THREE.MeshLambertMaterial()), coverTex = this.coverTex;
@@ -444,12 +449,12 @@ export class Terrain {
     const H = this.tileH, land = this.world.land;
     const c0 = gx & 1 ? (gx - 1) >> 1 : (gx >> 1) - 1, c1 = gx & 1 ? c0 : c0 + 1;
     const r0 = gy & 1 ? (gy - 1) >> 1 : (gy >> 1) - 1, r1 = gy & 1 ? r0 : r0 + 1;
-    let m = -1;
+    let m = 0, k = 0;
     for (let r = r0; r <= r1; r++) {
       if (r < 0 || r >= ROWS) continue;
-      for (let c = c0; c <= c1; c++) { const i = r * COLS + ((c + COLS) % COLS); if (land[i] && H[i] > m) m = H[i]; }
+      for (let c = c0; c <= c1; c++) { const i = r * COLS + ((c + COLS) % COLS); if (land[i]) { m += H[i]; k++; } }
     }
-    return m < 0 ? -1 : m + .003;
+    return k ? m / k + .003 : -1;
   }
 
   /** Height of the close-up ground surface at a world position (falls back to the tile top off the surface). */
@@ -469,6 +474,7 @@ export class Terrain {
    */
   paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3) {
     const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE;
+    { const B = this.border; B.table[(B.regions * B.regions + rid) * 4] = owner >= 0 ? owner + 1 : 0; }
     const { river, borderNb } = this.world;
     const base = this.baseCol, SD = this.stratData, LD = this.natLData;
     const hlC = hl === 2 ? WHITE : hl === 1 ? WHITE : hl === 3 ? RED : null, hlA = hl === 2 ? .26 : hl === 1 ? .12 : hl === 3 ? .15 : 0;
@@ -482,7 +488,6 @@ export class Terrain {
       else if (this.roadT[i]) { nr += (ROADC.r - nr) * .3; ng += (ROADC.g - ng) * .3; nbb += (ROADC.b - nbb) * .3; r = nr; g = ng; b = nbb; }
       r += (fc.r - r) * .46; g += (fc.g - g) * .46; b += (fc.b - b) * .46;
       // close-up: natural ground with a light owner tint
-      nr += (fc.r - nr) * .1; ng += (fc.g - ng) * .1; nbb += (fc.b - nbb) * .1;
       const nb = borderNb[i];
       let pr = nr, pg = ng, pb = nbb;
       if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; if (owners[nb] !== owner) { nr = r; ng = g; nbb = b; } }
@@ -523,13 +528,15 @@ export class Terrain {
     let key = '';
     for (const r of g.regions) {
       if (r.cr) for (const n in r.cr) key += r.id + ':' + n + '=' + (r.cr[n] >> 3) + ',';
-      for (const n of this.world.regions[r.id].adj) { const tr = worksAt(r, n).tr, c = r.fr?.[n] ? 1 : 0; if (tr || c) key += r.id + '>' + n + '=' + Math.max(tr, c) + ','; }
+      for (const n of this.world.regions[r.id].adj) { const w = worksAt(r, n), c = r.fr?.[n] ? 1 : 0; if (w.tr || c || w.wire) key += r.id + '>' + n + '=' + Math.max(w.tr, c) + '/' + w.wire + ','; }
     }
     if (key === this.warKey) return;
     this.warKey = key; const D = this.warData; D.fill(0);
+    const B = this.border, TB = B.table, NR = B.regions; TB.fill(0, 0, NR * NR * 4);
     for (const r of g.regions) for (const n of this.world.regions[r.id].adj) {
       const lvl = Math.max(worksAt(r, n).tr, r.fr?.[n] ? 1 : 0), dmg = Math.min(1, (r.cr?.[n] ?? 0) / 150);
-      if (!lvl && dmg <= 0) continue;
+      if (!lvl && dmg <= 0 && !worksAt(r, n).wire) continue;
+      if (n < NR) { const o = (r.id * NR + n) * 4; TB[o] = lvl * 80; TB[o + 1] = Math.round(dmg * 255); TB[o + 2] = worksAt(r, n).wire; }
       const band = this.borderBand(r.id, n);
       for (let k = 0; k < band.length; k += 2) {
         const o = band[k] * 4, d = band[k + 1];
@@ -537,12 +544,12 @@ export class Terrain {
         if (dmg > 0) D[o + 1] = Math.max(D[o + 1], Math.round(dmg * 255 * (1 - d / 4)));
       }
     }
-    this.warTex.needsUpdate = true;
+    this.warTex.needsUpdate = true; B.tableTex.needsUpdate = true;
   }
 
   /** Call after one or more paintRegion calls. */
   commitColors() {
-    this.stratTex.needsUpdate = true; this.natLTex.needsUpdate = true; this.natTex.needsUpdate = true;
+    this.stratTex.needsUpdate = true; this.natLTex.needsUpdate = true; this.natTex.needsUpdate = true; this.border.tableTex.needsUpdate = true;
     if (this.treeMesh.instanceColor) this.treeMesh.instanceColor.needsUpdate = true;
   }
 

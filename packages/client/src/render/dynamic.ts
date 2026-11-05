@@ -14,6 +14,8 @@ import type { Terrain } from './terrain';
 import { lerp } from './util';
 
 /** Map scale of figures and vehicles (1 = battlefield model size). */
+/** Below this camera distance the close-up ground paints trenches, wire and borders itself. */
+export const CLOSE_PAINT = 15;
 export const MAP_S = .5;
 /** Map scale of buildings relative to their original model size. */
 const BLD = .5;
@@ -59,7 +61,8 @@ export class DynamicDraw {
         for (let k = 0; k < 4; k++) P(bx - .11 * B / BLD + k * .075 * B / BLD, .09, bz + .076 * B / BLD, .05, .05, .01, K.flash, m.glowPool);
       }
       if (t.airfield && showB) m.airfield(x + .05, this.hAt(x + .05, z + .62 * O, y), z + .62 * O, Math.PI / 2, f, this.layer === 2 ? .95 : .8, t.battle >= 0 ? 0 : t.units.plane, T);
-      if (rig.dist < 45) this.works(t, def.id, y);
+      // up close the painted ground digs the trenches, parapets and wire in along the whole border (groundPaint.ts)
+      if (rig.dist < 45 && rig.dist >= CLOSE_PAINT) this.works(t, def.id, y);
       if (this.layer !== 2) this.frontLines(g, def.id, y, rig.dist);
       if (this.layer === 2) continue;
       // the main army in the middle, each corps at its border (a region in battle keeps only what is not fighting)
@@ -82,6 +85,8 @@ export class DynamicDraw {
       const c = t.fr?.[n], foe = g.regions[n].owner !== f;
       if (!c && !(foe && (rid === this.sel || (this.layer === 1 && g.viewer === f)))) continue;
       if (c && !close) continue;
+      // up close the dug-in trench shows the front; the staff-map bar would cover the troops
+      if (dist < CLOSE_PAINT) continue;
       const p = sectorPoint(this.world, rid, n), face = Math.atan2(p.x - R.cx, p.z - R.cz), y = this.hAt(p.x, p.z, y0) + .03;
       const L = 1.5, zoom = Math.max(1, dist / 30);
       if (c) {

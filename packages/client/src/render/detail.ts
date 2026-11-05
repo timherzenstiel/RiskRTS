@@ -190,12 +190,8 @@ export class GroundDetail {
       }
       if (T.cityT[i]) continue;
       if (T.fieldT[i]) {
-        // hedgerows where the field meets other ground
-        const L = c > 0 && land[i - 1] && !T.fieldT[i - 1] && !river[i - 1], Rr = c < COLS - 1 && land[i + 1] && !T.fieldT[i + 1] && !river[i + 1];
-        const U = i >= COLS && land[i - COLS] && !T.fieldT[i - COLS], D = i + COLS < N && land[i + COLS] && !T.fieldT[i + COLS];
-        const hedge = (x: number, z: number, along: boolean) => { for (let n = 0; n < 6; n++) { const t = (n + .5) / 6 - .5, hx = along ? x + t * TS : x, hz = along ? z : z + t * TS; add(hx, yAt(hx, hz), hz, along ? .06 : .022, .022 + hash2(i, n) * .012, along ? .022 : .06, shade(C.hedge, .85 + hash2(n, i) * .35)); } };
-        if (L) hedge(x0 - TS / 2 + .012, z0, false); if (Rr) hedge(x0 + TS / 2 - .012, z0, false);
-        if (U) hedge(x0, z0 - TS / 2 + .012, true); if (D) hedge(x0, z0 + TS / 2 - .012, true);
+        // a few bushes along the field's edge (the painted fields have soft, irregular edges, so no straight hedgerows)
+        for (let n = 0; n < 2; n++) if (hs(20 + n) < .35) { const bx = jx(21 + n), bz = jz(22 + n), s0 = .018 + hs(23 + n) * .016; add(bx, yAt(bx, bz), bz, s0, s0 * .9, s0, shade(C.hedge, .85 + hs(24 + n) * .35)); }
         if (hs(3) < .035) { // farmstead
           const fx = jx(4), fz = jz(4), h = yAt(fx, fz);
           add(fx, h, fz, .055, .035, .045, C.wall); add(fx, h + .035, fz - .011, .062, .012, .026, shade(C.roof, 1.2)); add(fx, h + .035, fz + .011, .062, .012, .026, shade(C.roof, .8)); add(fx, h + .047, fz, .062, .006, .008, C.roof);

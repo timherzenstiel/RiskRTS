@@ -2,22 +2,23 @@
 // file (header, tabs, cameo grids), and a supply gauge along the inner edge. On phones it becomes a bottom tray.
 import { FleetList } from './Navy';
 import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income, sectorName } from '@riskrts/shared';
-import { useSim, useUi } from '../game/store';
+import { MAP_MODES, useSim, useUi, type MapMode } from '../game/store';
 import { BANDS, bandOf } from '../render/camera';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
 import { Drawer } from './Drawer';
 import { Minimap } from './Minimap';
+import { BorderCard } from './Situation';
 import { rendererRef } from './refs';
 
-/** Map layer: everything, troops first (markers, front lines), or industry (buildings, rails, supply). */
+/** Map mode (design-command §1): political, fronts, forces, supply, intel. The same mode again goes back to the political map. */
 export function LayerPicker() {
-  const layer = useUi(s => s.layer), set = useUi.getState().setLayer;
+  const mode = useUi(s => s.mode), set = useUi.getState().setMode;
   return (
-    <div className="seg layer-seg" role="group" aria-label="Map layer">
-      <button aria-pressed={layer === 0} title="Show everything" onClick={() => { click(); set(0); }}>Map</button>
-      <button aria-pressed={layer === 1} title="Troops first: corps on the borders, front lines, columns on the move (T)" onClick={() => { click(); set(layer === 1 ? 0 : 1); }}>Troops<kbd>T</kbd></button>
-      <button aria-pressed={layer === 2} title="Industry: factories, barracks, airfields, rails and supply (B)" onClick={() => { click(); set(layer === 2 ? 0 : 2); }}>Industry<kbd>B</kbd></button>
+    <div className="seg layer-seg mode-seg" role="group" aria-label="Map mode">
+      {MAP_MODES.map((m, i) => (
+        <button key={m.name} aria-pressed={mode === i} title={`${m.name}: ${m.hint} (${m.key.toUpperCase()})`} onClick={() => { click(); set(mode === i && i ? 0 : i as MapMode); }}>{m.short}<kbd>{m.key.toUpperCase()}</kbd></button>
+      ))}
     </div>
   );
 }
@@ -72,6 +73,7 @@ function Idle() {
           </button>
         ))}
         <FleetList />
+        <button className="btn sm sit-open" onClick={() => { click(); ui().setPanel('situation'); }}>Situation: wars and borders</button>
         <p className="note">Select a region on the map to open its file: recruit, fortify, build, deploy and march.</p>
       </div>
     </section>
@@ -87,7 +89,7 @@ export function Sidebar() {
         <LayerPicker />
         <ZoomPicker />
       </div>
-      <div className="side-body">{sel >= 0 ? <Drawer /> : <Idle />}</div>
+      <div className="side-body"><BorderCard />{sel >= 0 ? <Drawer /> : <Idle />}</div>
       <SupplyGauge />
     </aside>
   );

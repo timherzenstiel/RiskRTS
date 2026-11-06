@@ -5,7 +5,9 @@ import { useSim, useUi, type Overlay, type Panel } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
 import { CloseIcon, HandshakeIcon, Icon, SwordsIcon } from './icons';
-import { menOf, menStr } from './format';
+import { menOf, menStr, nm } from './format';
+import { t, tx } from '../i18n';
+import { rich, tn } from './LangPicker';
 import { rendererRef } from './refs';
 import { reqText, staffBadge } from './Staff';
 import { FortGrid } from './DrawerTabs';
@@ -33,18 +35,18 @@ export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
   const sim = useSim(); if (!sim) return null;
   const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, staff = staffBadge(sim.g, sim.me);
-  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = 'borders in danger', calm = false) => (
-    <button className={'rb' + (panel === k ? ' on' : '')} aria-pressed={panel === k} title={label} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
-      {icon}<span>{label}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={`${badge} ${what}`}>{badge}</em> : null}
+  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false) => (
+    <button className={'rb' + (panel === k ? ' on' : '')} aria-pressed={panel === k} title={t(label)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
+      {icon}<span>{t(label)}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={t(what, badge)}>{badge}</em> : null}
     </button>
   );
   const o = (k: Overlay, label: string, icon: React.ReactNode, title: string) => (
-    <button className={'rb' + (overlay === k ? ' on' : '')} title={title} onClick={() => { Sfx.clunk(); ui().setOverlay(k); }}>{icon}<span>{label}</span></button>
+    <button className={'rb' + (overlay === k ? ' on' : '')} title={t(title)} onClick={() => { Sfx.clunk(); ui().setOverlay(k); }}>{icon}<span>{t(label)}</span></button>
   );
   return (
-    <nav id="rail" className="plate" aria-label="War Office panels">
+    <nav id="rail" className="plate" aria-label={t('War Office panels')}>
       {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
-      {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, 'requests waiting', !staff.crit)}
+      {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, '{0} requests waiting', !staff.crit)}
       {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />)}
       {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />)}
       {p('navy', 'Navy', <RailIcon d="M12 3v14M7 8h10M4 14c2 4 5 6 8 6s6-2 8-6" />)}
@@ -81,11 +83,11 @@ function warsOf(g: GameState, me: number): War[] {
 }
 
 function BattleRow({ g, me, b }: { g: GameState; me: number; b: Battle }) {
-  const W = buildWorld(), stage = b.goal === undefined ? '' : [' · first line', ' · consolidating', ' · depth', ' · foothold'][b.stage ?? 0];
-  const who = b.attacker === me ? 'We attack' : b.def === me ? 'We defend' : `${FACTIONS[b.attacker].short} attacks`;
+  const W = buildWorld(), stage = b.goal === undefined ? '' : ' · ' + t(['first line', 'consolidating', 'depth', 'foothold'][b.stage ?? 0]);
+  const who = b.attacker === me ? t('We attack') : b.def === me ? t('We defend') : t('{0} attacks', FACTIONS[b.attacker].short);
   return (
     <button className="sit-row" onClick={() => { click(); useUi.getState().select(b.region); rendererRef.current?.flyToBattle(b.id, 8); }}>
-      <span><b>{W.regions[b.region].name}</b> <small>{who}{b.from >= 0 ? ` · ${borderLabel(W, b.from)}` : ''}{stage}</small></span><span className="go">Go</span>
+      <span><b>{nm(W.regions[b.region].name)}</b> <small>{who}{b.from >= 0 ? ` · ${tx(borderLabel(W, b.from))}` : ''}{stage}</small></span><span className="go">{t('Go')}</span>
     </button>
   );
 }
@@ -99,35 +101,35 @@ export function SituationPanel() {
   const worst = borders.filter(b => b.danger >= 2 || b.danger === -1).slice(0, 6);
   const others = g.battles.filter(b => !b.ended && !b.sides.includes(me));
   return (
-    <section id="panel" className="plate" aria-label="Situation">
-      <div className="pn-h"><h2>Situation</h2><button className="x" aria-label="Close panel" onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+    <section id="panel" className="plate" aria-label={t('Situation')}>
+      <div className="pn-h"><h2>{t('Situation')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
       <div className="pn-body">
-        <div className="lbl"><span>Our wars</span><small>{wars.filter(w => !w.treaty).length} at war · {g.battles.filter(b => !b.ended && b.sides.includes(me)).length} battles</small></div>
+        <div className="lbl"><span>{t('Our wars')}</span><small>{t('{0} at war · {1} battles', wars.filter(w => !w.treaty).length, g.battles.filter(b => !b.ended && b.sides.includes(me)).length)}</small></div>
         {wars.map(w => (
           <div key={w.f} className={'war' + (w.treaty ? ' peace' : '')} style={{ '--c': FACTIONS[w.f].color } as React.CSSProperties}>
-            <div className="war-h"><i className="dot" /><b>{FACTIONS[w.f].name}</b><span className={'tag' + (w.treaty ? '' : ' red')}>{w.treaty ?? 'War'}</span></div>
+            <div className="war-h"><i className="dot" /><b>{nm(FACTIONS[w.f].name)}</b><span className={'tag' + (w.treaty ? '' : ' red')}>{w.treaty ? tx(w.treaty) : t('War')}</span></div>
             <div className="war-n">
-              <span><small>Battles</small><b>{w.battles.length}</b></span>
-              <span><small>Their regions</small><b>{w.regions}</b></span>
-              <span title="Men lost in the battles between us that are still on record"><small>Men lost · us : them</small><b>{menStr(w.lostUs)} : {menStr(w.lostThem)}</b></span>
+              <span><small>{t('Battles')}</small><b>{w.battles.length}</b></span>
+              <span><small>{t('Their regions')}</small><b>{w.regions}</b></span>
+              <span title={t('Men lost in the battles between us that are still on record')}><small>{t('Men lost · us : them')}</small><b>{menStr(w.lostUs)} : {menStr(w.lostThem)}</b></span>
             </div>
             {w.battles.map(b => <BattleRow key={b.id} g={g} me={me} b={b} />)}
           </div>
         ))}
-        <div className="lbl"><span>Borders to watch</span><small>ours : theirs</small></div>
+        <div className="lbl"><span>{t('Borders to watch')}</span><small>{t('ours : theirs')}</small></div>
         {worst.length ? worst.map(b => (
           <button key={b.region + '|' + b.sector} className={'sit-row bdr d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '')} onClick={() => openBorder(b)}>
-            <span><b>{W.regions[b.region].name} · {b.nb >= 0 ? W.regions[b.nb].name : borderLabel(W, b.sector)}</b><small>{dangerOf(b)}{b.know === 2 && b.day !== undefined ? ' · old report' : b.know === 1 ? ' · estimate' : ''}</small></span>
+            <span><b>{nm(W.regions[b.region].name)} · {b.nb >= 0 ? nm(W.regions[b.nb].name) : tx(borderLabel(W, b.sector))}</b><small>{t(dangerOf(b))}{b.know === 2 && b.day !== undefined ? ' · ' + t('old report') : b.know === 1 ? ' · ' + t('estimate') : ''}</small></span>
             <span className="lcdn">{b.own.btl[0] + b.own.reserve[0]} : {b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?'}{b.their.incoming ? ` +${b.their.incoming}` : ''}</span>
           </button>
-        )) : <p className="note">No border of ours is weaker than what we know is across it.</p>}
-        {others.length > 0 && <div className="lbl"><span>Other wars we can see</span></div>}
+        )) : <p className="note">{t('No border of ours is weaker than what we know is across it.')}</p>}
+        {others.length > 0 && <div className="lbl"><span>{t('Other wars we can see')}</span></div>}
         {others.slice(0, 8).map(b => (
           <button key={b.id} className="sit-row" onClick={() => { click(); rendererRef.current?.flyToBattle(b.id, 10); }}>
-            <span><i className="dot" style={{ '--c': FACTIONS[b.attacker].color } as React.CSSProperties} /> <b>{FACTIONS[b.attacker].short} → {FACTIONS[b.def]?.short ?? '?'}</b> <small>{W.regions[b.region].name}</small></span><span className="go">Go</span>
+            <span><i className="dot" style={{ '--c': FACTIONS[b.attacker].color } as React.CSSProperties} /> <b>{nm(FACTIONS[b.attacker].short)} → {FACTIONS[b.def] ? nm(FACTIONS[b.def].short) : '?'}</b> <small>{nm(W.regions[b.region].name)}</small></span><span className="go">{t('Go')}</span>
           </button>
         ))}
-        <p className="note">Press <kbd>F</kbd> for the Fronts map: war borders glow in both powers' colours and every border of ours shows a chip – our battalions against what we know is across.</p>
+        <p className="note">{rich(t('Press <kbd>F</kbd> for the Fronts map: war borders glow in both powers\' colours and every border of ours shows a chip – our battalions against what we know is across.'))}</p>
       </div>
     </section>
   );
@@ -142,37 +144,37 @@ export function BorderCard() {
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState, [rid, sec] = border, r = g.regions[rid];
   if (r.owner !== me) return null;
   const b = borderBalance(g, rid, sec), foe = b.foe >= 0 ? FACTIONS[b.foe] : null;
-  const works = (s: Balance['own']) => [s.trench ? `Trench ${roman(s.trench)}` : '', s.sand ? `sandbags ${roman(s.sand)}` : '', s.wire ? `wire ${roman(s.wire)}` : '', s.defs ? `${s.defs} defence${s.defs > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') || 'No works';
+  const works = (s: Balance['own']) => [s.trench ? tn('Trench {0}', { raw: roman(s.trench) }) : '', s.sand ? tn('sandbags {0}', { raw: roman(s.sand) }) : '', s.wire ? tn('wire {0}', { raw: roman(s.wire) }) : '', s.defs ? t(s.defs > 1 ? '{0} defences' : '{0} defence', s.defs) : ''].filter(Boolean).join(' · ') || t('No works');
   const theirCorps = b.nb >= 0 ? corpsAtPost(g.regions[b.nb], rid)[0] : undefined, ours = corpsAtPost(r, sec);
   const supply = g.factions[me].supply;
   return (
-    <section className={'bcard d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '')} aria-label="Border">
+    <section className={'bcard d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '')} aria-label={t('Border')}>
       <div className="bc-h">
-        <div><small>Border · {dangerOf(b)}</small><h3>{W.regions[rid].name} ↔ {b.nb >= 0 ? W.regions[b.nb].name : borderLabel(W, sec)}</h3></div>
-        <button className="x" aria-label="Close border" onClick={() => ui().closeBorder()}><CloseIcon /></button>
+        <div><small>{t('Border · {0}', dangerOf(b))}</small><h3>{nm(W.regions[rid].name)} ↔ {b.nb >= 0 ? nm(W.regions[b.nb].name) : tx(borderLabel(W, sec))}</h3></div>
+        <button className="x" aria-label={t('Close border')} onClick={() => ui().closeBorder()}><CloseIcon /></button>
       </div>
       <div className="bc-cols">
         <div className="bc-side" style={{ '--c': FACTIONS[me].color } as React.CSSProperties}>
-          <small>Ours</small>
-          <b className="lcdn">{b.own.btl[0] + b.own.reserve[0]} btl</b>
-          <span>{b.own.btl[0]} on the border{b.own.reserve[0] ? ` · ${b.own.reserve[0]} reserve nearby` : ''}{b.own.incoming ? ` · ${b.own.incoming} on the way` : ''}</span>
+          <small>{t('Ours')}</small>
+          <b className="lcdn">{t('{0} btl', b.own.btl[0] + b.own.reserve[0])}</b>
+          <span>{t('{0} on the border', b.own.btl[0])}{b.own.reserve[0] ? ' · ' + t('{0} reserve nearby', b.own.reserve[0]) : ''}{b.own.incoming ? ' · ' + t('{0} on the way', b.own.incoming) : ''}</span>
           <span>{works(b.own)}</span>
-          {ours.length > 0 && <span className="bc-corps">{ours.map(c => <button key={c.id} className="lnk" title="Select this corps" onClick={() => { click(); ui().selectCorps([c.id], false, rid); }}>{groupName(me, 1, c.n)} · {groundUnits(c.u)}</button>)}</span>}
+          {ours.length > 0 && <span className="bc-corps">{ours.map(c => <button key={c.id} className="lnk" title={t('Select this corps')} onClick={() => { click(); ui().selectCorps([c.id], false, rid); }}>{groupName(me, 1, c.n)} · {groundUnits(c.u)}</button>)}</span>}
         </div>
         <div className="bc-side" style={{ '--c': foe?.color ?? '#7fb4d8' } as React.CSSProperties}>
-          <small>Theirs{b.know === 1 ? ' · estimate' : b.know === 2 ? ' · old report' : b.know === 0 ? ' · unknown' : ''}</small>
-          <b className="lcdn">{b.know ? `${rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]])} btl` : '?'}</b>
-          <span>{b.know ? `${rng(b.their.btl)} on the border${b.their.reserve[1] ? ` · ${rng(b.their.reserve)} behind` : ''}` : 'Send a patrol to find out'}{b.their.incoming ? ` · +${b.their.incoming} marching in` : ''}</span>
-          <span>{b.know ? works(b.their) : 'Works unknown'}</span>
-          {theirCorps && theirCorps.n > 0 && <span>{groupName(b.foe, 1, theirCorps.n)}{(theirCorps.ord ?? 0) >= 1 ? ' · assembling to attack' : ''}</span>}
+          <small>{t('Theirs')}{b.know === 1 ? ' · ' + t('estimate') : b.know === 2 ? ' · ' + t('old report') : b.know === 0 ? ' · ' + t('unknown') : ''}</small>
+          <b className="lcdn">{b.know ? tn('{0} btl', { raw: rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) }) : '?'}</b>
+          <span>{b.know ? `${tn('{0} on the border', { raw: rng(b.their.btl) })}${b.their.reserve[1] ? ' · ' + tn('{0} behind', { raw: rng(b.their.reserve) }) : ''}` : t('Send a patrol to find out')}{b.their.incoming ? ' · ' + t('+{0} marching in', b.their.incoming) : ''}</span>
+          <span>{b.know ? works(b.their) : t('Works unknown')}</span>
+          {theirCorps && theirCorps.n > 0 && <span>{groupName(b.foe, 1, theirCorps.n)}{(theirCorps.ord ?? 0) >= 1 ? ' · ' + t('assembling to attack') : ''}</span>}
         </div>
       </div>
-      {b.massing && <p className="note budget full">Troops across this border are assembling for an attack.</p>}
+      {b.massing && <p className="note budget full">{t('Troops across this border are assembling for an attack.')}</p>}
       <div className="bc-acts">
-        <button className="btn sm" aria-pressed={open === 'send'} onClick={() => { click(); setOpen(open === 'send' ? '' : 'send'); }}>Send corps…</button>
-        <button className="btn sm" aria-pressed={open === 'fort'} onClick={() => { click(); setOpen(open === 'fort' ? '' : 'fort'); }}>Fortify…</button>
-        {b.nb >= 0 && <button className="btn sm" aria-pressed={open === 'scout'} onClick={() => { click(); setOpen(open === 'scout' ? '' : 'scout'); }}><Icon k="patrol" size={14} /> Scout…</button>}
-        {b.nb >= 0 && b.foe !== me && <button className="btn sm danger" disabled={groundUnits(r.units) < 2 || r.battle >= 0} title="Quick attack from this region over this border, with the share and goal set in the region's Overview" onClick={() => ui().march(rid, b.nb, !!treatyOf(g, me, b.foe) || undefined)}>Attack</button>}
+        <button className="btn sm" aria-pressed={open === 'send'} onClick={() => { click(); setOpen(open === 'send' ? '' : 'send'); }}>{t('Send corps…')}</button>
+        <button className="btn sm" aria-pressed={open === 'fort'} onClick={() => { click(); setOpen(open === 'fort' ? '' : 'fort'); }}>{t('Fortify…')}</button>
+        {b.nb >= 0 && <button className="btn sm" aria-pressed={open === 'scout'} onClick={() => { click(); setOpen(open === 'scout' ? '' : 'scout'); }}><Icon k="patrol" size={14} /> {t('Scout…')}</button>}
+        {b.nb >= 0 && b.foe !== me && <button className="btn sm danger" disabled={groundUnits(r.units) < 2 || r.battle >= 0} title={t('Quick attack from this region over this border, with the share and goal set in the region\'s Overview')} onClick={() => ui().march(rid, b.nb, !!treatyOf(g, me, b.foe) || undefined)}>{t('Attack')}</button>}
       </div>
       {open === 'fort' && <FortGrid region={r} id={rid} sector={sec} />}
       {open === 'send' && <SendCorps g={g} me={me} rid={rid} sec={sec} />}
@@ -195,13 +197,13 @@ function SendCorps({ g, me, rid, sec }: { g: GameState; me: number; rid: number;
     }
   }
   list.sort((a, z) => a.eta - z.eta);
-  if (!list.length) return <p className="note">No corps of ours can reach this border over land. Form one from a depot (Forces panel).</p>;
+  if (!list.length) return <p className="note">{t('No corps of ours can reach this border over land. Form one from a depot (Forces panel).')}</p>;
   return (
     <div className="bc-send">
       {list.slice(0, 5).map(x => (
         <div key={x.id} className="it nb">
-          <div className="tx"><b>{groupName(me, 1, x.n)} · {x.btl} btl</b><small>{W.regions[x.r].name} · {Math.round(x.eta)} s{x.army !== undefined ? ' · leaves its army\'s orders' : ''}</small></div>
-          <button className="buy plain" onClick={() => ui().order({ t: 'moveCorps', region: x.r, id: x.id, to: rid, toPost: sec })}>Send</button>
+          <div className="tx"><b>{groupName(me, 1, x.n)} · {t('{0} btl', x.btl)}</b><small>{nm(W.regions[x.r].name)} · {Math.round(x.eta)} s{x.army !== undefined ? ' · ' + t('leaves its army\'s orders') : ''}</small></div>
+          <button className="buy plain" onClick={() => ui().order({ t: 'moveCorps', region: x.r, id: x.id, to: rid, toPost: sec })}>{t('Send')}</button>
         </div>
       ))}
     </div>
@@ -216,12 +218,12 @@ function ScoutAcross({ g, me, rid, nb }: { g: GameState; me: number; rid: number
   const seen = g.regions[nb].seen;
   return (
     <div className="bc-send">
-      <p className="note">{(g.regions[nb].vis ?? 0) >= 3 ? 'We see it in full.' : seen !== undefined ? `Our last report is ${g.day - seen} days old.` : 'We have no report on it.'}</p>
-      <div className="it nb"><div className="tx"><b>Cavalry patrol</b><small>Troops across and the defences of this border · may be caught</small></div>
+      <p className="note">{(g.regions[nb].vis ?? 0) >= 3 ? t('We see it in full.') : seen !== undefined ? t('Our last report is {0} days old.', g.day - seen) : t('We have no report on it.')}</p>
+      <div className="it nb"><div className="tx"><b>{t('Cavalry patrol')}</b><small>{t('Troops across and the defences of this border · may be caught')}</small></div>
         <button className="buy plain" disabled={sup < COST.patrol} onClick={() => ui().order({ t: 'patrol', from: rid, to: nb })}>{COST.patrol}</button></div>
-      {air && <div className="it nb"><div className="tx"><b>Reconnaissance flight</b><small>From {W.regions[air.id].name}: troops, buildings, every border · anti-air may shoot it down</small></div>
+      {air && <div className="it nb"><div className="tx"><b>{t('Reconnaissance flight')}</b><small>{t('From {0}: troops, buildings, every border · anti-air may shoot it down', W.regions[air.id].name)}</small></div>
         <button className="buy plain" disabled={sup < COST.recon} onClick={() => ui().order({ t: 'recon', from: air.id, to: nb })}>{COST.recon}</button></div>}
-      <div className="it nb"><div className="tx"><b>{here ? (activeSpies(g, me).some(s => s.region === nb) ? 'Our agent works there' : 'Our agent is on the way') : 'Spy from the capital'}</b><small>{here ? 'Reports everything until unmasked' : `${spies.length}/3 agents in the field`}</small></div>
+      <div className="it nb"><div className="tx"><b>{here ? (activeSpies(g, me).some(s => s.region === nb) ? t('Our agent works there') : t('Our agent is on the way')) : t('Spy from the capital')}</b><small>{here ? t('Reports everything until unmasked') : t('{0}/3 agents in the field', spies.length)}</small></div>
         {!here && <button className="buy plain" disabled={!cap || sup < COST.spy || spies.length >= 3} onClick={() => ui().order({ t: 'spy', to: nb })}>{COST.spy}</button>}</div>
     </div>
   );
@@ -234,12 +236,12 @@ interface Alert { key: string; level: 0 | 1 | 2; title: string; text: string; ac
 function alertsOf(g: GameState, me: number): Alert[] {
   const W = buildWorld(), out: Alert[] = [], f = g.factions[me];
   for (const b of g.battles) if (!b.ended && b.def === me && b.attacker !== me) out.push({
-    key: 'atk' + b.id, level: 2, title: `${W.regions[b.region].name} under attack`, text: `${FACTIONS[b.attacker]?.name ?? 'The enemy'} attacks ${b.from >= 0 ? borderLabel(W, b.from) : ''}`.trim(), act: 'Go',
+    key: 'atk' + b.id, level: 2, title: t('{0} under attack', W.regions[b.region].name), text: b.from >= 0 ? t('{0} attacks {1}', FACTIONS[b.attacker]?.name ?? 'The enemy', borderLabel(W, b.from)) : t('{0} attacks', FACTIONS[b.attacker]?.name ?? 'The enemy'), act: t('Go'),
     go: () => { useUi.getState().select(b.region); rendererRef.current?.flyToBattle(b.id, 8); },
   });
   for (const b of hostileBorders(g, me)) if (b.massing || b.danger === 3) out.push({
-    key: 'bd' + b.region + '|' + b.sector, level: b.massing ? 2 : 1, title: `${b.massing ? 'Massing at' : 'Weak border:'} ${W.regions[b.region].name} – ${b.nb >= 0 ? W.regions[b.nb].name : borderLabel(W, b.sector)}`,
-    text: `ours ${b.own.btl[0] + b.own.reserve[0]} : theirs ${b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?'}`, act: 'Open', go: () => openBorder(b),
+    key: 'bd' + b.region + '|' + b.sector, level: b.massing ? 2 : 1, title: t(b.massing ? 'Massing at {0} – {1}' : 'Weak border: {0} – {1}', W.regions[b.region].name, b.nb >= 0 ? W.regions[b.nb].name : borderLabel(W, b.sector)),
+    text: tn('ours {0} : theirs {1}', b.own.btl[0] + b.own.reserve[0], { raw: b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?' }), act: t('Open'), go: () => openBorder(b),
   });
   for (const r of g.regions) if (r.owner === me && r.cut) out.push({
     key: 'cut' + r.id, level: 1, title: `${W.regions[r.id].name} is cut off`, text: `${cutReason(g, r)[0].toUpperCase()}${cutReason(g, r).slice(1)}: no Production, recruits or replacements, the garrison wears down`, act: 'Show',
@@ -264,12 +266,12 @@ export function Alerts() {
   const list = alertsOf(g, me).filter(a => (dismissed[a.key] ?? -1) < g.time).slice(0, 4);
   if (!list.length) return null;
   return (
-    <div id="alerts" aria-label="Alerts" aria-live="polite">
+    <div id="alerts" aria-label={t('Alerts')} aria-live="polite">
       {list.map(a => (
         <div key={a.key} className={'alert-i plate l' + a.level}>
           <span className="at"><b>{a.title}</b><small>{a.text}</small></span>
           <button className="btn sm" onClick={() => { click(); a.go(); }}>{a.act}</button>
-          <button className="x" aria-label="Dismiss" title="Dismiss for a minute" onClick={() => ui().dismiss(a.key, g.time + 60)}><CloseIcon /></button>
+          <button className="x" aria-label={t('Dismiss')} title={t('Dismiss for a minute')} onClick={() => ui().dismiss(a.key, g.time + 60)}><CloseIcon /></button>
         </div>
       ))}
     </div>

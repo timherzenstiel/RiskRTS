@@ -2,6 +2,7 @@
 // a lock line ("SEP 1916") when not yet available. Click buys one; Shift-click or the ×5 corner buys five.
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Icon, type IconKey } from './icons';
+import { t } from '../i18n';
 
 /** Painted cameo portraits in public/art/cameo; keys without one fall back to the line icon on a plate well. */
 const ART: Partial<Record<IconKey, string>> = {
@@ -50,13 +51,13 @@ export function Cameo({ k, name, cost, gets, hotkey, lock, disabled, pips, count
       onPointerEnter={() => say(line)} onPointerLeave={() => say(null)} onFocus={() => say(line)} onBlur={() => say(null)}>
       <button className="cm-b" disabled={disabled} title={title} aria-label={`${name}: ${title}`} onClick={e => onBuy(e.shiftKey)}>
         <span className="cm-art" aria-hidden="true">{url ? <img src={url} alt="" draggable={false} /> : <Icon k={k} />}</span>
-        {hotkey && <kbd className="cm-k" title={`Keyboard shortcut: ${hotkey}`}>key {hotkey}</kbd>}
+        {hotkey && <kbd className="cm-k" title={t('Keyboard shortcut: {0}', hotkey)}>{t('key {0}', hotkey)}</kbd>}
         {pips && <span className="cm-p" aria-hidden="true">{pips}</span>}
-        {count !== undefined && count > 0 && <span className="cm-n" title={`${count} already in this region`}>{count} here</span>}
+        {count !== undefined && count > 0 && <span className="cm-n" title={t('{0} already in this region', count)}>{t('{0} here', count)}</span>}
         {lock && <span className="cm-lock">{lock}</span>}
         <span className="cm-f"><span className="cm-c">{cost}</span>{gets && <span className="cm-g">{gets}</span>}<span className="cm-nm">{name}</span></span>
       </button>
-      {five && <button className="cm-5" disabled={fiveDisabled} aria-label={`${name}: buy five`} title="Buy five at once (or Shift-click)" onClick={() => onBuy(true)}>buy 5</button>}
+      {five && <button className="cm-5" disabled={fiveDisabled} aria-label={t('{0}: buy five', name)} title={t('Buy five at once (or Shift-click)')} onClick={() => onBuy(true)}>{t('buy 5')}</button>}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { Title } from './Title';
 import { ServerScreen } from './ServerScreen';
 import { Toast } from './Toast';
 import { netSet } from './netStore';
+import { useLang } from '../i18n';
 
 /** `#join=CODE` in the URL opens the join screen and connects straight away. */
 function readInvite(): string | null {
@@ -19,6 +20,7 @@ function readInvite(): string | null {
 
 export function App() {
   const screen = useUi(s => s.screen);
+  useLang(); // re-render the whole tree when the interface language changes
   useEffect(() => {
     const open = () => {
       const code = readInvite(); if (!code || useUi.getState().screen === 'game') return;

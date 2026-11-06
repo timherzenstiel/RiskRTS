@@ -11,7 +11,8 @@ import { click } from './actions';
 import { Icon, SupplyIcon } from './icons';
 import { Cameo, CameoGrid } from './Cameo';
 import { garrisonOf } from './garrison';
-import { menStr } from './format';
+import { around, menStr, nm } from './format';
+import { getLang, t, tx } from '../i18n';
 
 const UDESC: Record<UnitType, string> = {
   inf: '100 riflemen · cheap line troops',
@@ -63,10 +64,10 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
         {UNIT_TYPES.map((k, i) => {
           const c = unitCost(g, me, k) * mult, men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
           const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
-          const needs = k === 'tank' && !region.factory ? 'Needs factory' : k === 'plane' && !region.airfield ? 'Needs airfield' : null;
+          const needs = k === 'tank' && !region.factory ? t('Needs factory') : k === 'plane' && !region.airfield ? t('Needs airfield') : null;
           const locked = !!early || !!needs || region.cut || !!region.strike;
           const noMen = pool < men;
-          const lock = early ? monthStr(techDayFor(me, tech!, g.factions[me].rushed)) : needs ?? (region.cut ? 'Cut off' : region.strike ? 'Strike' : undefined);
+          const lock = early ? (monthStr(techDayFor(me, tech!, g.factions[me].rushed))) : needs ?? (region.cut ? t('Cut off') : region.strike ? (getLang() === 'de' ? t('On strike') : 'Strike') : undefined);
           return (
             <Cameo key={k} k={k} nation={me} name={unitName(g, me, k)} hotkey={i < 4 ? String(i + 1) : undefined} national={!!nat} count={region.units[k]}
               cost={<><SupplyIcon />{c}</>} gets={<span className={noMen ? 'short' : ''}>{men} men · {KIT[k]}</span>} lock={lock} disabled={supply < c || locked || noMen}
@@ -106,9 +107,9 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
           title="Unlocks squadrons and reconnaissance flights here" onBuy={() => build(id, 'airfield')} />; })()}
       </CameoGrid>
       <Railways region={region} id={id} />
-      <div className="lbl"><span>Defences in the interior · they join the first front of every battle here</span></div>
+      <div className="lbl"><span>{t('Defences in the interior · they join the first front of every battle here')}</span></div>
       <FortGrid region={region} id={id} sector={-1} />
-      <p className="note">Trenches, wire and defences on a border are built from its border card: click the border on the map, or a chip in Fronts mode.</p>
+      <p className="note">{t('Trenches, wire and defences on a border are built from its border card: click the border on the map, or a chip in Fronts mode.')}</p>
     </>
   );
 }
@@ -133,20 +134,20 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
   if (!sim) return null;
   const { g, me } = sim, W = buildWorld(), supply = g.factions[me].supply;
   const sector = marker && marker[0] === id ? marker[1] : -2;
-  const sectors = [...W.regions[id].land.map(n => ({ s: n, name: W.regions[n].name, owner: g.regions[n].owner, sea: false })), ...W.regions[id].zones.map(z => ({ s: 1000 + z, name: W.zones[z].name, owner: -1, sea: true })), { s: -1, name: 'Interior', owner: -1, sea: false }];
+  const sectors = [...W.regions[id].land.map(n => ({ s: n, name: W.regions[n].name, owner: g.regions[n].owner, sea: false })), ...W.regions[id].zones.map(z => ({ s: 1000 + z, name: W.zones[z].name, owner: -1, sea: true })), { s: -1, name: '', owner: -1, sea: false }];
   const here = (s: number) => region.defs.filter(d => d.s === s && d.f === region.owner);
   return (
     <>
-      <div className="lbl"><span>Where to build · pick a border (or tap it on the map)</span></div>
-      <div className="sectors" role="listbox" aria-label="Border sectors">
+      <div className="lbl"><span>{t('Where to build · pick a border (or tap it on the map)')}</span></div>
+      <div className="sectors" role="listbox" aria-label={t('Border sectors')}>
         {sectors.map(x => {
           const ds = here(x.s), w = worksAt(region, x.s), F = x.owner >= 0 ? FACTIONS[x.owner] : null, hostile = x.owner >= 0 && x.owner !== me;
           return (
             <button key={x.s} role="option" aria-selected={sector === x.s} className={'sec' + (hostile ? ' hostile' : '')} onClick={() => { click(); ui().setFortMarker([id, x.s]); }}>
               {F ? <i className="dot" style={{ '--c': F.color } as React.CSSProperties} /> : <i className="dot in" />}
-              <span className="nm">{x.s < 0 ? 'Interior' : x.sea ? `Coast · ${x.name}` : `Border · ${x.name}`}{x.s >= 0 && !x.sea && isMountain(id, x.s) ? ' · mountains' : ''}</span>
+              <span className="nm">{x.s < 0 ? t('Interior') : x.sea ? t('Coast · {0}', x.name) : t('Border · {0}', x.name)}{x.s >= 0 && !x.sea && isMountain(id, x.s) ? ' · ' + t('mountains') : ''}</span>
               <span className="have">
-                {w.tr > 0 && <span className="wtag" title={`Trench ${roman(w.tr)}`}><Icon k="trench" size={14} />{roman(w.tr)}</span>}
+                {w.tr > 0 && <span className="wtag" title={t('Trench {0}', roman(w.tr))}><Icon k="trench" size={14} />{roman(w.tr)}</span>}
                 {w.sand > 0 && <Icon k="sand" size={14} />}{w.wire > 0 && <Icon k="wire" size={14} />}
                 {ds.map(d => <Icon key={d.id} k={d.k} size={14} />)}<small>{slotsUsed(region, x.s)}/{slotsMax(id, x.s)}</small>
               </span>
@@ -154,7 +155,7 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
           );
         })}
       </div>
-      {sector > -2 ? <FortGrid region={region} id={id} sector={sector} /> : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}
+      {sector > -2 ? <FortGrid region={region} id={id} sector={sector} /> : <p className="note">{t('Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.')}</p>}
     </>
   );
 }
@@ -167,18 +168,18 @@ export function FortGrid({ region, id, sector }: { region: RegionState; id: numb
   const here = (s: number) => region.defs.filter(d => d.s === s && d.f === region.owner);
   return (
     <>
-      <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `${sector >= 1000 ? `Works on the ${W.zones[sector - 1000].name} coast only fight landings there` : `Works facing ${W.regions[sector].name} only fight attacks from there`} · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
-      <CameoGrid label="Works">
+      <div className="lbl"><span>{sector < 0 ? t('Interior defences join the first front of every battle here') : `${sector >= 1000 ? t('Works on the {0} coast only fight landings there', W.zones[sector - 1000].name) : t('Works facing {0} only fight attacks from there', W.regions[sector].name)} · ${t('{0}/{1} slots', slotsUsed(region, sector), slotsMax(id, sector))}`}</span></div>
+      <CameoGrid label={t('Works')}>
         {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
           const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
           const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
           const early = need && !techOn(g, me, need);
           const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
           const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
-          const cost = c === null ? 'Max' : !room && !early ? 'Full' : <><SupplyIcon />{c}</>;
-          return <Cameo key={k} k={k} name={FNAME[k]} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
+          const cost = c === null ? t('Max') : !room && !early ? t('Full') : <><SupplyIcon />{c}</>;
+          return <Cameo key={k} k={k} name={t(FNAME[k])} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
             count={k === 'trench' || k === 'sand' || k === 'wire' ? undefined : here(sector).filter(d => d.k === k).length}
-            title={FDESC[k]} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
+            title={t(FDESC[k])} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
         })}
       </CameoGrid>
     </>
@@ -210,10 +211,10 @@ export function GoalPicker() {
   const goal = useUi(s => s.goal);
   return (
     <>
-      <div className="lbl"><span>Attack goal</span></div>
-      <div className="seg share" role="group" aria-label="Attack goal">
-        <button aria-pressed={goal === 2} title="Take the first line, consolidate, then fight the main army in the depth and take the region" onClick={() => { click(); useUi.getState().setGoal(2); }}>Invade</button>
-        <button aria-pressed={goal === 1} title="Take the enemy's first line on that border and dig in there; order the invasion later" onClick={() => { click(); useUi.getState().setGoal(1); }}>First line only</button>
+      <div className="lbl"><span>{t('Attack goal')}</span></div>
+      <div className="seg share" role="group" aria-label={t('Attack goal')}>
+        <button aria-pressed={goal === 2} title={t('Take the first line, consolidate, then fight the main army in the depth and take the region')} onClick={() => { click(); useUi.getState().setGoal(2); }}>{t('Invade')}</button>
+        <button aria-pressed={goal === 1} title={t("Take the enemy's first line on that border and dig in there; order the invasion later")} onClick={() => { click(); useUi.getState().setGoal(1); }}>{t('First line only')}</button>
       </div>
     </>
   );
@@ -223,9 +224,9 @@ export function SharePicker() {
   const frac = useUi(s => s.sendFrac);
   return (
     <>
-      <div className="lbl"><span>Troops to send</span></div>
-      <div className="seg share" role="group" aria-label="Share of troops to send">
-        {FRACS.map(([v, l]) => <button key={v} aria-pressed={frac === v} onClick={() => { click(); useUi.getState().setSendFrac(v); }}>{l}</button>)}
+      <div className="lbl"><span>{t('Troops to send')}</span></div>
+      <div className="seg share" role="group" aria-label={t('Share of troops to send')}>
+        {FRACS.map(([v, l]) => <button key={v} aria-pressed={frac === v} onClick={() => { click(); useUi.getState().setSendFrac(v); }}>{v === 1 ? t('All but 1') : l}</button>)}
       </div>
     </>
   );
@@ -234,10 +235,10 @@ export function SharePicker() {
 /** What we know of a region's ground troops, in words. */
 export function knownTroops(r: RegionState, mine: boolean): string {
   const v = r.vis ?? 3;
-  if (mine || v >= 3) { const n = groundUnits(r.units); return `${n} formation${n === 1 ? '' : 's'}`; }
-  if (r.est) return r.est[1] > 0 ? `est. ${menStr(r.est[0])}–${menStr(r.est[1])} men` : 'no troops seen';
-  if (v === 2) { const n = groundUnits(r.units); return `${n} formation${n === 1 ? '' : 's'} (old report)`; }
-  return 'strength unknown';
+  if (mine || v >= 3) { const n = groundUnits(r.units); return n === 1 ? t('{0} formation', n) : t('{0} formations', n); }
+  if (r.est) return r.est[1] > 0 ? t('est. {0}–{1} men', menStr(r.est[0]), menStr(r.est[1])) : t('no troops seen');
+  if (v === 2) { const n = groundUnits(r.units); return (n === 1 ? t('{0} formation', n) : t('{0} formations', n)) + ' ' + t('(old report)'); }
+  return t('strength unknown');
 }
 
 /** One neighbour line that marches `from` -> `to`; `list` is the region shown on the line (the neighbour of the drawer's region). */
@@ -248,14 +249,14 @@ export function NeighbourRow({ from, to, list, label, brk }: { from: number; to:
   const units = groundUnits(garrisonOf(g, shown)); const sea = W.seaLane.has(from + '|' + to);
   const disabled = src.battle >= 0 || groundUnits(src.units) < 2;
   const facing = shown.defs.filter(d => d.s === from && d.f === shown.owner).length, w = worksAt(shown, from);
-  const works = list === to && (facing || w.tr || w.wire || w.sand) ? ` · facing us: ${[w.tr ? `trench ${roman(w.tr)}` : '', w.wire ? 'wire' : '', w.sand ? 'sandbags' : '', facing ? `${facing} def.` : ''].filter(Boolean).join(', ')}` : '';
-  const info = list === to ? `${shown.owner === me ? 'Yours' : F.short} · ${knownTroops(shown, shown.owner === me)}${works}` : `${units} available`;
+  const works = list === to && (facing || w.tr || w.wire || w.sand) ? ' · ' + t('facing us:') + ' ' + [w.tr ? t('trench {0}', roman(w.tr)) : '', w.wire ? t('wire') : '', w.sand ? t('sandbags') : '', facing ? t('{0} def.', facing) : ''].filter(Boolean).join(', ') : '';
+  const info = list === to ? `${shown.owner === me ? t('Yours') : nm(F.short)} · ${knownTroops(shown, shown.owner === me)}${works}` : t('{0} available', units);
   return (
     <div className="it nb">
       <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />
-      <div className="tx"><b>{W.regions[list].name}</b><small>{info}{sea ? (shown.owner === me ? ' · by transport' : ' · amphibious assault') : ''}{isMountain(from, to) ? ' · over mountains' : ''}</small></div>
+      <div className="tx"><b>{nm(W.regions[list].name)}</b><small>{info}{sea ? ' · ' + (shown.owner === me ? t('by transport') : t('amphibious assault')) : ''}{isMountain(from, to) ? ' · ' + t('over mountains') : ''}</small></div>
       <button className={'buy ' + (label === 'Attack' ? 'atk' : 'plain')} disabled={disabled}
-        title={src.battle >= 0 ? 'Troops in a battle cannot leave' : groundUnits(src.units) < 2 ? 'Needs at least 2 ground formations' : brk ? 'This breaks the treaty: war weariness and lost trust' : undefined} onClick={() => march(from, to, brk)}>{label}</button>
+        title={src.battle >= 0 ? t('Troops in a battle cannot leave') : groundUnits(src.units) < 2 ? t('Needs at least 2 ground formations') : brk ? t('This breaks the treaty: war weariness and lost trust') : undefined} onClick={() => march(from, to, brk)}>{t(label)}</button>
     </div>
   );
 }
@@ -265,7 +266,7 @@ export function AttackBudget() {
   const sim = useSim(); if (!sim) return null;
   const cap = sim.g.cfg?.attackCap ?? 0, n = offensives(sim.g, sim.me).size;
   if (!cap) return null;
-  return <p className={'note budget' + (n >= cap ? ' full' : '')}>Attacks under way: <b>{n} / {cap}</b>{n >= cap ? ' · wait for one to end before opening a new front' : ''}</p>;
+  return <p className={'note budget' + (n >= cap ? ' full' : '')}>{t('Attacks under way:')} <b>{n} / {cap}</b>{n >= cap ? ' · ' + t('wait for one to end before opening a new front') : ''}</p>;
 }
 
 export function AirSection({ region, id }: { region: RegionState; id: number }) {
@@ -277,21 +278,21 @@ export function AirSection({ region, id }: { region: RegionState; id: number }) 
   const active = orderMode && kind === 'air';
   return (
     <>
-      <div className="lbl"><span>Air strike · {region.units.plane} squadron{region.units.plane === 1 ? '' : 's'} · reach {AIR_RANGE} borders</span></div>
+      <div className="lbl"><span>{region.units.plane === 1 ? t('Air strike · {0} squadron · reach {1} borders', 1, AIR_RANGE) : t('Air strike · {0} squadrons · reach {1} borders', region.units.plane, AIR_RANGE)}</span></div>
       <button className="btn sm wide pick-target" aria-pressed={active} onClick={() => { click(); if (active) ui().cancelOrder(); else ui().beginOrder('air'); }}>
-        {active ? 'Cancel · pick a target on the map' : 'Pick an air target on the map'}<kbd>A</kbd>
+        {active ? t('Cancel · pick a target on the map') : t('Pick an air target on the map')}<kbd>A</kbd>
       </button>
       {targets.map(r => {
         const F = FACTIONS[r.owner], d = hops(id, r.id), flak = r.defs.filter(x => x.k === 'flak' && x.f === r.owner).length;
         return (
           <div className="it nb" key={r.id}>
             <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />
-            <div className="tx"><b>{W.regions[r.id].name}</b><small>{r.owner === me ? 'Support our defence' : F.short} · {d} border{d > 1 ? 's' : ''}{r.battle >= 0 ? ' · battle' : ''}{flak ? ` · ${flak} AA` : ''}</small></div>
-            <button className={'buy ' + (r.owner === me ? 'plain' : 'atk')} onClick={() => ui().air(id, r.id)}>{r.owner === me ? 'Support' : 'Strike'}</button>
+            <div className="tx"><b>{nm(W.regions[r.id].name)}</b><small>{r.owner === me ? t('Support our defence') : nm(F.short)} · {d > 1 ? t('{0} borders', d) : d === 1 ? t('1 border') : t('{0} border', d)}{r.battle >= 0 ? ' · ' + t('battle') : ''}{flak ? ' · ' + t('{0} AA', flak) : ''}</small></div>
+            <button className={'buy ' + (r.owner === me ? 'plain' : 'atk')} onClick={() => ui().air(id, r.id)}>{r.owner === me ? t('Support') : t('Strike')}</button>
           </div>
         );
       })}
-      <p className="note">Aircraft bomb and strafe but cannot take ground. They return home when their fuel runs out.</p>
+      <p className="note">{t('Aircraft bomb and strafe but cannot take ground. They return home when their fuel runs out.')}</p>
     </>
   );
 }
@@ -305,18 +306,18 @@ export function ReconSection({ region, id }: { region: RegionState; id: number }
   if (!foes.length && !far.length) return null;
   return (
     <>
-      <div className="lbl"><span>Reconnaissance</span></div>
+      <div className="lbl"><span>{t('Reconnaissance')}</span></div>
       {foes.map(n => (
         <div className="it nb" key={'p' + n}>
           <span className="ic"><Icon k="patrol" size={18} /></span>
-          <div className="tx"><b>Patrol · {W.regions[n].name}</b><small>{reportAge(g, g.regions[n])} · may be caught by MG nests or wire</small></div>
+          <div className="tx"><b>{t('Patrol · {0}', W.regions[n].name)}</b><small>{reportAge(g, g.regions[n])} · {t('may be caught by MG nests or wire')}</small></div>
           <button className="buy plain" disabled={supply < COST.patrol} onClick={() => ui().order({ t: 'patrol', from: id, to: n })}><SupplyIcon />{COST.patrol}</button>
         </div>
       ))}
       {region.airfield && [...foes.map(n => g.regions[n]), ...far].map(r => (
         <div className="it nb" key={'r' + r.id}>
           <span className="ic"><Icon k="recon" size={18} /></span>
-          <div className="tx"><b>Recon flight · {W.regions[r.id].name}</b><small>{reportAge(g, r)} · photographs everything · anti-air may shoot it down</small></div>
+          <div className="tx"><b>{t('Recon flight · {0}', W.regions[r.id].name)}</b><small>{reportAge(g, r)} · {t('photographs everything · anti-air may shoot it down')}</small></div>
           <button className="buy plain" disabled={supply < COST.recon} onClick={() => ui().order({ t: 'recon', from: id, to: r.id })}><SupplyIcon />{COST.recon}</button>
         </div>
       ))}
@@ -337,7 +338,7 @@ export function Feints({ region, id }: { region: RegionState; id: number }) {
         return (
           <div className="it nb" key={'d' + n}>
             <span className="ic"><Icon k="inf" size={18} /></span>
-            <div className="tx"><b>Feint {own ? 'to' : 'on'} {W.regions[n].name}</b><small>{own ? 'Rivals see an army arrive and a big concentration there until they scout it' : 'Rivals see an army marching on them; it melts away on arrival'}</small></div>
+            <div className="tx"><b>{own ? t('Feint to {0}', W.regions[n].name) : t('Feint on {0}', W.regions[n].name)}</b><small>{own ? t('Rivals see an army arrive and a big concentration there until they scout it') : t('Rivals see an army marching on them; it melts away on arrival')}</small></div>
             <button className="buy plain" disabled={supply < COST.decoy} onClick={() => useUi.getState().order({ t: 'decoy', from: id, to: n })}><SupplyIcon />{COST.decoy}</button>
           </div>
         );
@@ -347,11 +348,13 @@ export function Feints({ region, id }: { region: RegionState; id: number }) {
 }
 
 /** "No report", "Report: 3 days old", "Our agent is there". */
-export function reportAge(g: { day: number }, r: RegionState): string {
-  if (r.spied) return 'our agent is there';
-  if ((r.vis ?? 3) >= 3) return 'in full view';
-  if (r.seen === undefined) return 'no report';
-  const d = g.day - r.seen; return d <= 0 ? 'report: fresh' : `report: ${d} day${d === 1 ? '' : 's'} old`;
+export function reportAge(g: { day: number }, r: RegionState, bare = false): string {
+  if (r.spied) return t('our agent is there');
+  if ((r.vis ?? 3) >= 3) return t('in full view');
+  if (r.seen === undefined) return t('no report');
+  const d = g.day - r.seen;
+  if (bare) return d <= 0 ? t('fresh') : d === 1 ? t('{0} day old', d) : t('{0} days old', d);
+  return d <= 0 ? t('report: fresh') : d === 1 ? t('report: {0} day old', d) : t('report: {0} days old', d);
 }
 
 export function MarchTab({ region, id }: { region: RegionState; id: number }) {
@@ -364,17 +367,17 @@ export function MarchTab({ region, id }: { region: RegionState; id: number }) {
       <AttackBudget />
       <SharePicker />
       <GoalPicker />
-      <p className="note">An attack runs in phases: the troops form up in the middle of the region, march to the border, assemble there for half a minute, then go in. The enemy sees them gather.</p>
+      <p className="note">{t('An attack runs in phases: the troops form up in the middle of the region, march to the border, assemble there for half a minute, then go in. The enemy sees them gather.')}</p>
       <button className="btn sm wide pick-target" aria-pressed={active} disabled={region.battle >= 0 || groundUnits(region.units) < 2}
         onClick={() => { click(); const u = useUi.getState(); if (active) u.cancelOrder(); else u.beginOrder('march'); }}>
-        {active ? 'Cancel · pick a target on the map' : 'Pick a target on the map'}
+        {active ? t('Cancel · pick a target on the map') : t('Pick a target on the map')}
       </button>
-      <div className="lbl"><span>Neighbouring regions · infantry and tanks attack across direct borders only</span></div>
+      <div className="lbl"><span>{t('Neighbouring regions · infantry and tanks attack across direct borders only')}</span></div>
       {adj.map(i => { const peace = g.regions[i].owner !== me && !!treatyOf(g, me, g.regions[i].owner); return <NeighbourRow key={i} from={id} to={i} list={i} brk={peace} label={g.regions[i].owner === me ? 'Reinforce' : peace ? 'Break treaty' : 'Attack'} />; })}
       <Feints region={region} id={id} />
       <AirSection region={region} id={id} />
       <ReconSection region={region} id={id} />
-      <p className="note">Shortcut: right-click a region on the map.</p>
+      <p className="note">{t('Shortcut: right-click a region on the map.')}</p>
     </>
   );
 }

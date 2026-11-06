@@ -12,14 +12,20 @@ import { BorderCard } from './Situation';
 import { CorpsCard } from './Forces';
 import { ArmyCard } from './Staff';
 import { rendererRef } from './refs';
+import { getLang, t, tx } from '../i18n';
+
+/** Zoom band names (render/camera) in the interface language. */
+const bandName = (i: number, n: string) => getLang() === 'de' ? ['Übersicht', 'Front', 'Gefecht', 'Nah'][i] ?? n : n;
+/** Short map mode labels (game/store MAP_MODES) in the interface language. */
+const modeShort = (i: number, n: string) => getLang() === 'de' ? ['Pol.', 'Fronten', 'Truppen', 'Nachsch.', 'Aufkl.'][i] ?? n : n;
 
 /** Map mode (design-command §1): political, fronts, forces, supply, intel. The same mode again goes back to the political map. */
 export function LayerPicker() {
   const mode = useUi(s => s.mode), set = useUi.getState().setMode;
   return (
-    <div className="seg layer-seg mode-seg" role="group" aria-label="Map mode">
+    <div className="seg layer-seg mode-seg" role="group" aria-label={t('Map mode')}>
       {MAP_MODES.map((m, i) => (
-        <button key={m.name} aria-pressed={mode === i} title={`${m.name}: ${m.hint} (${m.key.toUpperCase()})`} onClick={() => { click(); set(mode === i && i ? 0 : i as MapMode); }}>{m.short}<kbd>{m.key.toUpperCase()}</kbd></button>
+        <button key={m.name} aria-pressed={mode === i} title={`${t(m.name)}: ${t(m.hint)} (${m.key.toUpperCase()})`} onClick={() => { click(); set(mode === i && i ? 0 : i as MapMode); }}>{modeShort(i, m.short)}<kbd>{m.key.toUpperCase()}</kbd></button>
       ))}
     </div>
   );
@@ -30,8 +36,8 @@ function ZoomPicker() {
   useSim(); // re-render with the game clock so the lit band follows the wheel
   const d = rendererRef.current?.cameraDistance() ?? 55, cur = bandOf(d);
   return (
-    <div className="seg zoom-seg" role="group" aria-label="Zoom">
-      {BANDS.map((b, i) => <button key={b.name} aria-pressed={cur === i} title={`${b.name} view (${b.key.toUpperCase()})`} onClick={() => { Sfx.clunk(); rendererRef.current?.zoomBand(i); }}>{b.name}<kbd>{b.key.toUpperCase()}</kbd></button>)}
+    <div className="seg zoom-seg" role="group" aria-label={t('Zoom')}>
+      {BANDS.map((b, i) => <button key={b.name} aria-pressed={cur === i} title={t('{0} view ({1})', bandName(i, b.name), b.key.toUpperCase())} onClick={() => { Sfx.clunk(); rendererRef.current?.zoomBand(i); }}>{bandName(i, b.name)}<kbd>{b.key.toUpperCase()}</kbd></button>)}
     </div>
   );
 }
@@ -59,24 +65,24 @@ function Idle() {
   const fronts = g.battles.filter(b => !b.ended && (b.def === me || b.sides.includes(me)));
   const ui = useUi.getState;
   return (
-    <section className="idle" aria-label="War Office">
+    <section className="idle" aria-label={t('War Office')}>
       <div className="dh" style={{ '--c': F.color } as React.CSSProperties}>
         <div className="dh-row"><small>War Office · +{income(g, me)} Production per week</small></div>
         <h2>{F.name}</h2>
         <div className="owner"><span>{mine.length} regions · {fronts.length} front{fronts.length === 1 ? '' : 's'}</span></div>
       </div>
       <div className="tb-body">
-        {fronts.length > 0 && <div className="lbl"><span>Fronts</span></div>}
+        {fronts.length > 0 && <div className="lbl"><span>{t('Fronts')}</span></div>}
         {fronts.slice(0, 8).map(b => (
           <button key={b.id} className="it nb front-it" onClick={() => { click(); ui().select(b.region); rendererRef.current?.flyToBattle(b.id, 8); }}>
             <i className="dot" style={{ '--c': FACTIONS[g.regions[b.region].owner].color } as React.CSSProperties} />
-            <span className="tx"><b>{W.regions[b.region].name}</b><small>{b.def === me ? 'Defending' : 'Attacking'}{b.from >= 0 ? ` · ${b.from >= 1000 ? 'on the ' + sectorName(W, b.from) : 'from ' + W.regions[b.from].name}` : ''}</small></span>
-            <span className="go">Go</span>
+            <span className="tx"><b>{tx(W.regions[b.region].name)}</b><small>{b.def === me ? t('Defending') : t('Attacking')}{b.from >= 0 ? ' · ' + (b.from >= 1000 ? t('on the {0}', sectorName(W, b.from)) : t('from {0}', W.regions[b.from].name)) : ''}</small></span>
+            <span className="go">{t('Go')}</span>
           </button>
         ))}
         <FleetList />
-        <button className="btn sm sit-open" onClick={() => { click(); ui().setPanel('situation'); }}>Situation: wars and borders</button>
-        <p className="note">Select a region on the map to open its file: recruit, fortify, build, deploy and march.</p>
+        <button className="btn sm sit-open" onClick={() => { click(); ui().setPanel('situation'); }}>{t('Situation: wars and borders')}</button>
+        <p className="note">{t('Select a region on the map to open its file: recruit, fortify, build, deploy and march.')}</p>
       </div>
     </section>
   );
@@ -85,7 +91,7 @@ function Idle() {
 export function Sidebar() {
   const sel = useUi(s => s.sel);
   return (
-    <aside id="side" className={'plate' + (sel >= 0 ? ' open' : '')} aria-label="War Office">
+    <aside id="side" className={'plate' + (sel >= 0 ? ' open' : '')} aria-label={t('War Office')}>
       <div className="radar">
         <div className="crt"><Minimap /></div>
         <LayerPicker />

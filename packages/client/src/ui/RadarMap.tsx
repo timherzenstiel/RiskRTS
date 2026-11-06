@@ -2,6 +2,7 @@
 // animated arrows (dashes marching from one region to another). Draws from the shared world raster, no WebGL.
 import { useEffect, useRef } from 'react';
 import { COLS, FACTIONS, HH, HW, ROWS, buildWorld } from '@riskrts/shared';
+import { t } from '../i18n';
 
 const RGB = FACTIONS.map(f => [1, 3, 5].map(i => parseInt(f.color.slice(i, i + 2), 16)));
 
@@ -17,7 +18,7 @@ export interface RadarProps {
   label?: string;
 }
 
-export function RadarMap({ owners, highlight = [], arrows = [], view, width = 420, height = 210, label = 'Map' }: RadarProps) {
+export function RadarMap({ owners, highlight = [], arrows = [], view, width = 420, height = 210, label }: RadarProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const key = Array.from(owners).join(',') + '|' + highlight.join(',') + '|' + arrows.join(';') + '|' + (view ?? []).join(',');
   useEffect(() => {
@@ -58,5 +59,5 @@ export function RadarMap({ owners, highlight = [], arrows = [], view, width = 42
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <div className="crt radar-map"><canvas ref={ref} width={width} height={height} role="img" aria-label={label} /></div>;
+  return <div className="crt radar-map"><canvas ref={ref} width={width} height={height} role="img" aria-label={label ?? t('Map')} /></div>;
 }

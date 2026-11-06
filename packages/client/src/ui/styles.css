@@ -316,6 +316,8 @@ input:disabled{opacity:.5}
 .notice{margin:0;padding:10px 12px;border-radius:10px;background:rgba(240,112,92,.12);border:1px solid rgba(240,112,92,.35);color:#ffd2c9;font-size:13.5px}
 .foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
 .foot a{color:var(--mute)}
+.foot{align-items:center}
+.foot .seg.lang button{min-height:24px;min-width:0;font-size:11px;padding:0 8px}
 .foot a:hover{color:var(--accent)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}

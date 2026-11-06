@@ -5,6 +5,7 @@ import { FACTIONS, battleCounts, borderLabel, buildWorld } from '@riskrts/shared
 import { useSim, useUi } from '../game/store';
 import { rendererRef } from './refs';
 import { FrontControls } from './FrontCard';
+import { t, tx } from '../i18n';
 
 export function BattleCard() {
   const sim = useSim();
@@ -15,15 +16,15 @@ export function BattleCard() {
   const owner = sim.g.regions[b.region].owner, W = buildWorld();
   const counts = [...battleCounts(b)];
   const quiet = b.age - (b.lastJoin ?? 0) > 60;
-  const works = [b.tr ? `trench ${['', 'I', 'II', 'III'][b.tr]}` : '', b.sand ? 'sandbags' : '', b.wire > 0 ? `wire ${Math.round(b.wire / Math.max(1, b.wire0) * 100)}%` : ''].filter(Boolean).join(' · ');
+  const works = [b.tr ? t('trench {0}', ['', 'I', 'II', 'III'][b.tr]) : '', b.sand ? t('sandbags') : '', b.wire > 0 ? t('wire {0}%', Math.round(b.wire / Math.max(1, b.wire0) * 100)) : ''].filter(Boolean).join(' · ');
   return (
     <div id="bcard" className="plate cmdbar" aria-live="polite">
       <div className="cb-sides">
-        <div className="bt"><b>Battle of {W.regions[b.region].name}</b><small className="lcd-t">{b.ended ? 'Over' : `${Math.floor(b.age)} s${quiet ? ' · trench warfare' : ''}`}</small></div>
-        <div className="bf"><small>{borderLabel(W, b.from)}{b.amph !== undefined && (b.stage ?? 0) === 0 ? ' · landing' : ''}{works ? ` · ${works}` : ''}</small></div>
+        <div className="bt"><b>{t('Battle of {0}', W.regions[b.region].name)}</b><small className="lcd-t">{b.ended ? t('Over') : `${Math.floor(b.age)} s${quiet ? ' · ' + t('trench warfare') : ''}`}</small></div>
+        <div className="bf"><small>{tx(borderLabel(W, b.from))}{b.amph !== undefined && (b.stage ?? 0) === 0 ? ' · ' + t('landing') : ''}{works ? ` · ${works}` : ''}</small></div>
         {counts.map(([f, [alive, all]]) => (
           <div className="side" key={f} style={{ '--c': FACTIONS[f].color } as React.CSSProperties}>
-            <span className="nm"><span className="crest sm">{FACTIONS[f].key}</span>{FACTIONS[f].short}{f === owner ? ' · def.' : ''}</span>
+            <span className="nm"><span className="crest sm">{FACTIONS[f].key}</span>{tx(FACTIONS[f].short)}{f === owner ? ' · ' + t('def.') : ''}</span>
             <span className="sb"><i style={{ width: `${all ? alive / all * 100 : 0}%` }} /></span>
             <span className="n">{alive}/{all}{b.mor?.[f] !== undefined ? <small> · {Math.round(b.mor[f])}%</small> : null}</span>
           </div>

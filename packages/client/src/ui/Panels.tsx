@@ -10,12 +10,14 @@ import { useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { CloseIcon, Icon } from './icons';
 import { capLines, cutReason } from './Logistics';
-import { menStr } from './format';
+import { menStr, nm } from './format';
+import { getLang, t, tx } from '../i18n';
+import { tn } from './LangPicker';
 import { rendererRef } from './refs';
 import { FleetList } from './Navy';
 
 const MOB = ['Peacetime', 'Extended', 'Total'] as const;
-const fmt = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + (Math.abs(v) >= 100 ? Math.round(Math.abs(v)).toLocaleString('en-GB') : String(Math.round(Math.abs(v) * 10) / 10));
+const fmt = (v: number) => { const de = getLang() === 'de'; return (v > 0 ? '+' : v < 0 ? '−' : '') + (Math.abs(v) >= 100 ? Math.round(Math.abs(v)).toLocaleString(de ? 'de-DE' : 'en-GB') : String(Math.round(Math.abs(v) * 10) / 10).replace('.', de ? ',' : '.')); };
 
 function Ledger({ terms, total, unit }: { terms: Term[]; total: number; unit: string }) {
   return (
@@ -31,8 +33,8 @@ function Ledger({ terms, total, unit }: { terms: Term[]; total: number; unit: st
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   const ui = useUi.getState;
   return (
-    <section id="panel" className="plate" aria-label={title}>
-      <div className="pn-h"><h2>{title}</h2><button className="x" aria-label="Close panel" onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+    <section id="panel" className="plate" aria-label={t(title)}>
+      <div className="pn-h"><h2>{t(title)}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
       <div className="pn-body">{children}</div>
     </section>
   );
@@ -98,17 +100,17 @@ export function NavyPanel() {
   return (
     <Shell title="Navy">
       <FleetList />
-      <div className="lbl"><span>Ports · {ports.length}</span><small>ships docked</small></div>
+      <div className="lbl"><span>{t('Ports · {0}', ports.length)}</span><small>{t('ships docked')}</small></div>
       {ports.map(r => {
         const docked = g.ships.filter(s => s.owner === me && s.port === r.id && s.fleet < 0), kinds = [...new Set(docked.map(s => s.kind))];
         return (
           <button key={r.id} className="sit-row" onClick={() => { go(r.id); ui().setTab('build'); }}>
-            <span><b>{W.regions[r.id].name}</b> <small>{docked.length ? kinds.map(k => `${docked.filter(s => s.kind === k).length} ${SHIP[k].many ?? SHIP[k].one}`).join(' · ') : 'no ships'}{r.portAt !== undefined && r.portAt > g.time ? ' · being built' : ''}</small></span><span className="go">Open</span>
+            <span><b>{nm(W.regions[r.id].name)}</b> <small>{docked.length ? kinds.map(k => `${docked.filter(s => s.kind === k).length} ${tx(SHIP[k].many ?? SHIP[k].one)}`).join(' · ') : t('no ships')}{r.portAt !== undefined && r.portAt > g.time ? ' · ' + t('being built') : ''}</small></span><span className="go">{t('Open')}</span>
           </button>
         );
       })}
-      {!ports.length && <p className="note">No ports. Build one in a coastal region (its Build tab).</p>}
-      <p className="note">Ships are built, and troops shipped or landed, from a port's Build tab. Click a fleet at sea to give it orders.</p>
+      {!ports.length && <p className="note">{t('No ports. Build one in a coastal region (its Build tab).')}</p>}
+      <p className="note">{t('Ships are built, and troops shipped or landed, from a port\'s Build tab. Click a fleet at sea to give it orders.')}</p>
     </Shell>
   );
 }
@@ -128,7 +130,7 @@ export function IntelPanel() {
   const reports = g.regions.filter(r => r.owner !== me && r.owner >= 0 && r.seen !== undefined).sort((a, b) => (b.seen ?? 0) - (a.seen ?? 0)).slice(0, 10);
   return (
     <Shell title="Intel">
-      <div className="lbl"><span>Agents · {spies.length}/3</span></div>
+      <div className="lbl"><span>{t('Agents · {0}/3', spies.length)}</span></div>
       {spies.length ? spies.map(s => (
         <button key={s.id} className="sit-row" onClick={() => go(s.region)}><span><Icon k="spy" size={14} /> <b>{W.regions[s.region].name}</b> <small>{working.has(s.id) ? `reporting${(s.hot ?? -1) > g.day ? ' · exposed after sabotage' : ''}` : `on the way · ${Math.ceil(s.eta - g.time)} s`}</small></span><span className="go">Go</span></button>
       )) : <p className="note">No agents in the field. Send one from a foreign region's file or a border card ({COST.spy} Production).</p>}
@@ -140,10 +142,10 @@ export function IntelPanel() {
           <span><b>{W.regions[b.nb].name}</b> <small>{FACTIONS[b.foe]?.short ?? '?'} · facing {W.regions[b.region].name} · {age === Infinity ? 'no report' : `report ${age} days old`}</small></span>
           <button className="btn sm" disabled={sup < COST.patrol} title={`Cavalry patrol over this border · ${COST.patrol} Production`} onClick={() => ui().order({ t: 'patrol', from: b.region, to: b.nb })}>Patrol · {COST.patrol}</button>
         </div>
-      )) : <p className="note">We have fresh reports on every hostile border.</p>}
-      {reports.length > 0 && <div className="lbl"><span>Latest reports</span></div>}
+      )) : <p className="note">{t('We have fresh reports on every hostile border.')}</p>}
+      {reports.length > 0 && <div className="lbl"><span>{t('Latest reports')}</span></div>}
       {reports.map(r => (
-        <button key={r.id} className="sit-row" onClick={() => go(r.id)}><span><b>{W.regions[r.id].name}</b> <small>{FACTIONS[r.owner].short} · {g.day - (r.seen ?? g.day)} days old · {groundUnits(r.units)} formations seen{r.cs?.some(c => c.p >= 0) ? ` · corps on ${r.cs.filter(c => c.p >= 0).map(c => borderLabel(W, c.p)).slice(0, 2).join(', ')}` : ''}</small></span><span className="go">Go</span></button>
+        <button key={r.id} className="sit-row" onClick={() => go(r.id)}><span><b>{nm(W.regions[r.id].name)}</b> <small>{nm(FACTIONS[r.owner].short)} · {t('{0} days old', g.day - (r.seen ?? g.day))} · {t('{0} formations seen', groundUnits(r.units))}{r.cs?.some(c => c.p >= 0) ? ' · ' + tn('corps on {0}', { raw: r.cs.filter(c => c.p >= 0).map(c => tx(borderLabel(W, c.p))).slice(0, 2).join(', ') }) : ''}</small></span><span className="go">{t('Go')}</span></button>
       ))}
     </Shell>
   );

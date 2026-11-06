@@ -9,7 +9,9 @@ import { useSim, useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
 import { click } from './actions';
 import { CloseIcon } from './icons';
-import { menStr } from './format';
+import { menStr, nm } from './format';
+import { t, tx } from '../i18n';
+import { tn } from './LangPicker';
 import { rendererRef } from './refs';
 import { corpsState, unitsLine } from './DeployTab';
 import { CorpsArmyRow, hqName } from './Staff';
@@ -36,13 +38,13 @@ function corpsAway(g: GameState, me: number): { tag: NonNullable<Army['ct']>; wh
   const W = buildWorld(), out: { tag: NonNullable<Army['ct']>; where: string; u: Units }[] = [];
   for (const a of g.armies) if (a.owner === me && a.ct) {
     const to = a.path?.length ? a.path[a.path.length - 1] : a.to, post = a.path?.length ? a.fin ?? -1 : a.post ?? -1;
-    out.push({ tag: a.ct, u: a.units, where: (a.ord ?? 0) >= 1 ? `moving up to attack ${W.regions[a.post!]?.name ?? ''}` : `marching to ${W.regions[to].name}${post >= 0 ? ` · ${postLabel(W, post)}` : ''}` });
+    out.push({ tag: a.ct, u: a.units, where: (a.ord ?? 0) >= 1 ? t('moving up to attack {0}', W.regions[a.post!]?.name ?? '') : post >= 0 ? t('marching to {0} · {1}', W.regions[to].name, postLabel(W, post)) : t('marching to {0}', W.regions[to].name) });
   }
-  for (const fl of g.fleets) if (fl.owner === me && fl.ct) out.push({ tag: fl.ct, u: fl.cargo, where: `at sea to ${W.regions[fl.to].name}` });
-  for (const b of g.battles) if (!b.ended && b.ct) for (const t of Object.values(b.ct)) {
+  for (const fl of g.fleets) if (fl.owner === me && fl.ct) out.push({ tag: fl.ct, u: fl.cargo, where: t('at sea to {0}', W.regions[fl.to].name) });
+  for (const b of g.battles) if (!b.ended && b.ct) for (const tag of Object.values(b.ct)) {
     const u: Units = { inf: 0, mg: 0, art: 0, tank: 0, plane: 0 };
-    for (const x of b.agents) if (x.c === t.id && x.f === me && !x.dead && !x.out && x.type in u) u[x.type as keyof Units]++;
-    if (groundUnits(u)) out.push({ tag: t, u, where: `fighting in ${W.regions[b.region].name}` });
+    for (const x of b.agents) if (x.c === tag.id && x.f === me && !x.dead && !x.out && x.type in u) u[x.type as keyof Units]++;
+    if (groundUnits(u)) out.push({ tag, u, where: t('fighting in {0}', W.regions[b.region].name) });
   }
   return out;
 }
@@ -78,22 +80,23 @@ export function OrderPreview() {
   if (!sim || !ids.length || hover < 0 || orderMode) return null;
   const { g, me } = sim, W = buildWorld(), T = g.regions[hover], found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
   if (!found.length) return null;
-  const btl = found.reduce((s, x) => s + groundUnits(x.c.u), 0), who = found.length === 1 ? groupName(me, 1, found[0].c.n) : `${found.length} corps`;
+  const btl = found.reduce((s, x) => s + groundUnits(x.c.u), 0), who = found.length === 1 ? groupName(me, 1, found[0].c.n) : t('{0} corps', found.length);
   let line: string, cls = 'mv', sub = '';
   if (T.owner === me) {
     const etas = found.map(x => marchEta(g, me, x.r.id, x.c.p, hover, -1)).filter((x): x is number => x !== null);
-    line = `Move ${who} (${btl} btl) to ${W.regions[hover].name}`;
-    sub = etas.length < found.length ? `${found.length - etas.length} cannot get there over land` : `about ${Math.round(Math.max(...etas))} s · right-click near a border to stand there`;
+    line = tn('Move {0} ({1} btl) to {2}', { raw: who }, btl, W.regions[hover].name);
+    sub = etas.length < found.length ? t('{0} cannot get there over land', found.length - etas.length) : t('about {0} s · right-click near a border to stand there', Math.round(Math.max(...etas)));
   } else {
     cls = 'atk';
     const can = found.filter(x => W.regions[x.r.id].land.includes(hover));
-    line = `${goal === 2 ? 'Invade' : 'Take the first line of'} ${W.regions[hover].name} with ${can.length === found.length ? who : `${can.length} of ${found.length} corps`}`;
-    if (!can.length) { cls = 'no'; sub = 'None of them borders it'; }
+    const with_ = can.length === found.length ? who : t('{0} of {1} corps', can.length, found.length);
+    line = tn(goal === 2 ? 'Invade {0} with {1}' : 'Take the first line of {0} with {1}', W.regions[hover].name, { raw: with_ });
+    if (!can.length) { cls = 'no'; sub = t('None of them borders it'); }
     else {
       const b = borderBalance(g, can[0].r.id, hover), mine = can.reduce((s, x) => s + groundUnits(x.c.u), 0);
-      const t = Math.max(...can.map(x => (marchEta(g, me, x.r.id, x.c.p, x.r.id, hover) ?? 0))) + ASSEMBLE * moveK(g);
+      const sec = Math.max(...can.map(x => (marchEta(g, me, x.r.id, x.c.p, x.r.id, hover) ?? 0))) + ASSEMBLE * moveK(g);
       const their = b.know ? `${b.their.btl[0] + b.their.reserve[0]}–${b.their.btl[1] + b.their.reserve[1]}` : '?';
-      sub = `ours ${mine} btl : theirs ${their}${b.massing ? ' · massing' : ''} · goes in after about ${Math.round(t)} s${(T.owner >= 0 && FACTIONS[T.owner]) ? ` · ${FACTIONS[T.owner].short}` : ''}`;
+      sub = `${tn('ours {0} btl : theirs {1}', mine, { raw: their })}${b.massing ? ' · ' + t('massing') : ''} · ${t('goes in after about {0} s', Math.round(sec))}${(T.owner >= 0 && FACTIONS[T.owner]) ? ` · ${nm(FACTIONS[T.owner].short)}` : ''}`;
     }
   }
   return <div id="preview" className={'plate ' + cls} role="status"><b>{line}</b><small>{sub}</small></div>;
@@ -101,18 +104,18 @@ export function OrderPreview() {
 
 // ---------------------------------------------------------------- forces panel
 
-const armyShort = (g: GameState, id: number) => { const h = (g.hq ?? []).find(x => x.id === id); return h ? hqName(h).split(' ').slice(0, 2).join(' ') : 'army'; };
+const armyShort = (g: GameState, id: number) => { const h = (g.hq ?? []).find(x => x.id === id); return h ? hqName(h).split(' ').slice(0, 2).join(' ') : t('army'); };
 
 function CorpsRow({ g, me, r, c, sel }: { g: GameState; me: number; r: RegionState; c: Corps; sel: boolean }) {
   const W = buildWorld(), st = strengthOf(c), fight = c.p >= 0 && frontsOf(g, r.id).some(b => b.from === c.p);
   return (
     <button className={'oob-c' + (sel ? ' on' : '') + ((c.ord ?? 0) >= 1 ? ' att' : '')} aria-pressed={sel}
-      title={`${groupName(me, 1, c.n)} · ${unitsLine(c.u)}\nClick to select, Shift-click to add. Right-click the map to give orders.`}
+      title={`${groupName(me, 1, c.n)} · ${unitsLine(c.u)}\n${t('Click to select, Shift-click to add. Right-click the map to give orders.')}`}
       onClick={e => pickCorps(r, c, e.shiftKey)}>
-      <span className="oc-n"><b>{groupName(me, 1, c.n)}{c.man ? <i className="hand" title="Under your orders: Auto leaves it alone">✋</i> : null}</b><small>{c.army !== undefined ? `${armyShort(g, c.army)} · ` : ''}{postLabel(W, c.p)} · {fight ? 'in battle' : corpsState(g, c)}</small></span>
-      <span className="oc-v"><b className="lcdn">{groundUnits(c.u)}</b><small>btl</small></span>
-      <span className="oc-bars" title={`Strength ${pct(st)} · morale ${Math.round(c.mor)}%`}><i style={{ width: pct(st) }} /><i className="mor" style={{ width: `${Math.min(100, c.mor)}%` }} /></span>
-      <span className="oc-xp" title={`Experience: ${c.xp ?? 0} of 3 stars (+5 % damage each)`}>{stars(c.xp)}</span>
+      <span className="oc-n"><b>{groupName(me, 1, c.n)}{c.man ? <i className="hand" title={t('Under your orders: Auto leaves it alone')}>✋</i> : null}</b><small>{c.army !== undefined ? `${armyShort(g, c.army)} · ` : ''}{tx(postLabel(W, c.p))} · {fight ? t('in battle') : corpsState(g, c)}</small></span>
+      <span className="oc-v"><b className="lcdn">{groundUnits(c.u)}</b><small>{t('btl')}</small></span>
+      <span className="oc-bars" title={t('Strength {0}% · morale {1}%', Math.round(st * 100), Math.round(c.mor))}><i style={{ width: pct(st) }} /><i className="mor" style={{ width: `${Math.min(100, c.mor)}%` }} /></span>
+      <span className="oc-xp" title={t('Experience: {0} of 3 stars (+5 % damage each)', c.xp ?? 0)}>{stars(c.xp)}</span>
     </button>
   );
 }
@@ -129,26 +132,26 @@ export function ForcesPanel() {
   const all = regions.flatMap(r => corpsIn(r)), away = corpsAway(g, me);
   const btl = regions.reduce((s, r) => s + groundUnits(r.units), 0);
   return (
-    <section id="panel" className="plate" aria-label="Forces">
-      <div className="pn-h"><h2>Forces</h2><button className="x" aria-label="Close panel" onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+    <section id="panel" className="plate" aria-label={t('Forces')}>
+      <div className="pn-h"><h2>{t('Forces')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
       <div className="pn-body">
         <div className="oob-sum">
-          <span><small>Corps</small><b className="lcdn">{all.length + away.length}</b></span>
-          <span><small>Battalions</small><b className="lcdn">{btl}</b></span>
-          <span><small>Under your orders</small><b className="lcdn">{all.filter(c => c.man).length}</b></span>
-          <div className="seg oob-f" role="group" aria-label="Show"><button aria-pressed={!mine} onClick={() => { click(); setMine(false); }}>All</button><button aria-pressed={mine} title="Only the corps under your orders (✋)" onClick={() => { click(); setMine(true); }}>Mine ✋</button></div>
+          <span><small>{t('Corps')}</small><b className="lcdn">{all.length + away.length}</b></span>
+          <span><small>{t('Battalions')}</small><b className="lcdn">{btl}</b></span>
+          <span><small>{t('Under your orders')}</small><b className="lcdn">{all.filter(c => c.man).length}</b></span>
+          <div className="seg oob-f" role="group" aria-label={t('Show')}><button aria-pressed={!mine} onClick={() => { click(); setMine(false); }}>{t('All')}</button><button aria-pressed={mine} title={t('Only the corps under your orders (✋)')} onClick={() => { click(); setMine(true); }}>{t('Mine ✋')}</button></div>
         </div>
-        {(g.hq ?? []).some(h => h.owner === me) && <div className="lbl"><span>Armies</span></div>}
+        {(g.hq ?? []).some(h => h.owner === me) && <div className="lbl"><span>{t('Armies')}</span></div>}
         {(g.hq ?? []).filter(h => h.owner === me).map(h => (
           <button key={'h' + h.id} className="oob-c army" onClick={() => { click(); ui().selectArmy(h.id); }}>
-            <span className="oc-n"><b>{hqName(h)}</b><small>{h.cmd.name} · {h.front.map(r => W.regions[r].name).join(', ')}</small></span>
-            <span className="oc-v"><b className="lcdn">{all.filter(c => c.army === h.id).length}</b><small>corps</small></span>
+            <span className="oc-n"><b>{hqName(h)}</b><small>{h.cmd.name} · {h.front.map(r => nm(W.regions[r].name)).join(', ')}</small></span>
+            <span className="oc-v"><b className="lcdn">{all.filter(c => c.army === h.id).length}</b><small>{t('corps')}</small></span>
             <span className="oc-xp">{(g.requests ?? []).some(q => q.army === h.id) ? <em className="rbadge">{(g.requests ?? []).filter(q => q.army === h.id).length}</em> : null}</span>
           </button>
         ))}
-        {away.length > 0 && <div className="lbl"><span>On the move</span></div>}
+        {away.length > 0 && <div className="lbl"><span>{t('On the move')}</span></div>}
         {away.map(a => (
-          <div key={'a' + a.tag.id} className="oob-c away"><span className="oc-n"><b>{groupName(me, 1, a.tag.n)}</b><small>{a.where}</small></span><span className="oc-v">{groundUnits(a.u) ? <><b className="lcdn">{groundUnits(a.u)}</b><small>btl</small></> : null}</span><span className="oc-xp">{stars(a.tag.xp)}</span></div>
+          <div key={'a' + a.tag.id} className="oob-c away"><span className="oc-n"><b>{groupName(me, 1, a.tag.n)}</b><small>{a.where}</small></span><span className="oc-v">{groundUnits(a.u) ? <><b className="lcdn">{groundUnits(a.u)}</b><small>{t('btl')}</small></> : null}</span><span className="oc-xp">{stars(a.tag.xp)}</span></div>
         ))}
         {regions.map(r => {
           const cs = corpsIn(r).filter(c => !mine || c.man).sort((a, b) => a.p - b.p), dep = depotOf(r).u, dn = groundUnits(dep);
@@ -156,15 +159,15 @@ export function ForcesPanel() {
           return (
             <div key={r.id} className="oob-r">
               <button className="oob-rh" onClick={() => { click(); ui().select(r.id); rendererRef.current?.flyTo(r.id, 26); }}>
-                <b>{W.regions[r.id].name}</b>{r.battle >= 0 && <span className="tag red">battle</span>}<small>{groundUnits(r.units)} btl{r.deploy === 1 ? ' · Manual' : ' · Auto'}</small>
+                <b>{nm(W.regions[r.id].name)}</b>{r.battle >= 0 && <span className="tag red">{t('battle')}</span>}<small>{t('{0} btl', groundUnits(r.units))} · {r.deploy === 1 ? t('Manual') : t('Auto')}</small>
               </button>
               {cs.map(c => <CorpsRow key={c.id} g={g} me={me} r={r} c={c} sel={selC.includes(c.id)} />)}
-              {!mine && dn > 0 && <div className="oob-c dep" title="Battalions in no corps: recruits and the troops Auto arranges"><span className="oc-n"><b>Depot</b><small>{unitsLine(dep)}</small></span><span className="oc-v"><b className="lcdn">{dn}</b><small>btl</small></span>
-                <button className="btn sm" title={`Form a corps of up to ${CORPS_CAP} battalions from the depot, under your orders`} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>Form corps</button></div>}
+              {!mine && dn > 0 && <div className="oob-c dep" title={t('Battalions in no corps: recruits and the troops Auto arranges')}><span className="oc-n"><b>{t('Depot')}</b><small>{unitsLine(dep)}</small></span><span className="oc-v"><b className="lcdn">{dn}</b><small>{t('btl')}</small></span>
+                <button className="btn sm" title={t('Form a corps of up to {0} battalions from the depot, under your orders', CORPS_CAP)} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>{t('Form corps')}</button></div>}
             </div>
           );
         })}
-        <p className="note">Click a corps to select it (Shift adds more), then right-click the map: an own region or one of its borders moves it there, an enemy region attacks. Corps marked ✋ are yours; Auto arranges the rest.</p>
+        <p className="note">{t('Click a corps to select it (Shift adds more), then right-click the map: an own region or one of its borders moves it there, an enemy region attacks. Corps marked ✋ are yours; Auto arranges the rest.')}</p>
       </div>
     </section>
   );
@@ -185,11 +188,11 @@ function Detach({ r, c, done }: { r: RegionState; c: Corps; done: () => void }) 
   return (
     <div className="cc-det">
       {GROUND_TYPES.filter(k => c.u[k] > 0).map(k => (
-        <label key={k}><span>{UT[k].short}</span>
+        <label key={k}><span>{tx(UT[k].short)}</span>
           <input type="number" min={0} max={c.u[k]} value={n[k] ?? 0} onChange={e => setN({ ...n, [k]: Math.max(0, Math.min(c.u[k], Math.floor(+e.target.value || 0))) })} />
           <small>/ {c.u[k]}</small></label>
       ))}
-      <button className="btn sm" disabled={!tot || tot >= groundUnits(c.u)} onClick={() => { click(); if (useUi.getState().order({ t: 'detach', region: r.id, id: c.id, u: n })) done(); }}>Detach {tot || ''}</button>
+      <button className="btn sm" disabled={!tot || tot >= groundUnits(c.u)} onClick={() => { click(); if (useUi.getState().order({ t: 'detach', region: r.id, id: c.id, u: n })) done(); }}>{t('Detach')}{tot ? ` ${tot}` : ''}</button>
     </div>
   );
 }
@@ -202,24 +205,24 @@ function OneCorps({ g, me, r, c }: { g: GameState; me: number; r: RegionState; c
   return (
     <>
       <div className="cc-stats">
-        <span><small>Battalions</small><b className="lcdn">{groundUnits(c.u)}<i>/{CORPS_CAP}</i></b></span>
-        <span><small>Men</small><b className="lcdn">{menStr(menTotal(c.m))}</b></span>
-        <span><small>Strength</small><b className="lcdn">{pct(st)}</b></span>
-        <span><small>Morale</small><b className="lcdn">{Math.round(c.mor)}%</b></span>
-        <span title="+1 star per battle won, +5 % damage per star"><small>Experience</small><b className="xp">{c.xp ? stars(c.xp) : 'green'}</b></span>
+        <span><small>{t('Battalions')}</small><b className="lcdn">{groundUnits(c.u)}<i>/{CORPS_CAP}</i></b></span>
+        <span><small>{t('Men')}</small><b className="lcdn">{menStr(menTotal(c.m))}</b></span>
+        <span><small>{t('Strength')}</small><b className="lcdn">{pct(st)}</b></span>
+        <span><small>{t('Morale')}</small><b className="lcdn">{Math.round(c.mor)}%</b></span>
+        <span title={t('+1 star per battle won, +5 % damage per star')}><small>{t('Experience')}</small><b className="xp">{c.xp ? stars(c.xp) : t('green')}</b></span>
       </div>
-      <p className="cc-u">{GROUND_TYPES.filter(k => c.u[k] > 0).map(k => <span key={k}><b>{c.u[k]}</b> {c.u[k] === 1 ? FORMATION[k].one : FORMATION[k].many}</span>)}</p>
-      <div className="lv-row"><span className="lv-l" title="How this corps fights">Stance</span>
-        <div className="seg" role="group" aria-label="Corps stance">
-          {STANCES.map((nm, i) => <button key={nm} title={nm} aria-pressed={(c.st ?? r.stance ?? 0) === i} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, st: i as Stance }); }}>{['Balanced', 'Aggressive', 'Defensive', 'Hold'][i]}</button>)}
+      <p className="cc-u">{GROUND_TYPES.filter(k => c.u[k] > 0).map(k => <span key={k}><b>{c.u[k]}</b> {tx(c.u[k] === 1 ? FORMATION[k].one : FORMATION[k].many)}</span>)}</p>
+      <div className="lv-row"><span className="lv-l" title={t('How this corps fights')}>{t('Stance')}</span>
+        <div className="seg" role="group" aria-label={t('Corps stance')}>
+          {STANCES.map((sn, i) => <button key={sn} title={tx(sn)} aria-pressed={(c.st ?? r.stance ?? 0) === i} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, st: i as Stance }); }}>{t(['Balanced', 'Aggressive', 'Defensive', 'Hold'][i])}</button>)}
         </div>
       </div>
       {foe && (
-        <div className="lv-row"><span className="lv-l">Order</span>
-          <div className="seg ord" role="group" aria-label="Corps order">
-            {ORDERS.map((o, k) => <button key={o} aria-pressed={(c.ord ?? 0) === k} title={o} onClick={() => order(k as Order)}>{k === 0 ? 'Hold' : k === 1 ? 'First line' : 'Invade'}</button>)}
+        <div className="lv-row"><span className="lv-l">{t('Order')}</span>
+          <div className="seg ord" role="group" aria-label={t('Corps order')}>
+            {ORDERS.map((o, k) => <button key={o} aria-pressed={(c.ord ?? 0) === k} title={t(o)} onClick={() => order(k as Order)}>{k === 0 ? t('Hold') : k === 1 ? t('First line') : t('Invade')}</button>)}
           </div>
-          {(c.ord ?? 0) >= 1 && !c.now && (c.ready ?? 0) > g.time && <button className="btn sm danger" title="Attack before the troops have assembled: tired men, unregistered guns" onClick={() => order(c.ord!, true)}>Go now</button>}
+          {(c.ord ?? 0) >= 1 && !c.now && (c.ready ?? 0) > g.time && <button className="btn sm danger" title={t('Attack before the troops have assembled: tired men, unregistered guns')} onClick={() => order(c.ord!, true)}>{t('Go now')}</button>}
         </div>
       )}
       <div className="cc-acts">
@@ -229,7 +232,9 @@ function OneCorps({ g, me, r, c }: { g: GameState; me: number; r: RegionState; c
         <button className="btn sm" aria-pressed={!c.nr} title={c.nr ? 'Refill off: this corps takes no replacements from the manpower pool' : 'Refill on: each week this corps takes men from the pool to make good its losses (front-line corps first)'} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, refill: !!c.nr }); }}>{c.nr ? 'Refill off' : 'Refill on'}</button>
       </div>
       {det && <Detach r={r} c={c} done={() => setDet(false)} />}
-      <p className="note">Right-click the map: an own region or border moves the corps there, {W.regions[r.id].land.length ? 'a neighbouring enemy region attacks it' : 'an enemy region attacks it'} ({ui().goal === 1 ? 'take the first line' : 'invade'}).</p>
+      <p className="note">{t(W.regions[r.id].land.length
+        ? (ui().goal === 1 ? 'Right-click the map: an own region or border moves the corps there, a neighbouring enemy region attacks it (take the first line).' : 'Right-click the map: an own region or border moves the corps there, a neighbouring enemy region attacks it (invade).')
+        : (ui().goal === 1 ? 'Right-click the map: an own region or border moves the corps there, an enemy region attacks it (take the first line).' : 'Right-click the map: an own region or border moves the corps there, an enemy region attacks it (invade).'))}</p>
     </>
   );
 }
@@ -242,36 +247,36 @@ export function CorpsCard() {
   const found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
   const goal = ui().goal;
   if (!found.length) return (
-    <section className="ccard" aria-label="Corps"><div className="bc-h"><div><small>Corps</small><h3>On the move</h3></div><button className="x" aria-label="Clear selection" onClick={() => ui().selectCorps([])}><CloseIcon /></button></div>
-      <p className="note">The selected corps are marching, at sea or fighting. They take orders again once they stand at a post.</p></section>
+    <section className="ccard" aria-label={t('Corps')}><div className="bc-h"><div><small>{t('Corps')}</small><h3>{t('On the move')}</h3></div><button className="x" aria-label={t('Clear selection')} onClick={() => ui().selectCorps([])}><CloseIcon /></button></div>
+      <p className="note">{t('The selected corps are marching, at sea or fighting. They take orders again once they stand at a post.')}</p></section>
   );
   const one = found.length === 1 ? found[0] : null;
   return (
-    <section className="ccard" aria-label="Corps" style={{ '--c': FACTIONS[me].color } as React.CSSProperties}>
+    <section className="ccard" aria-label={t('Corps')} style={{ '--c': FACTIONS[me].color } as React.CSSProperties}>
       <div className="bc-h">
         <div>
-          <small>{one ? `${W.regions[one.r.id].name} · ${postLabel(W, one.c.p)}${one.c.man ? ' · under your orders' : ' · Auto'}` : `${found.length} corps selected`}</small>
-          <h3>{one ? groupName(me, 1, one.c.n) : `${found.reduce((s, f) => s + groundUnits(f.c.u), 0)} battalions`}</h3>
+          <small>{one ? `${nm(W.regions[one.r.id].name)} · ${tx(postLabel(W, one.c.p))} · ${one.c.man ? t('under your orders') : t('Auto')}` : t('{0} corps selected', found.length)}</small>
+          <h3>{one ? groupName(me, 1, one.c.n) : t('{0} battalions', found.reduce((s, f) => s + groundUnits(f.c.u), 0))}</h3>
         </div>
-        <button className="x" aria-label="Clear selection" onClick={() => ui().selectCorps([])}><CloseIcon /></button>
+        <button className="x" aria-label={t('Clear selection')} onClick={() => ui().selectCorps([])}><CloseIcon /></button>
       </div>
       {one ? <OneCorps g={g} me={me} r={one.r} c={one.c} /> : (
         <>
           {found.map(({ r, c }) => (
             <button key={c.id} className="oob-c" onClick={e => pickCorps(r, c, e.shiftKey)}>
-              <span className="oc-n"><b>{groupName(me, 1, c.n)}</b><small>{W.regions[r.id].name} · {postLabel(W, c.p)}</small></span>
-              <span className="oc-v"><b className="lcdn">{groundUnits(c.u)}</b><small>btl</small></span>
+              <span className="oc-n"><b>{groupName(me, 1, c.n)}</b><small>{nm(W.regions[r.id].name)} · {tx(postLabel(W, c.p))}</small></span>
+              <span className="oc-v"><b className="lcdn">{groundUnits(c.u)}</b><small>{t('btl')}</small></span>
               <span className="oc-xp">{stars(c.xp)}</span>
             </button>
           ))}
-          <p className="note">Right-click the map to move them all, or right-click an enemy region to attack with each one that borders it.</p>
+          <p className="note">{t('Right-click the map to move them all, or right-click an enemy region to attack with each one that borders it.')}</p>
         </>
       )}
       <CorpsArmyRow ids={found.map(x => x.c.id)} />
-      <div className="lv-row"><span className="lv-l" title="What attacks ordered by right-click aim for">Attack goal</span>
-        <div className="seg" role="group" aria-label="Attack goal">
-          <button aria-pressed={goal === 1} onClick={() => { click(); ui().setGoal(1); }}>First line</button>
-          <button aria-pressed={goal === 2} onClick={() => { click(); ui().setGoal(2); }}>Invade</button>
+      <div className="lv-row"><span className="lv-l" title={t('What attacks ordered by right-click aim for')}>{t('Attack goal')}</span>
+        <div className="seg" role="group" aria-label={t('Attack goal')}>
+          <button aria-pressed={goal === 1} onClick={() => { click(); ui().setGoal(1); }}>{t('First line')}</button>
+          <button aria-pressed={goal === 2} onClick={() => { click(); ui().setGoal(2); }}>{t('Invade')}</button>
         </div>
       </div>
     </section>

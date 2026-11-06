@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ECON, FACTIONS, NATIONS, TICK_SECONDS, WEATHER, barrageWeeks, convoyIn, econOf, REPL, WOUNDED, income, incomeTerms, missionFrac, missionText, poolGrowth, poolTerms, shellIncome, shellTerms, weatherAt, type Term } from '@riskrts/shared';
 
 /** A breakdown for a tooltip: one line per term, then the total. */
-const why = (terms: Term[], unit: string) => '\n\n' + [...terms.map(t => `${t.v >= 0 ? '+' : '−'}${Math.abs(Math.round(t.v * 10) / 10)}  ${t.label}${t.note ? ` (${t.note})` : ''}`), `= ${Math.round(terms.reduce((a, t) => a + t.v, 0))} ${unit}`].join('\n');
+const why = (terms: Term[], unit: string) => '\n\n' + [...terms.map(x => `${x.v >= 0 ? '+' : '−'}${t('{0}', Math.abs(Math.round(x.v * 10) / 10))}  ${tx(x.label)}${x.note ? ` (${tx(x.note)})` : ''}`), `= ${Math.round(terms.reduce((a, x) => a + x.v, 0))} ${unit}`].join('\n');
 import { dateStr, useSim, useUi } from '../game/store';
 import { buildWorld } from '@riskrts/shared';
 import { GuestSession } from '../game/session';
@@ -12,6 +12,8 @@ import { Sfx } from '../audio/sfx';
 import { Scoreboard } from './Scoreboard';
 import { rendererRef } from './refs';
 import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
+import { t, tx } from '../i18n';
+import { menStr } from './format';
 
 const SPEEDS = [1, 2, 4];
 
@@ -27,9 +29,9 @@ function Lcd({ label, value, plus, cls, title, onClick }: { label: string; value
 function Needle({ v, unrest }: { v: number; unrest: number }) {
   const a = -60 + Math.min(100, Math.max(0, v)) * 1.2;
   return (
-    <div className={'needle' + (v >= unrest || v >= 60 ? ' hi' : v >= 30 ? ' mid' : '')} title={`War weariness: how tired your nation is of the war. Losses, conscription and broken treaties raise it; quiet times let it fade. It cuts supply income by up to 30% and lowers morale; above 60% the barracks stop sending volunteers, and above ${unrest} strikes and uprisings begin.`} role="img" aria-label={`War weariness ${Math.round(v)}%`}>
+    <div className={'needle' + (v >= unrest || v >= 60 ? ' hi' : v >= 30 ? ' mid' : '')} title={t('War weariness: how tired your nation is of the war. Losses, conscription and broken treaties raise it; quiet times let it fade. It cuts supply income by up to 30% and lowers morale; above 60% the barracks stop sending volunteers, and above {0} strikes and uprisings begin.', unrest)} role="img" aria-label={t('War weariness {0}%', Math.round(v))}>
       <svg viewBox="0 0 44 26" aria-hidden="true"><path d="M4 24A18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeOpacity=".35" strokeWidth="3" /><path d="M29 8.4A18 18 0 0 1 40 24" fill="none" stroke="#c8402e" strokeWidth="3" /><line x1="22" y1="24" x2="22" y2="9" stroke="#e8e0c4" strokeWidth="2" strokeLinecap="round" style={{ transform: `rotate(${a}deg)`, transformOrigin: '22px 24px' }} /></svg>
-      <span><small>Weariness</small><b>{Math.round(v)}%</b></span>
+      <span><small>{t('Weariness')}</small><b>{Math.round(v)}%</b></span>
     </div>
   );
 }
@@ -38,14 +40,14 @@ function Needle({ v, unrest }: { v: number; unrest: number }) {
 function Ticker() {
   const last = useUi(s => s.log[0]);
   useEffect(() => { if (last) Sfx.teletype(); }, [last?.id]);
-  if (!last) return <div className="ticker"><span className="tk-t">Awaiting dispatches…</span></div>;
+  if (!last) return <div className="ticker"><span className="tk-t">{t('Awaiting dispatches…')}</span></div>;
   const open = () => {
     if (last.report !== undefined) { useUi.setState({ reportId: last.report }); useUi.getState().setOverlay('reports'); return; }
     if (last.region !== undefined) { rendererRef.current?.flyTo(last.region, 16); useUi.getState().select(last.region); }
   };
   return (
-    <button className={'ticker ' + last.cls} onClick={open} title="Latest dispatch · open the menu for earlier ones">
-      <time>{last.day}</time><span key={last.id} className="tk-t">{last.text}</span>
+    <button className={'ticker ' + last.cls} onClick={open} title={t('Latest dispatch · open the menu for earlier ones')}>
+      <time>{(last.day)}</time><span key={last.id} className="tk-t">{tx(last.text)}</span>
     </button>
   );
 }
@@ -59,16 +61,16 @@ export function TopBar() {
   const { g, me, session } = sim; const f = g.factions[me]; const F = FACTIONS[me];
   const counts = FACTIONS.map((_, i) => g.regions.filter(r => r.owner === i).length);
   const ui = useUi.getState;
-  const orders = f.mission ? missionText(f.mission)[0] : 'Awaiting orders';
+  const orders = f.mission ? tx(missionText(f.mission)[0]) : t('Awaiting orders');
   const speed = session.speed;
   const men = f.men ?? 0;
   const sel = useUi.getState().sel, at = sel >= 0 ? sel : g.regions.find(r => r.capitalOf === me)?.id ?? 0, w = weatherAt(at, g.day);
 
   return (
     <header id="top" className="strip">
-      <button className="mission" aria-label={g.over ? 'Show the result of the war' : 'Show sealed orders'} onClick={() => { click(); ui().setOverlay(g.over ? 'end' : 'orders'); }}>
+      <button className="mission" aria-label={g.over ? t('Show the result of the war') : t('Show sealed orders')} onClick={() => { click(); ui().setOverlay(g.over ? 'end' : 'orders'); }}>
         <span className="crest" style={{ '--c': F.color } as React.CSSProperties}>{F.key}</span>
-        <span className="mtx"><small>Sealed orders</small><b>{orders}</b>
+        <span className="mtx"><small>{t('Sealed orders')}</small><b>{orders}</b>
           <span className="mbar"><i style={{ width: `${(f.mission ? missionFrac(g, f) * 100 : 0).toFixed(1)}%` }} /></span></span>
       </button>
       <Ticker />
@@ -85,10 +87,10 @@ export function TopBar() {
         <Lcd label="Men" value={men >= 10000 ? `${Math.round(men / 1000)}k` : Math.floor(men).toLocaleString('en-GB')} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
           title={`Men: the manpower pool. New formations take men from it (an infantry battalion needs 100) and train for a week; replacements for under-strength corps (up to ${Math.round(REPL.share * 100)} % a week) come from it too, and ${Math.round(WOUNDED.share * 100)} % of the casualties return to it after ${WOUNDED.days / 7} weeks. +${poolGrowth(g, me)} come in each week, a new age class from every home region you still hold. Raise conscription in the Economy panel (click) for more, at the cost of war weariness.` + why(poolTerms(g, me), 'men per week')} onClick={() => { click(); ui().setPanel('economy'); }} />
         <Needle v={f.ww} unrest={NATIONS[me].unrest} />
-        <div className="pills" role="group" aria-label="Powers">
+        <div className="pills" role="group" aria-label={t('Powers')}>
           {FACTIONS.map((x, i) => (
             <button key={i} className={'pill' + (i === me ? ' me' : '') + (g.factions[i].alive ? '' : ' dead')} style={{ '--c': x.color } as React.CSSProperties}
-              title={x.name} aria-label={`${x.name}: ${counts[i]} regions. Open scoreboard`} aria-expanded={scoreOpen} onClick={() => { click(); ui().toggleScore(); }}>
+              title={tx(x.name)} aria-label={t('{0}: {1} regions. Open scoreboard', x.name, counts[i])} aria-expanded={scoreOpen} onClick={() => { click(); ui().toggleScore(); }}>
               <i /><span className="k">{x.key}</span> <span className="c">{counts[i]}</span>
             </button>
           ))}
@@ -97,20 +99,20 @@ export function TopBar() {
       </div>
 
       <div className="right">
-        <button id="date" className="lcd datebtn" title="War calendar: unlocks, rushes and doctrines" onClick={() => { click(); ui().setOverlay('calendar'); }}><small>Date</small><span className="lcd-w"><b>{dateStr(g.day)}</b></span></button>
-        <span className={'wx w' + w} title={`Weather in ${buildWorld().regions[at].name}: ${WEATHER[w]}${w === 1 ? ' · marches and assaults 30% slower, shells sink into the mud' : w === 2 ? ' · marches 40% slower, cut-off troops wear down twice as fast' : w === 3 ? ' · cut-off troops wear down 50% faster' : ''}`}>{WEATHER[w]}</span>
+        <button id="date" className="lcd datebtn" title={t('War calendar: unlocks, rushes and doctrines')} onClick={() => { click(); ui().setOverlay('calendar'); }}><small>{t('Date')}</small><span className="lcd-w"><b>{(dateStr(g.day))}</b></span></button>
+        <span className={'wx w' + w} title={t('Weather in {0}: {1}', buildWorld().regions[at].name, WEATHER[w]) + (w === 1 ? ' · ' + t('marches and assaults 30% slower, shells sink into the mud') : w === 2 ? ' · ' + t('marches 40% slower, cut-off troops wear down twice as fast') : w === 3 ? ' · ' + t('cut-off troops wear down 50% faster') : '')}>{tx(WEATHER[w])}</span>
         {session.canControlTime ? (
-          <div className="seg speed" role="group" aria-label="Game speed">
-            <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
+          <div className="seg speed" role="group" aria-label={t('Game speed')}>
+            <button aria-label={t('Pause')} aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
             {session.canChangeSpeed
               ? SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)
-              : <button aria-pressed={speed === 1} title="Against other players the war runs at 1×. 2× and 4× are only for games against computers." onClick={() => { click(); ui().setSpeed(1); }}>1×</button>}
+              : <button aria-pressed={speed === 1} title={t('Against other players the war runs at 1×. 2× and 4× are only for games against computers.')} onClick={() => { click(); ui().setSpeed(1); }}>1×</button>}
           </div>
         ) : (
-          <span className="speedro" title={session instanceof GuestSession && session.spectator ? 'Watching with full vision, a little delayed' : 'The host controls the game speed'}>{session instanceof GuestSession && session.spectator ? 'Spectating' : speed === 0 ? 'Paused' : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ranked' : ''}</span>
+          <span className="speedro" title={session instanceof GuestSession && session.spectator ? t('Watching with full vision, a little delayed') : t('The host controls the game speed')}>{session instanceof GuestSession && session.spectator ? t('Spectating') : speed === 0 ? t('Paused') : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ' + t('ranked') : ''}</span>
         )}
-        <button className="ico" aria-label="Diplomacy" title="Diplomacy: treaties and messages" onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
-        <button className="ico" aria-label="Menu" title="Menu" onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
+        <button className="ico" aria-label={t('Diplomacy')} title={t('Diplomacy: treaties and messages')} onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
+        <button className="ico" aria-label={t('Menu')} title={t('Menu')} onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
       </div>
     </header>
   );

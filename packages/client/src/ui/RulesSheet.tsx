@@ -8,6 +8,8 @@ import {
 import { useUi } from '../game/store';
 import { Modal } from './Modal';
 import { click } from './actions';
+import { t, tx } from '../i18n';
+import { rich } from './LangPicker';
 
 const PAGES = ['Fronts', 'Corps', 'Commanders', 'Scouting', 'Supply & men'] as const;
 const pct = (x: number) => `${Math.round(x * 100)} %`;
@@ -16,50 +18,50 @@ export function RulesSheet() {
   const [page, setPage] = useState<number>(0);
   const close = () => { click(); useUi.getState().setOverlay(null); };
   return (
-    <Modal label="Rules" onClose={close}>
-      <div className="kicker">Field service regulations</div><h2>Rules</h2>
-      <div className="seg rules-tabs" role="tablist" aria-label="Rules pages">
-        {PAGES.map((p, i) => <button key={p} role="tab" aria-selected={page === i} aria-pressed={page === i} onClick={() => { click(); setPage(i); }}>{p}</button>)}
+    <Modal label={t('Rules')} onClose={close}>
+      <div className="kicker">{t('Field service regulations')}</div><h2>{t('Rules')}</h2>
+      <div className="seg rules-tabs" role="tablist" aria-label={t('Rules pages')}>
+        {PAGES.map((p, i) => <button key={p} role="tab" aria-selected={page === i} aria-pressed={page === i} onClick={() => { click(); setPage(i); }}>{t(p)}</button>)}
       </div>
       <div className="rules-page">
         {page === 0 && <>
-          <h3>Who is at war</h3>
-          <p>Every power is at war with every other power it has no treaty with. A ceasefire, non-aggression pact or alliance ends that until it lapses or is broken.</p>
-          <h3>The balance on a border</h3>
-          <p>Each chip in Fronts mode compares <b>ours</b> – the corps on that border, plus half of what stands at the centre if it can get there within {RESERVE_REACH} s – with <b>theirs</b> – what we know of the corps across and half their centre, plus columns marching in.</p>
+          <h3>{t('Who is at war')}</h3>
+          <p>{t('Every power is at war with every other power it has no treaty with. A ceasefire, non-aggression pact or alliance ends that until it lapses or is broken.')}</p>
+          <h3>{t('The balance on a border')}</h3>
+          <p>{rich(t('Each chip in Fronts mode compares <b>ours</b> – the corps on that border, plus half of what stands at the centre if it can get there within {0} s – with <b>theirs</b> – what we know of the corps across and half their centre, plus columns marching in.', RESERVE_REACH))}</p>
           <table className="ledger"><tbody>
-            <tr><td>Each trench level</td><td>+{pct(WORK_MULT.trench)}</td></tr>
-            <tr><td>Each sandbag row</td><td>+{pct(WORK_MULT.sand)}</td></tr>
-            <tr><td>Each wire belt</td><td>+{pct(WORK_MULT.wire)}</td></tr>
+            <tr><td>{t('Each trench level')}</td><td>+{pct(WORK_MULT.trench)}</td></tr>
+            <tr><td>{t('Each sandbag row')}</td><td>+{pct(WORK_MULT.sand)}</td></tr>
+            <tr><td>{t('Each wire belt')}</td><td>+{pct(WORK_MULT.wire)}</td></tr>
           </tbody></table>
-          <p>Our power times the works, plus the fixed defences, over theirs: green from 1.5×, khaki from 0.8×, amber from 0.5×, red below or when they mass for an attack.</p>
-          <h3>What we know</h3>
-          <p>Across our own borders we see an estimate in men. A patrol, flight or spy brings an exact report, which counts as old after {STALE_DAYS} days.</p>
+          <p>{t('Our power times the works, plus the fixed defences, over theirs: green from 1.5×, khaki from 0.8×, amber from 0.5×, red below or when they mass for an attack.')}</p>
+          <h3>{t('What we know')}</h3>
+          <p>{t('Across our own borders we see an estimate in men. A patrol, flight or spy brings an exact report, which counts as old after {0} days.', STALE_DAYS)}</p>
         </>}
         {page === 1 && <>
-          <h3>Corps</h3>
-          <p>A corps holds at most <b>{CORPS_CAP} battalions</b>; larger forces are several corps on one post (the centre, a border or a coast). It keeps its own men, morale and experience while it marches, sails and fights. Battalions in no corps are the region's depot.</p>
+          <h3>{t('Corps')}</h3>
+          <p>{rich(t('A corps holds at most <b>{0} battalions</b>; larger forces are several corps on one post (the centre, a border or a coast). It keeps its own men, morale and experience while it marches, sails and fights. Battalions in no corps are the region\'s depot.', CORPS_CAP))}</p>
           <table className="ledger"><tbody>
-            <tr><td>Experience per battle won</td><td>+1 star (max {XP_MAX})</td></tr>
-            <tr><td>Damage per star</td><td>+{pct(XP_DMG)}</td></tr>
-            <tr><td>Assembling before an attack</td><td>{ASSEMBLE} s</td></tr>
-            <tr><td>Holding a border this long digs one trench level deeper</td><td>{DIG_IN} s</td></tr>
+            <tr><td>{t('Experience per battle won')}</td><td>{t('+1 star (max {0})', XP_MAX)}</td></tr>
+            <tr><td>{t('Damage per star')}</td><td>+{pct(XP_DMG)}</td></tr>
+            <tr><td>{t('Assembling before an attack')}</td><td>{ASSEMBLE} s</td></tr>
+            <tr><td>{t('Holding a border this long digs one trench level deeper')}</td><td>{DIG_IN} s</td></tr>
           </tbody></table>
-          <h3>Who moves them</h3>
-          <p>Regions on <b>Auto</b> arrange their depot and the corps they raised themselves. Corps you move, attack with, split, merge or form are yours (✋): Auto leaves them alone. Corps in an army are moved by its commander unless you take one by hand.</p>
+          <h3>{t('Who moves them')}</h3>
+          <p>{rich(t('Regions on <b>Auto</b> arrange their depot and the corps they raised themselves. Corps you move, attack with, split, merge or form are yours (✋): Auto leaves them alone. Corps in an army are moved by its commander unless you take one by hand.'))}</p>
         </>}
         {page === 2 && <>
-          <h3>Armies and commanders</h3>
-          <p>An army holds a front (a list of your regions). Its commander shifts his corps to the borders that need them – from quiet, peaceful or safe posts (safe: {SAFE_RATIO}× our strength) and from his reserve – by himself. Everything else he asks you for, at most {MAX_REQ} requests at a time; a denied request rests for {DENY_WEEKS} weeks.</p>
+          <h3>{t('Armies and commanders')}</h3>
+          <p>{t('An army holds a front (a list of your regions). Its commander shifts his corps to the borders that need them – from quiet, peaceful or safe posts (safe: {0}× our strength) and from his reserve – by himself. Everything else he asks you for, at most {1} requests at a time; a denied request rests for {2} weeks.', SAFE_RATIO, MAX_REQ, DENY_WEEKS)}</p>
           <table className="ledger"><tbody>
-            <tr><td>Proposes an attack from</td><td>{ATTACK_RATIO}× ours to theirs, {MIN_ATTACK}+ battalions</td></tr>
-            <tr><td>Asks to fall back below</td><td>{FALLBACK_RATIO}×</td></tr>
-            <tr><td>Report needed before an attack</td><td>≤ {REPORT_FRESH} days old</td></tr>
-            <tr><td>Front budget</td><td>up to {pct(BUDGET_MAX)} of income</td></tr>
+            <tr><td>{t('Proposes an attack from')}</td><td>{t('{0}× ours to theirs, {1}+ battalions', ATTACK_RATIO, MIN_ATTACK)}</td></tr>
+            <tr><td>{t('Asks to fall back below')}</td><td>{t('{0}×', FALLBACK_RATIO)}</td></tr>
+            <tr><td>{t('Report needed before an attack')}</td><td>{t('≤ {0} days old', REPORT_FRESH)}</td></tr>
+            <tr><td>{t('Front budget')}</td><td>{t('up to {0} of income', pct(BUDGET_MAX))}</td></tr>
           </tbody></table>
-          <p>No attack starts and no corps leaves the front without your answer. Standing approvals (not for attacks) and the budget let him do the small things himself.</p>
-          <h3>Traits</h3>
-          <table className="ledger"><tbody>{TRAIT_KEYS.map(k => <tr key={k}><td>{TRAITS[k].name}</td><td>{TRAITS[k].desc}</td></tr>)}</tbody></table>
+          <p>{t('No attack starts and no corps leaves the front without your answer. Standing approvals (not for attacks) and the budget let him do the small things himself.')}</p>
+          <h3>{t('Traits')}</h3>
+          <table className="ledger"><tbody>{TRAIT_KEYS.map(k => <tr key={k}><td>{tx(TRAITS[k].name)}</td><td>{tx(TRAITS[k].desc)}</td></tr>)}</tbody></table>
         </>}
         {page === 3 && <>
           <table className="ledger"><tbody>
@@ -68,7 +70,7 @@ export function RulesSheet() {
             <tr><td>Spy · anywhere, reports every week until caught (max {MAX_SPIES})</td><td>{COST.spy} Production</td></tr>
             <tr><td>Decoy march</td><td>{COST.decoy} Production</td></tr>
           </tbody></table>
-          <p>Patrols are caught more often by MG nests, bunkers and wire on the border they cross; flights by anti-air guns. Commanders ask for a look when a border is not safe and the report is older than {REPORT_OLD} days.</p>
+          <p>{t('Patrols are caught more often by MG nests, bunkers and wire on the border they cross; flights by anti-air guns. Commanders ask for a look when a border is not safe and the report is older than {0} days.', REPORT_OLD)}</p>
         </>}
         {page === 4 && <>
           <h3>The week</h3>
@@ -101,10 +103,10 @@ export function RulesSheet() {
             {ECON.map(e => <tr key={e.name}><td>War economy · {e.name}</td><td>{pct(e.shells)} of factory output to shells</td></tr>)}
             <tr><td>War weariness: Production lost per point</td><td>{pct(WW_INCOME / 100)}</td></tr>
           </tbody></table>
-          <p>The Economy panel shows each of these numbers as a ledger for your nation.</p>
+          <p>{t('The Economy panel shows each of these numbers as a ledger for your nation.')}</p>
         </>}
       </div>
-      <div className="row"><button className="btn primary" onClick={close}>Back to the map</button></div>
+      <div className="row"><button className="btn primary" onClick={close}>{t('Back to the map')}</button></div>
     </Modal>
   );
 }

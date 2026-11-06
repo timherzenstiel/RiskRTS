@@ -2,6 +2,8 @@
 import type { ReactNode } from 'react';
 import { FACTIONS } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
+import { t } from '../i18n';
+import { rich } from './LangPicker';
 
 export function Hint() {
   const sim = useSim(); const { tips, tut, orderMode, orderKind, sel, overlay } = useUi();
@@ -26,7 +28,7 @@ export function Hint() {
   return (
     <div id="hint" className="glass" role="status">
       <span>{text}</span>
-      <button id="hint-x" aria-label="Hide tips" title="Hide tips" onClick={() => useUi.getState().setTips(false)}>×</button>
+      <button id="hint-x" aria-label={t('Hide tips')} title={t('Hide tips')} onClick={() => useUi.getState().setTips(false)}>×</button>
     </div>
   );
 }

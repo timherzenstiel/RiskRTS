@@ -1,11 +1,12 @@
 // UI state (zustand). Game state itself lives in the Session; components read it through useSim() and re-render on `rev`.
 import { create } from 'zustand';
-import { describeEvent, type BuildKind, type Command, type FortKind, type GameEvent, type UnitType } from '@riskrts/shared';
+import { dateOf, describeEvent, type BuildKind, type Command, type FortKind, type GameEvent, type UnitType } from '@riskrts/shared';
 import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
 import { Neural, defaultVoiceMode, type VoiceMode } from '../audio/voice';
 import { DEFAULT_PIXEL_SCALE, type PixelScale } from '../render/api';
+import { getLang, tx } from '../i18n';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
 /** Tabs of the region card (design-command §5.3): Overview (posts, corps, operations from here), Recruit, Build. */
@@ -95,6 +96,7 @@ interface Ui {
   cancelOrder(): void;
   setOverlay(o: Overlay): void;
   toggleScore(): void;
+  /** Show a toast. Pass English: the text is translated here (command errors from the simulation or a host, client messages). */
   say(text: string): void;
   setSpeed(s: number): void;
   setQuality(q: PixelScale): void;
@@ -107,7 +109,7 @@ interface Ui {
   recruit(region: number, unit: UnitType, n?: number, now?: boolean): void;
   build(region: number, kind: BuildKind): void;
   fortify(region: number, kind: FortKind, sector: number): void;
-  /** Send any command; errors become toasts. */
+  /** Send any command; errors become toasts (translated by say()). */
   order(cmd: Command): boolean;
   march(from: number, to: number, brk?: boolean): void;
   air(from: number, to: number): void;
@@ -173,7 +175,7 @@ export const useUi = create<Ui>((set, get) => ({
   cancelOrder: () => set({ orderMode: false }),
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
-  say: (text) => set({ toast: { text, id: ++feedId } }),
+  say: (text) => set({ toast: { text: tx(text), id: ++feedId } }),
   setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; get().bump(); } },
   setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
@@ -221,7 +223,11 @@ Radio.onAir = (d) => useUi.setState({ onAir: d ? { text: d.say, region: d.region
 Neural.onState = () => useUi.setState({ voiceState: { state: Neural.state, p: Neural.progress } });
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export function dateStr(day: number) { const d = new Date(Date.UTC(1914, 7, 1) + day * 864e5); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+const MON_DE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+/** "1 Aug 1914" (German: "1. Aug 1914"), in the interface language. */
+export function dateStr(day: number) { const d = new Date(Date.UTC(1914, 7, 1) + day * 864e5); return getLang() === 'de' ? `${d.getUTCDate()}. ${MON_DE[d.getUTCMonth()]} ${d.getUTCFullYear()}` : `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+/** "Sep 1916" in the interface language (the shared monthStr is English only). */
+export function monthStr(day: number) { const { y, m } = dateOf(day); return `${(getLang() === 'de' ? MON_DE : MON)[m - 1]} ${y}`; }
 
 /** Read the live session. Re-renders whenever the store's rev changes. */
 export function useSim() {

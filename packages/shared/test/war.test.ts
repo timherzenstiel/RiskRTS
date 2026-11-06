@@ -1,10 +1,10 @@
 // Border works, fronts, strength, supply lines, morale and fog of war.
 import { describe, it, expect } from 'vitest';
 import {
-  FORMATION, UNIT_TYPES, WIRE_HP, applyCommand, buildWorld, consolidate, createGame, emptyUnits, fogView, frontsOf, migrateState, run, slotsUsed, startBattle, step,
+  FORMATION, UNIT_TYPES, WIRE_HP, applyCommand, autoDeploy, buildWorld, consolidate, createGame, emptyUnits, fogView, frontsOf, migrateState, run, slotsUsed, startBattle, step,
   updateSupplyLines, visibility, worksAt, income, dayOf, type GameState,
 } from '../src';
-import { strike } from './helpers';
+import { setCs, strike } from './helpers';
 
 const W = buildWorld();
 const id = (n: string) => W.byName[n].id;
@@ -12,7 +12,7 @@ function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TY
 /** France (0) against Germany (1), everything else neutralised to power 2. */
 function setup(seed = 21) {
   const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 0 } });
-  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; }
+  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; }
   const A = id('France'), B = id('Germany');
   g.regions[A].owner = 0; g.regions[A].home = 0; g.regions[B].owner = 1; g.regions[B].home = 1;
   g.factions.forEach(f => { f.supply = 100; f.mission = null; });
@@ -66,7 +66,7 @@ describe('fronts', () => {
     g.regions[C].owner = 0; g.regions[C].home = 0;
     g.regions[A].units.inf = 10; g.regions[C].units.inf = 10; g.regions[B].units = { ...emptyUnits(), inf: 12, art: 2 }; fill(g);
     // the defenders stand on both borders
-    g.regions[B].deploy = 1; g.regions[B].fr = { [A]: { u: { ...emptyUnits(), inf: 6, art: 1 }, n: 1, ord: 0 }, [C]: { u: { ...emptyUnits(), inf: 6, art: 1 }, n: 2, ord: 0 } };
+    g.regions[B].deploy = 1; setCs(g, B, [[A, { inf: 6, art: 1 }, { n: 1 }], [C, { inf: 6, art: 1 }, { n: 2 }]]);
     strike(g, 0, A, B, .5, 2, true); run(g, 6);
     expect(frontsOf(g, B).length).toBe(1);
     strike(g, 0, C, B, .5, 2, true); run(g, 6);
@@ -81,7 +81,8 @@ describe('fronts', () => {
     const { g, A, B } = setup();
     const C = W.regions[B].adj.find(i => i !== A && !W.seaLane.has(B + '|' + i))!;
     g.regions[C].owner = 0; g.regions[C].home = 0;
-    g.regions[A].units = { ...emptyUnits(), inf: 20, tank: 3 }; g.regions[C].units.inf = 3; g.regions[B].units = { ...emptyUnits(), inf: 6 }; fill(g);
+    g.regions[A].units = { ...emptyUnits(), inf: 20, tank: 3 }; g.regions[C].units.inf = 8; g.regions[B].units = { ...emptyUnits(), inf: 6 }; fill(g);
+    autoDeploy(g, g.regions[B], true); // the defenders stand on their borders
     applyCommand(g, 0, { t: 'march', from: C, to: B, frac: 1 }); run(g, 5);
     applyCommand(g, 0, { t: 'march', from: A, to: B, frac: 1 });
     let sawTwo = false, ownerDuring = true;
@@ -179,7 +180,7 @@ describe('saves', () => {
     old.v = 2; for (const r of old.regions) { r.trench = r.capitalOf >= 0 ? 2 : 0; delete r.works; delete r.men; delete r.mor; delete r.cut; delete r.home; }
     for (const f of old.factions) { delete f.ww; delete f.wounded; } delete old.intel; delete old.spies;
     const m = migrateState(old)!;
-    expect(m.v).toBe(6); expect(m.intel.length).toBe(m.factions.length); expect(m.factions[0].shells).toBeGreaterThan(0);
+    expect(m.v).toBe(7); expect(m.intel.length).toBe(m.factions.length); expect(m.factions[0].shells).toBeGreaterThan(0);
     const cap = m.regions.find(r => r.capitalOf === 1)!;
     expect(Object.values(cap.works).some(w => w.tr === 2)).toBe(true);
     expect(cap.men.inf).toBe(cap.units.inf * 100);

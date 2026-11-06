@@ -9,6 +9,7 @@ import { Sfx } from '../audio/sfx';
 import { Drawer } from './Drawer';
 import { Minimap } from './Minimap';
 import { BorderCard } from './Situation';
+import { CorpsCard } from './Forces';
 import { rendererRef } from './refs';
 
 /** Map mode (design-command §1): political, fronts, forces, supply, intel. The same mode again goes back to the political map. */
@@ -89,7 +90,7 @@ export function Sidebar() {
         <LayerPicker />
         <ZoomPicker />
       </div>
-      <div className="side-body"><BorderCard />{sel >= 0 ? <Drawer /> : <Idle />}</div>
+      <div className="side-body"><CorpsCard /><BorderCard />{sel >= 0 ? <Drawer /> : <Idle />}</div>
       <SupplyGauge />
     </aside>
   );

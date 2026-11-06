@@ -1,6 +1,6 @@
 # RiskRTS – Design: Command Overhaul (forces, supply, manpower, situation map, menus)
 
-Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved, building phase 1** · Mockups: design canvas "RiskRTS – Command overhaul"
+Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #25** · Mockups: design canvas "RiskRTS – Command overhaul"
 
 ## Problem
 
@@ -455,3 +455,15 @@ Each phase with tests, typecheck, a screenshot pass through `dev/harness.ts` and
 - **Left rail** with Situation, Nation, Reports, Diplomacy, Calendar; **Situation panel** (wars per power with battles and losses on record, borders to watch, other wars); **border card** above the region file (ours | theirs, Send troops / Fortify / Scout / Attack); **alerts** bottom-left (under attack, massing or weak border, cut off, manpower low, supply unspent; dismiss for a minute).
 - **Why**: the supply, shells and men counters show their breakdown in the tooltip (`sim/terms.ts`, tested to add up to the totals).
 - On phones the rail is hidden; the Situation panel opens from the sidebar's idle page.
+
+## Implementation notes – phase 2 (branch `command/2-corps`, on top of phase 1)
+
+- **Corps are formations** (`RegionState.cs: Corps[]`, `sim/posts.ts`): id, number, post (-1 centre, a border, a coast), battalions, **own men and morale**, experience 0–3 stars, `man` (under the player's orders). At most **20 battalions** each (`CORPS_CAP`); any number per post. The region's `units`/`men` stay the totals; what is in no corps is the **depot** (`depotOf`). `fixPosts` keeps corps within the totals every step.
+- Corps live in **a list per region** rather than the global `GameState.corps` of §7: identity travels with columns (`Army.ct`), fleets (`Fleet.ct`) and battles (`Battle.ct`, `Agent.c`). Survivors go back to the post they came from, per corps; conquerors stand at the centre. A won battle adds a star (+5 % damage each).
+- **Auto** only arranges the depot and its own corps; corps marked ✋ (moved, attacked, detached, merged or formed by the player) are left alone. Idle Auto corps at the centre fold back into the depot.
+- **Commands**: `moveCorps`, `attackCorps` (moves up to the border, assembles, attacks), `detach`, `merge`, `form` (new corps from the depot), `corpsSet` (stance, hand back to Auto), `order` with an optional corps id. `march` / `move` / `ship` still work on shares of a post.
+- Returning wounded refill corps and depot in proportion to their gaps; encirclement wears corps down like the depot.
+- **Saves v7 / protocol 7**: each old border corps becomes corps of its own (split at 20) with the region's men share and morale.
+- **Client**: Forces panel (rail, key **O**: regions → corps with strength, morale, stars, ✋; corps on the move; depot with *Form corps*), corps card (stats, stance, order, Detach, Merge, Hand to Auto, attack goal), corps markers on the map (one per post, "×2", click selects, Shift adds), right-click orders for the selected corps, the Deploy tab lists every corps per post.
+- Not yet: **armies** (2–6 corps under a commander with a front) – they come with the commanders in phase 3; box-select and drag-to-merge on the map; refill toggle (phase 5).
+

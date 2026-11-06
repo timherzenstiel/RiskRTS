@@ -10,6 +10,7 @@ import { Overlays } from './Overlays';
 import { OfferBanner } from './Diplomacy';
 import { Sidebar } from './Sidebar';
 import { Alerts, LeftRail, SituationPanel } from './Situation';
+import { ForcesPanel } from './Forces';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -79,6 +80,7 @@ export function Game() {
       <Sidebar />
       <LeftRail />
       <SituationPanel />
+      <ForcesPanel />
       <Alerts />
       <OfferBanner />
       <div id="leftcol"><Feed /></div>

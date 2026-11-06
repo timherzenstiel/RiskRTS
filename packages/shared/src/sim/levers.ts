@@ -9,7 +9,7 @@ import { marchFactor } from './rails';
 import { MARCH_MIN, MARCH_SPEED, emit, mkArmy, rnd, world } from './core';
 import { POST_SPEED, column, legDist, moveK } from './posts';
 import { weatherMarch } from './rails';
-import { forceIn, goOverTheTop, LULL_FROM } from './battle';
+import { forceIn, forceParts, goOverTheTop, LULL_FROM } from './battle';
 import { formArmy } from './commands';
 import { stanceIn, statsOf } from './rules';
 import type { Army, Barrage, Battle, GameState, Stance } from './types';
@@ -74,7 +74,8 @@ function pullOut(g: GameState, b: Battle, fid: number): string | null {
   const mor = Math.max(0, f.mor - 10), st = stanceIn(b, fid);
   // defenders of a phased front fall back to the main army in the middle of the region (the fight goes on in the depth)
   if (fid === b.def && b.goal && (b.stage ?? 0) === 0 && g.regions[b.region].owner === fid && b.from >= 0) {
-    out(); column(g, fid, b.region, b.from, b.region, -1, f.u, f.m, mor, { tired: true, stance: st, gn: b.cn, gk: 1 });
+    const parts = forceParts(b, fid, g);
+    out(); for (const [key, p] of parts) column(g, fid, b.region, b.from, b.region, -1, p.u, p.m, mor, { tired: true, stance: st, gn: b.cn, gk: 1, ct: key >= 0 ? b.ct?.[key] : undefined });
     emit(g, { k: 'withdraw', faction: fid, region: b.region, to: b.region });
     return null;
   }
@@ -88,7 +89,8 @@ function pullOut(g: GameState, b: Battle, fid: number): string | null {
   if (!adj.length) return 'There is no region of yours next to this front to fall back to.';
   const score = (j: number) => (j === b.from ? 4 : 0) + (g.regions[j].cut ? 0 : 2) + (g.regions[j].battle < 0 ? 1 : 0);
   const dest = adj.sort((x, y) => score(y) - score(x))[0];
-  out(); column(g, fid, b.region, fid === b.def ? -1 : b.from, dest, -1, f.u, f.m, mor, { tired: true, stance: st });
+  const parts = forceParts(b, fid, g);
+  out(); for (const [key, p] of parts) column(g, fid, b.region, fid === b.def ? -1 : b.from, dest, -1, p.u, p.m, mor, { tired: true, stance: st, ct: key >= 0 ? b.ct?.[key] : undefined });
   emit(g, { k: 'withdraw', faction: fid, region: b.region, to: dest });
   return null;
 }

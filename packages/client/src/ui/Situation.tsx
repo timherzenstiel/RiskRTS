@@ -1,6 +1,6 @@
 // Seeing the situation (design-command §1, §5): the left rail of panels, the Situation panel (our wars, borders in danger,
 // other wars), the border card opened from a balance chip, and the alerts queue.
-import { FACTIONS, TREATY_NAMES, borderBalance, borderLabel, buildWorld, groundUnits, hostileBorders, income, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
+import { FACTIONS, TREATY_NAMES, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hostileBorders, income, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
 import { useSim, useUi, type Overlay, type Panel } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
@@ -40,6 +40,7 @@ export function LeftRail() {
   return (
     <nav id="rail" className="plate" aria-label="War Office panels">
       {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
+      {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />)}
       {o('nation', 'Nation', <RailIcon d="M4 20V8l8-5 8 5v12M9 20v-6h6v6" />, 'Nation: manpower, conscription, national strengths and weaknesses')}
       {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
       {o('diplomacy', 'Diplo', <HandshakeIcon />, 'Diplomacy: treaties and messages')}
@@ -132,7 +133,7 @@ export function BorderCard() {
   if (r.owner !== me) return null;
   const b = borderBalance(g, rid, sec), foe = b.foe >= 0 ? FACTIONS[b.foe] : null;
   const works = (s: Balance['own']) => [s.trench ? `Trench ${roman(s.trench)}` : '', s.sand ? `sandbags ${roman(s.sand)}` : '', s.wire ? `wire ${roman(s.wire)}` : '', s.defs ? `${s.defs} defence${s.defs > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') || 'No works';
-  const theirCorps = b.nb >= 0 ? g.regions[b.nb].fr?.[rid] : undefined;
+  const theirCorps = b.nb >= 0 ? corpsAtPost(g.regions[b.nb], rid)[0] : undefined, ours = corpsAtPost(r, sec);
   const supply = g.factions[me].supply;
   return (
     <section className={'bcard d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '')} aria-label="Border">
@@ -146,13 +147,14 @@ export function BorderCard() {
           <b className="lcdn">{b.own.btl[0] + b.own.reserve[0]} btl</b>
           <span>{b.own.btl[0]} on the border{b.own.reserve[0] ? ` · ${b.own.reserve[0]} reserve nearby` : ''}{b.own.incoming ? ` · ${b.own.incoming} on the way` : ''}</span>
           <span>{works(b.own)}</span>
+          {ours.length > 0 && <span className="bc-corps">{ours.map(c => <button key={c.id} className="lnk" title="Select this corps" onClick={() => { click(); ui().selectCorps([c.id], false, rid); }}>{groupName(me, 1, c.n)} · {groundUnits(c.u)}</button>)}</span>}
         </div>
         <div className="bc-side" style={{ '--c': foe?.color ?? '#7fb4d8' } as React.CSSProperties}>
           <small>Theirs{b.know === 1 ? ' · estimate' : b.know === 2 ? ' · old report' : b.know === 0 ? ' · unknown' : ''}</small>
           <b className="lcdn">{b.know ? `${rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]])} btl` : '?'}</b>
           <span>{b.know ? `${rng(b.their.btl)} on the border${b.their.reserve[1] ? ` · ${rng(b.their.reserve)} behind` : ''}` : 'Send a patrol to find out'}{b.their.incoming ? ` · +${b.their.incoming} marching in` : ''}</span>
           <span>{b.know ? works(b.their) : 'Works unknown'}</span>
-          {theirCorps && theirCorps.n > 0 && <span>Corps no. {theirCorps.n}{(theirCorps.ord ?? 0) >= 1 ? ' · assembling to attack' : ''}</span>}
+          {theirCorps && theirCorps.n > 0 && <span>{groupName(b.foe, 1, theirCorps.n)}{(theirCorps.ord ?? 0) >= 1 ? ' · assembling to attack' : ''}</span>}
         </div>
       </div>
       {b.massing && <p className="note budget full">Troops across this border are assembling for an attack.</p>}

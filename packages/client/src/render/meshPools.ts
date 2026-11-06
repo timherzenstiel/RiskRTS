@@ -3,7 +3,7 @@
 // takes the instance's faction tint (shaded by the painted value), the rest keeps its own colour.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { uChrome } from './pools';
+import { nz, uChrome } from './pools';
 
 export type MeshKey = 'soldier_aim' | 'soldier_kneel_aim' | 'soldier_throw' | 'soldier_prone' | 'soldier_dead' | 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
   'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
@@ -82,7 +82,8 @@ class MeshPool {
   }
   /** One instance at (x,y,z), turned by `face` about Y, uniform scale s, optional roll about the model's forward axis. */
   push(x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0) {
-    if (this.n >= this.max) return;
+    if (this.n >= this.max || !Number.isFinite(x + y + z + face + s + roll + pitch)) return;
+    s = nz(s);
     const i = this.n++, o = i * 16, M = this.M, co = Math.cos(face) * s, si = Math.sin(face) * s;
     if (pitch) {
       // R = RotY(face) * RotX(pitch) * s

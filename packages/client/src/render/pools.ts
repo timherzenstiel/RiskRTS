@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 
+/** Keep a scale away from zero (sign kept). */
+export const nz = (v: number) => v > -1e-4 && v < 1e-4 ? (v < 0 ? -1e-4 : 1e-4) : v;
+
 export const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
 /** Strength of the steel sheen on units and buildings (Tiberian: dull, Red Alert: industrial chrome). */
@@ -43,7 +46,9 @@ export class Pool {
 
   /** Push one box: centre (x,y,z), size (sx,sy,sz), yaw ry, colour c. */
   push(x: number, y: number, z: number, sx: number, sy: number, sz: number, ry: number, c: THREE.Color) {
-    if (this.n >= this.max) return;
+    if (this.n >= this.max || !Number.isFinite(x + y + z + sx + sy + sz + ry)) return;
+    // a zero size makes three's instanced normal divide by zero (NaN pixels); keep every axis a hair thick
+    sx = nz(sx); sy = nz(sy); sz = nz(sz);
     const i = this.n++, o = i * 16, M = this.M, co = Math.cos(ry), si = Math.sin(ry);
     M[o] = co * sx; M[o + 1] = 0; M[o + 2] = -si * sx; M[o + 3] = 0;
     M[o + 4] = 0; M[o + 5] = sy; M[o + 6] = 0; M[o + 7] = 0;

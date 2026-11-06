@@ -207,7 +207,7 @@ class SpriteBatch {
   begin() { this.n = 0; }
 
   push(x: number, y: number, z: number, w: number, h: number, c: THREE.Color, a: number, rot: number, seed: number, age: number, extra: number) {
-    if (this.n >= this.max || a <= 0) return;
+    if (this.n >= this.max || !(a > 0) || !Number.isFinite(x + y + z + w + h + a + rot + seed + age + extra)) return;
     const i = this.n++;
     this.P[i * 3] = x; this.P[i * 3 + 1] = y; this.P[i * 3 + 2] = z;
     this.S[i * 2] = w; this.S[i * 2 + 1] = h;

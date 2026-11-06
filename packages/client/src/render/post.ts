@@ -1,4 +1,4 @@
-// Post-processing chain: MSAA half-float target -> bloom -> C&C grade (dither, grain) -> sRGB output.
+// Post-processing chain: MSAA half-float target -> sanitize -> bloom -> C&C grade (dither, grain) -> sRGB output.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -46,6 +46,23 @@ const GRADE = {
   }`,
 };
 
+/**
+ * Drops non-finite pixels (NaN/Inf from a degenerate normal or a half-float overflow) and caps over-bright ones before the bloom.
+ * Without it one bad pixel is smeared by the bloom's separable blur into a screen-sized rectangle of black-and-white noise.
+ * The test is on the bit pattern, so no compiler can optimise it away.
+ */
+const SANITIZE = {
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+  bool bad(float x){ return (floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u; }
+  void main(){
+    vec4 c=texture2D(tDiffuse,vUv);
+    if(bad(c.r)||bad(c.g)||bad(c.b)||bad(c.a)) c=vec4(0.,0.,0.,1.);
+    gl_FragColor=vec4(clamp(c.rgb,0.,64.),clamp(c.a,0.,1.));
+  }`,
+};
+
 export class Post {
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
@@ -56,6 +73,7 @@ export class Post {
     const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
+    this.composer.addPass(new ShaderPass(SANITIZE));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .3, .4, .88);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(GRADE);

@@ -28,8 +28,8 @@ describe('deployment', () => {
     for (const r of g.regions) {
       for (const [s, c] of Object.entries(r.fr ?? {})) {
         corps++;
-        expect(W.regions[r.id].adj).toContain(+s);
-        expect(g.regions[+s].owner).not.toBe(r.owner);
+        expect(W.regions[r.id].sectors).toContain(+s);
+        if (+s < 1000) expect(g.regions[+s].owner).not.toBe(r.owner);
         expect(c.n).toBeGreaterThan(0);
       }
       if (groundUnits(r.units) >= 4) expect(groundUnits(mainOf(r))).toBeGreaterThan(0);
@@ -131,7 +131,7 @@ describe('phased offensives', () => {
   it('when a region falls, the corps on its other borders fall back to a neighbouring region', () => {
     const { g, A, B } = setup(); const C = W.regions[B].adj.find(i => i !== A && !W.seaLane.has(B + '|' + i))!; g.regions[C].owner = 1;
     g.regions[A].units = { ...emptyUnits(), inf: 24, art: 2 }; g.regions[B].units = { ...emptyUnits(), inf: 7 }; fill(g); updateSupplyLines(g);
-    const other = W.regions[B].adj.find(i => i !== A && i !== C)!;
+    const other = W.regions[B].land.find(i => i !== A && i !== C)!;
     g.regions[B].deploy = 1; g.regions[B].fr = { [A]: { u: { ...emptyUnits(), inf: 2 }, n: 4, ord: 0 }, [other]: { u: { ...emptyUnits(), inf: 5 }, n: 5, ord: 0 } };
     const b = openFront(g, 0, A, B, 1, 2, true);
     for (let i = 0; i < 20 * 600 && !b.ended; i++) step(g, .05);
@@ -188,7 +188,7 @@ describe('names, fog, snapshots and saves', () => {
     const old = JSON.parse(JSON.stringify(g)); old.v = 4;
     for (const r of old.regions) { delete r.fr; delete r.an; } for (const f of old.factions) { delete f.nArmy; delete f.nCorps; }
     const m = migrateState(old)!;
-    expect(m.v).toBe(5);
+    expect(m.v).toBe(6);
     expect(m.regions.some(r => Object.keys(r.fr ?? {}).length > 0)).toBe(true);
     for (const r of m.regions) expect(groundUnits(mainOf(r))).toBeGreaterThanOrEqual(0);
   });

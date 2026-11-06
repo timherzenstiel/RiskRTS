@@ -11,8 +11,8 @@ export const DEFAULT_PIXEL_SCALE: PixelScale = 1;
 export interface RendererCallbacks {
   /** Left click / tap on a region (-1 for water). */
   onSelect(regionId: number): void;
-  /** Right click, or a click while orderMode is on. */
-  onOrder(regionId: number): void;
+  /** Right click, or a click while orderMode is on (`zone`: the sea zone clicked, when it was water). */
+  onOrder(regionId: number, zone?: number): void;
   onHover(regionId: number): void;
 }
 
@@ -27,6 +27,9 @@ export interface WorldRendererApi {
   flyTo(regionId: number, distance?: number): void;
   /** Fly to one front (battle) of a region. */
   flyToBattle(battleId: number, distance?: number): void;
+  /** Fly to a naval battle, or to a point (a fleet). */
+  flyToSea?(id: number, distance?: number): void;
+  flyToPoint?(x: number, z: number, distance?: number): void;
   /** Move the camera focus to a world position (used by the minimap). */
   panTo(x: number, z: number): void;
   /** World-space corners of the visible map area, for drawing the minimap viewport. */

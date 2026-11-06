@@ -13,6 +13,8 @@ import { doctrineDeadlines } from './tech';
 import { diploStep } from './diplomacy';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
+import { migrateNavy, startNavy, stepNavy } from './navy';
+import { stepSeaBattles } from './naval';
 import { TICK_SECONDS } from '../data/units';
 import { DEFAULT_SETTINGS, type GameSettings, type GameState } from './types';
 import { DT, SHELLS } from '../data/units';
@@ -31,10 +33,10 @@ export interface GameOptions {
 export function createGame(opt: GameOptions): GameState {
   const W = world(), seed = (opt.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0, R = new Rng(seed);
   const g: GameState = {
-    v: 5, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
+    v: 6, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
     factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start, men: 0, mob: 0, unrestT: 0 })),
-    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], treaties: [], offers: [], over: false, winner: null, nextId: 1,
+    armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], treaties: [], offers: [], ships: [], fleets: [], seaBattles: [], over: false, winner: null, nextId: 1,
     stats: { won: Array(NUM_FACTIONS).fill(0), lost: Array(NUM_FACTIONS).fill(0) },
     events: [], fx: opt.fx === false ? null : [],
   };
@@ -56,6 +58,8 @@ export function createGame(opt: GameOptions): GameState {
   g.factions.forEach(f => { const i = pool.findIndex(m => !(m.type === 'destroy' && m.target === f.id)); f.mission = pool.splice(i, 1)[0]; });
   g.factions.forEach(f => { if (f.mission!.type === 'destroy') (f.mission as { n0?: number }).n0 = g.regions.filter(r => r.owner === (f.mission as { target: number }).target).length; });
   g.rng = R.s;
+  // the harbours of 1914 and the fleets in them
+  startNavy(g);
   updateSupplyLines(g);
   // every region starts with its troops placed: a main army in the middle and corps on the borders facing foreign powers
   for (const t of g.regions) autoDeploy(g, t, true);
@@ -72,9 +76,10 @@ const fullStrength = (u: Units) => { const m = emptyUnits(); for (const k of UNI
 export function migrateState(s: GameState & { v: number }): GameState | null {
   if (!s || !Array.isArray(s.regions)) return null;
   addMissingPowers(s);
-  if (s.v === 5) return s;
-  if (s.v === 4) return to5(fill4(s));
-  if (s.v === 3) return migrate3(s);
+  if (s.v === 6) { s.ships ??= []; s.fleets ??= []; s.seaBattles ??= []; return s; }
+  if (s.v === 5) return to6(s);
+  if (s.v === 4) return to6(to5(fill4(s)));
+  if (s.v === 3) return to6(migrate3(s));
   if (s.v !== 2) return null;
   const W = world();
   type Old = GameState['regions'][number] & { trench?: number };
@@ -88,7 +93,7 @@ export function migrateState(s: GameState & { v: number }): GameState | null {
   for (const b of s.battles) { b.tr ??= 0; b.sand ??= 0; b.wire ??= 0; b.wire0 ??= 0; b.mor ??= {}; b.lost ??= {}; b.lastJoin ??= b.age; }
   s.intel = s.factions.map(() => []); s.spies = [];
   (s as { v: number }).v = 3; updateSupplyLines(s);
-  return migrate3(s);
+  return to6(migrate3(s));
 }
 
 /** Saves from before a power was added (the United States): it joins as already defeated, holding nothing. */
@@ -137,6 +142,15 @@ function to5(s: GameState): GameState {
   return s;
 }
 
+/** Version 5 → 6: the navy. Ports and fleets of 1914; works, defences and corps on sea lanes move to the coast they face. */
+function to6(s: GameState): GameState {
+  (s as { v: number }).v = 6;
+  migrateNavy(s);
+  for (const r of s.regions) autoDeploy(s, r, true);
+  updateSupplyLines(s);
+  return s;
+}
+
 /** Advance the simulation by dt seconds (callers use small fixed steps, e.g. 0.05). */
 export function step(g: GameState, dt: number) {
   if (g.over) return;
@@ -149,7 +163,9 @@ export function step(g: GameState, dt: number) {
     a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); }
   }
   stepPosts(g);
+  stepNavy(g, dt);
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
+  stepSeaBattles(g, dt);
   updateSpies(g); doctrineDeadlines(g); diploStep(g);
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];

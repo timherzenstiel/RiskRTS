@@ -697,3 +697,20 @@ button.ww:hover b{color:var(--accent)}
 .glass.layers{padding:3px;border-radius:12px}
 .glass.layers .seg button{min-height:26px;font-size:12px}
 .post small,.post .note{text-transform:none;letter-spacing:normal}
+
+/* ---- the navy: sea zone names, fleet markers, naval battle buttons, port badge ---- */
+.zl{position:absolute;left:0;top:0;font:italic 600 12px/1 var(--f-head);letter-spacing:.32em;color:var(--c,rgba(220,230,235,.55));opacity:.7;text-shadow:0 1px 2px rgba(0,0,0,.85);white-space:nowrap;pointer-events:none;will-change:transform}
+.zl.held{opacity:.95}
+#labels.ly2 .zl{display:none}
+.tl.fm .n{display:flex;align-items:center;gap:4px;border-radius:3px;padding:2px 6px 2px 4px;font:700 11px/1 var(--f-head);background:rgba(8,16,24,.88);color:#e8f0f2;border-left:4px solid var(--c);box-shadow:0 0 0 1.5px rgba(8,10,12,.75),0 2px 6px rgba(0,0,0,.5);cursor:pointer}
+.tl.fm .n svg{width:15px;height:10px;color:var(--c);flex:none}
+.tl.fm.off .n{background:rgba(52,14,8,.94);box-shadow:0 0 0 1.5px var(--danger),0 0 12px rgba(240,112,92,.55)}
+.tl.fm.stn .n{box-shadow:0 0 0 1.5px rgba(8,10,12,.75),0 3px 0 -1px var(--c)}
+#labels.ly2 .tl.fm{display:none!important}
+.bm.sea{background:rgba(6,18,32,.9);border-color:#7fb4d8;color:#cfe6f4;box-shadow:0 0 0 0 rgba(127,180,216,.6)}
+.bm.sea svg{width:16px;height:10px}
+.tl .b.port{color:#9fc6dc}
+.fleet-card .hpbar{height:5px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden;margin-top:3px}
+.fleet-card .hpbar i{display:block;height:100%;background:var(--c,#9fc6dc)}
+.sea-card .sides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sea-card .side b{display:block}

@@ -4,6 +4,7 @@
 import { RIVERS } from './geometry';
 import { SEEDS, SEA, type ContKey } from '../data/regions';
 import { REGION_TILES, REGION_TILES_COLS, REGION_TILES_ROWS } from '../data/regionTiles';
+import { buildZones, type CoastPt, type ZoneInfo, type ZoneLink } from './zones';
 
 export const RES = .5;                    // degrees per tile
 export const COLS = 720, ROWS = 282, LAT_TOP = 84, N = COLS * ROWS;
@@ -23,12 +24,16 @@ export interface RegionDef {
   id: number; name: string; cont: ContKey; lon: number; lat: number;
   tiles: number[]; adj: number[]; seaAdj: number[];
   anchor: number; cx: number; cz: number;
+  /** Land neighbours (adj without sea lanes), sea zones the coast touches and where, and every sector key (land borders, then coasts). */
+  land: number[]; zones: number[]; coast: Record<number, CoastPt>; sectors: number[];
 }
 export interface World {
   land: Uint8Array; river: Uint8Array; terrOf: Int16Array; borderNb: Int16Array;
   regions: RegionDef[]; byName: Record<string, RegionDef>;
   /** "a|b" keys of region pairs connected by a sea lane. */
   seaLane: Set<string>;
+  /** Sea zone of every water tile (-1 lakes), the zones, the links between them, and the zone each sea lane runs through ("a|b"). */
+  zoneOf: Int8Array; zones: ZoneInfo[]; links: ZoneLink[]; laneZone: Map<string, number>;
 }
 
 const nb4 = (i: number, out: number[]) => { const c = i % COLS; out[0] = c > 0 ? i - 1 : -1; out[1] = c < COLS - 1 ? i + 1 : -1; out[2] = i >= COLS ? i - COLS : -1; out[3] = i + COLS < N ? i + COLS : -1; return out; };
@@ -56,7 +61,7 @@ export function buildWorld(): World {
     for (let s = 0; s <= n; s++) { const i = tileAtLL(x0 + (x1 - x0) * s / n, y0 + (y1 - y0) * s / n); if (i >= 0 && land[i]) river[i] = 1; }
   }
 
-  const regions: RegionDef[] = SEEDS.map(([name, cont, lon, lat], id) => ({ id, name, cont, lon, lat, tiles: [], adj: [], seaAdj: [], anchor: 0, cx: 0, cz: 0 }));
+  const regions: RegionDef[] = SEEDS.map(([name, cont, lon, lat], id) => ({ id, name, cont, lon, lat, tiles: [], adj: [], seaAdj: [], anchor: 0, cx: 0, cz: 0, land: [], zones: [], coast: {}, sectors: [] }));
   const byName: Record<string, RegionDef> = {}; regions.forEach(t => byName[t.name] = t);
   const NB = [0, 0, 0, 0];
   for (let i = 0; i < N; i++) if (land[i]) regions[terrOf[i]].tiles.push(i);
@@ -80,7 +85,8 @@ export function buildWorld(): World {
   }
   const borderNb = new Int16Array(N).fill(-1);
   for (let i = 0; i < N; i++) { if (!land[i]) continue; nb4(i, NB); for (const j of NB) if (j >= 0 && land[j] && terrOf[j] !== terrOf[i]) { borderNb[i] = terrOf[j]; break; } }
-  cache = { land, river, terrOf, borderNb, regions, byName, seaLane };
+  cache = { land, river, terrOf, borderNb, regions, byName, seaLane, zoneOf: new Int8Array(0), zones: [], links: [], laneZone: new Map() };
+  buildZones(cache);
   return cache;
 }
 

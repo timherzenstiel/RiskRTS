@@ -3,6 +3,7 @@ import type { ContKey } from '../data/regions';
 import type { AgentType, DefKind, FortKind, Units, UnitType } from '../data/units';
 import type { DoctrineKey } from '../data/nations';
 import type { TechKey } from '../data/tech';
+import type { ShipKind } from '../data/sea';
 
 export type Mission =
   | { type: 'conts' | 'conts1'; conts: ContKey[] }
@@ -125,6 +126,8 @@ export interface RegionState {
   bombed?: number;
   /** A fake concentration: rivals estimate `men` more here, until `until`, unless their latest report is newer than `day`. */
   fake?: { men: number; day: number; until: number };
+  /** A harbour (coastal regions only), and the game time it is finished if it is still being built. */
+  port?: boolean; portAt?: number;
 }
 
 export interface Army {
@@ -159,6 +162,8 @@ export interface Army {
   path?: number[]; fin?: number;
   /** Moving between posts of one region (`from` = `to`). */
   inner?: boolean;
+  /** Aircraft from (and back to) a carrier. */
+  cv?: number;
 }
 
 export interface Agent {
@@ -171,8 +176,8 @@ export interface Agent {
   cb?: boolean;
   /** Defence agents: the Defence they came from (they return to the region when the battle ends). */
   defId?: number; sector?: number;
-  /** Aircraft: remaining time over the battlefield, home region, and whether it has left. */
-  fuel?: number; home?: number; out?: boolean;
+  /** Aircraft: remaining time over the battlefield, home region, and whether it has left; the carrier they fly back to. */
+  fuel?: number; home?: number; out?: boolean; cv?: number;
 }
 export interface Shell { x: number; z: number; time: number; f: number; dmg: number; sp: number; src: AgentType }
 
@@ -217,6 +222,90 @@ export interface Battle {
   stT?: number;
   /** Number of the defending corps of this border, and battle age until which the attackers' guns fire unregistered. */
   cn?: number; unreg?: number;
+  /** Attack over a coast: the region the attackers' supply runs back to, and the fleet of an amphibious assault (the second wave is aboard). */
+  src?: number; amph?: number;
+  /** Reload timers of battleships bombarding this coast (ship id → seconds). */
+  bomb?: Record<number, number>;
+}
+
+/** A ship: docked in a port, or at sea with a fleet. Battleship squadrons and carriers carry their hit points over from battle to battle. */
+export interface Ship {
+  id: number; owner: number; kind: ShipKind; hp: number;
+  /** The port it was built in (or last docked at); it returns there. */
+  home: number;
+  /** Region whose port it lies in (-1 at sea), and its fleet at sea (-1 docked). */
+  port: number; fleet: number;
+  /** Carriers: squadrons aboard. */
+  planes?: number;
+  /** Still being built: the game time it is launched. */
+  ready?: number;
+}
+export type FleetTask = 'move' | 'assault' | 'station' | 'return';
+/** muster: ships gather off the embarkation coast while the troops march down; then embark, sail, and the end of the voyage. */
+export type FleetState = 'muster' | 'embark' | 'sail' | 'offshore' | 'beach' | 'unload' | 'land' | 'stationed';
+export interface Fleet {
+  id: number; owner: number; ships: number[];
+  task: FleetTask; state: FleetState;
+  /** Troops aboard (in an assault the first wave rides the landing craft), their men and morale. */
+  cargo: Units; men: Units; mor: number;
+  /** Route: polyline (flat x, z; x runs on past the date line), zones along it ([distance, zone] pairs), length and distance sailed. */
+  path: number[]; zs: number[]; len: number; d: number;
+  /** Speed of the slowest ship (world units per second, pace and weather included). */
+  v: number;
+  /** Seconds left in a timed state (muster, embark, offshore, landing, unload). */
+  t: number;
+  /** Regions it sails from and to, the post the troops take up there, and the zone of the target coast or station. */
+  from: number; to: number; toPost?: number; zone: number;
+  /** Assaults: goal (1 beachhead, 2 invade), the battle on the beach, the troops' stance. */
+  goal?: number; battle?: number; st?: Stance;
+  /** Naval battle it is fighting in. */
+  sea?: number;
+  /** Zones already checked for interception on this voyage. */
+  seen?: number[];
+  /** Group number and kind of the troops aboard (names). */
+  gn?: number; gk?: number;
+  /** The assault is held offshore by storms. */
+  storm?: boolean;
+  /** Just out of a naval battle: not caught again until this game time. */
+  calm?: number;
+}
+
+/** A ship in a naval battle. Positions in battle units around the battle point; `hd` is the heading (radians, 0 = +z). */
+export type ShipAgentKind = 'dn' | 'dd' | 'cv' | 'tr' | 'lc' | 'pl';
+export interface ShipAgent {
+  id: number; ship: number; f: number; kind: ShipAgentKind;
+  x: number; z: number; hd: number; v: number; hp: number; hp0: number;
+  /** Turrets still working, torpedoes left, current target (agent index), reload timer, fire timer (seconds burning). */
+  tur: number; torps: number; tgt: number; cd: number; fire: number;
+  /** Consecutive salvos on the same target (straddling), turret bearing for drawing, game time of the last salvo. */
+  str: number; aim: number; fireT: number;
+  /** Left the battle area, sunk (and when), breaking off. */
+  out: boolean; dead: boolean; dieT: number; brk?: boolean;
+  /** Turning away from a torpedo attack until this battle age. */
+  evade?: number;
+  /** Aircraft: fuel left, the carrier it came from. */
+  fuel?: number; cv?: number;
+  /** Destroyers: on a torpedo run. */
+  run?: boolean;
+}
+export interface SeaShell { x: number; z: number; t: number; f: number; tgt: number; hit: boolean; dmg: number }
+export interface Torpedo { x: number; z: number; hd: number; t: number; f: number }
+export interface SeaBattle {
+  id: number; zone: number;
+  /** Battle point on the map (world units) and the axis the fleets met along. */
+  x: number; z: number; ax: number; az: number;
+  /** Powers on each side, fleets taking part. */
+  sides: number[][]; fleets: number[];
+  agents: ShipAgent[]; shells: SeaShell[]; torps: Torpedo[];
+  age: number; ended: boolean; removeAt: number;
+  /** Battle age at which night falls. */
+  night: number;
+  /** Hit points each side started with, sides breaking off and when the first did. */
+  hp0: number[]; brk: boolean[]; brkT?: number;
+  /** Ships sunk per side, by agent kind. */
+  sunk: Record<string, number>[];
+  /** Winning side (0/1), -1 drawn. */
+  winner?: number;
 }
 
 /** After-action report of a finished battle. */
@@ -234,7 +323,12 @@ export type Fx =
   /** A gun firing a shell that lands at (tx, tz) after `fl` simulated seconds (used for the incoming whistle). */
   | { k: 'fire'; b: number; x: number; z: number; face: number; tx?: number; tz?: number; fl?: number }
   | { k: 'boom'; b: number; x: number; z: number; s: number }
-  | { k: 'flak'; b: number; x: number; z: number };
+  | { k: 'flak'; b: number; x: number; z: number }
+  /** Naval battles, in world units: a salvo from (x0, z0) landing at (x1, z1) after `fl` seconds; a hit, fire or explosion; a torpedo. */
+  | { k: 'nfire'; s: number; x0: number; z0: number; x1: number; z1: number; fl: number; hit: boolean; big: boolean }
+  | { k: 'nboom'; s: number; x: number; z: number; big: number }
+  /** Shore bombardment: a battleship broadside from offshore at a land battle. */
+  | { k: 'bomb'; b: number; x: number; z: number; tx: number; tz: number; fl: number };
 
 export type GameEvent =
   | { k: 'start' }
@@ -273,7 +367,17 @@ export type GameEvent =
   | { k: 'offer'; id: number; from: number; to: number; kind: TreatyKind }
   | { k: 'treaty'; a: number; b: number; kind: TreatyKind; what: 'signed' | 'declined' | 'ended' | 'broken' | 'notice'; by?: number }
   | { k: 'say'; from: number; to: number; p: number }
-  | { k: 'over'; winner: number | null; reason?: string };
+  | { k: 'over'; winner: number | null; reason?: string }
+  /** The navy: a ship launched, a port finished, a fleet offshore, a convoy lost at sea, ships scuttled in a captured port. */
+  | { k: 'shipBuilt'; faction: number; region: number; kind: ShipKind }
+  | { k: 'portBuilt'; faction: number; region: number }
+  | { k: 'offshore'; faction: number; region: number; zone: number; owner: number; est: number }
+  | { k: 'convoyLost'; faction: number; zone: number; ships: number; men: number; by: 'uboat' | 'navy' }
+  | { k: 'scuttled'; faction: number; region: number; n: number }
+  | { k: 'shipped'; faction: number; from: number; to: number; units: number }
+  | { k: 'landing'; faction: number; region: number; zone: number; ok: boolean; owner: number }
+  | { k: 'seaBattle'; zone: number; sides: number[][]; winner: number; sunk: Record<string, number>[]; start: boolean; id: number }
+  | { k: 'strait'; link: number; open: boolean; region: number };
 
 export interface GameStats { won: number[]; lost: number[] }
 
@@ -303,7 +407,7 @@ export interface Intel {
 export interface Spy { id: number; f: number; region: number; eta: number; /** Exposed by sabotage until this day: twice as likely to be caught. */ hot?: number }
 
 export interface GameState {
-  v: 5; seed: number; rng: number;
+  v: 6; seed: number; rng: number;
   time: number; day: number; supplyT: number; diff: number;
   cfg: GameSettings;
   regions: RegionState[]; factions: FactionState[];
@@ -317,6 +421,8 @@ export interface GameState {
   railCut: Record<string, number>; railNew: [number, number, number][];
   /** Treaties in force and offers waiting for an answer. */
   treaties: Treaty[]; offers: Offer[];
+  /** The navy: every ship, fleets at sea, naval battles. */
+  ships: Ship[]; fleets: Fleet[]; seaBattles: SeaBattle[];
   /** Fog-of-war views only: the faction this view was made for. */
   viewer?: number;
   over: boolean; winner: number | null;
@@ -326,7 +432,7 @@ export interface GameState {
   fx: Fx[] | null;
 }
 
-export type BuildKind = 'factory' | 'barracks' | 'airfield';
+export type BuildKind = 'factory' | 'barracks' | 'airfield' | 'port';
 export type Command =
   | { t: 'recruit'; region: number; unit: UnitType; n?: number }
   | { t: 'build'; region: number; kind: BuildKind }
@@ -375,4 +481,16 @@ export type Command =
   /** Turn supply into shells (1 supply buys SHELLS_PER_SUPPLY shells). */
   | { t: 'produce'; kind: 'shells'; n: number }
   /** Mobilisation level 0..2: each level +50% manpower growth and +0.5 war weariness per convoy. */
-  | { t: 'mobilise'; level: number };
+  | { t: 'mobilise'; level: number }
+  /** The navy: build ships in a port; ship a share of a group over the sea to an own post; an amphibious assault on an enemy coast. */
+  | { t: 'buildShip'; region: number; kind: ShipKind; n?: number }
+  | { t: 'ship'; region: number; post: number; to: number; toPost: number; frac: number }
+  | { t: 'landing'; from: number; to: number; zone?: number; frac: number; goal?: Order; brk?: boolean; escort?: boolean }
+  /** Battleships and carriers: station the warships docked in a port (or a fleet at sea) in a zone, or send a fleet home. */
+  | { t: 'station'; region?: number; fleet?: number; zone: number; kind?: 'bb' | 'carrier'; brk?: boolean }
+  | { t: 'dock'; fleet: number }
+  | { t: 'breakOff'; sea: number }
+  /** Take squadrons of a port region aboard a docked carrier (negative: fly them off). */
+  | { t: 'embarkAir'; region: number; ship: number; n: number }
+  /** Carrier air mission against a region in reach of its zone. */
+  | { t: 'carrierAir'; ship: number; to: number; rail?: boolean; factory?: boolean; brk?: boolean };

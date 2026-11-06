@@ -8,7 +8,7 @@ import { uChrome } from './pools';
 export type MeshKey = 'soldier_aim' | 'soldier_kneel_aim' | 'soldier_throw' | 'soldier_prone' | 'soldier_dead' | 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
   'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
   'mg' | 'art' | 'tank_mk4' | 'tank_ft' | 'tank_a7v' | 'plane' | 'prop' | 'mark_0' | 'mark_1' | 'mark_2' | 'mark_3' | 'mark_4' | 'mark_5' | 'mark_6' |
-  'pill' | 'bunk' | 'factory' | 'barracks' | 'hangar' |
+  'pill' | 'bunk' | 'factory' | 'barracks' | 'hangar' | 'dreadnought' | 'turret' | 'destroyer' | 'liner' | 'carrier' | 'lighter' | 'harbour' |
   'tree_broad' | 'tree_pine' | 'tree_palm' | 'tree_acacia' | 'shrub' | 'house_a' | 'house_b' | 'church' | 'house_ruin' | 'house_ruin_b' | 'tree_broad_lo' | 'tree_pine_lo' | 'house_a_lo' | 'house_b_lo';
 const CAP: Record<MeshKey, number> = {
   soldier_aim: 3000, soldier_kneel_aim: 2500, soldier_throw: 800, soldier_prone: 3000, soldier_dead: 4000,
@@ -16,7 +16,7 @@ const CAP: Record<MeshKey, number> = {
   helm_brodie: 6000, helm_adrian: 6000, helm_cap: 6000, helm_stahl: 12000, helm_kabalak: 6000,
   mg: 2500, art: 2500, tank_mk4: 800, tank_ft: 800, tank_a7v: 800, plane: 600, prop: 600,
   mark_0: 200, mark_1: 200, mark_2: 200, mark_3: 200, mark_4: 200, mark_5: 200, mark_6: 200,
-  pill: 1500, bunk: 1000, factory: 200, barracks: 200, hangar: 200,
+  pill: 1500, bunk: 1000, factory: 200, barracks: 200, hangar: 200, dreadnought: 300, turret: 1200, destroyer: 200, liner: 300, carrier: 40, lighter: 300, harbour: 80,
   tree_broad: 1, tree_pine: 1, tree_palm: 1, tree_acacia: 1, shrub: 1, house_a: 1, house_b: 1, church: 1, house_ruin: 1, house_ruin_b: 1, tree_broad_lo: 1, tree_pine_lo: 1, house_a_lo: 1, house_b_lo: 1,
 };
 /** Static scenery: placed once by the terrain (no per-frame pool). */

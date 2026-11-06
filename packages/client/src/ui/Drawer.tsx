@@ -13,9 +13,10 @@ import { menOf, menStr, strengthOf } from './format';
 import { FrontControls } from './FrontCard';
 import { Briefing } from './Briefing';
 import { DeployTab, corpsState, unitsLine } from './DeployTab';
-import { groupName } from '@riskrts/shared';
+import { borderLabel, groupName } from '@riskrts/shared';
+import { CarrierRows, LandingRows, NavyTab } from './Navy';
 
-const TABS: [Tab, string][] = [['rec', 'Recruit'], ['fort', 'Fortify'], ['build', 'Build'], ['deploy', 'Deploy'], ['march', 'March']];
+const TABS: [Tab, string][] = [['rec', 'Recruit'], ['fort', 'Fortify'], ['build', 'Build'], ['deploy', 'Deploy'], ['march', 'March'], ['navy', 'Harbour']];
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 
 /** One line per front: where the attack comes from, who is left, morale, and (for the defender) a reserves button. */
@@ -30,7 +31,7 @@ function Fronts({ g, me, fronts, own }: { g: GameState; me: number; fronts: Batt
       {fronts.map(b => {
         const cnt = battleCounts(b), mine = cnt.get(me)?.[0] ?? 0, foe = [...cnt].reduce((s, [f, c]) => s + (f === me ? 0 : c[0]), 0);
         const mor = b.mor?.[me], quiet = b.age - (b.lastJoin ?? 0) > 60;
-        const where = b.from >= 0 ? `${W.regions[b.from].name} border` : 'Inside the region';
+        const where = borderLabel(W, b.from) + (b.amph !== undefined && (b.stage ?? 0) === 0 ? ' · landing' : '');
         return (
           <div className="front" key={b.id}>
             <span className="fl"><b>{where}</b><small>{b.sides.includes(me) ? `ours ${mine} · enemy ${foe}` : `${foe + mine} engaged`}{mor !== undefined ? ` · morale ${Math.round(mor)}%` : ''}{quiet ? ' · trench warfare' : ''}{b.tr ? ` · trench ${roman(b.tr)}` : ''}{b.wire > 0 ? ' · wire' : ''}</small></span>
@@ -62,7 +63,7 @@ export function Drawer() {
   const spies = g.spies.filter(s => s.f === me), spyHere = spies.find(s => s.region === sel);
   const str = strengthOf(gar, men);
   // what is known of the defences, border by border (for foreign regions)
-  const borders = !own ? wr.adj.map(n => ({ n, w: worksAt(r, n), d: r.defs.filter(d => d.s === n && d.f === r.owner) })).filter(x => x.w.tr || x.w.sand || x.w.wire || x.d.length) : [];
+  const borders = !own ? wr.sectors.map(n => ({ n, w: worksAt(r, n), d: r.defs.filter(d => d.s === n && d.f === r.owner) })).filter(x => x.w.tr || x.w.sand || x.w.wire || x.d.length) : [];
 
   return (
     <section id="drawer" aria-label={`${wr.name} region file`}>
@@ -122,14 +123,14 @@ export function Drawer() {
       {!own && r.fr && Object.keys(r.fr).length > 0 && (
         <div className="pad borders corps-seen">
           {Object.entries(r.fr).map(([s, c]) => (
-            <small key={s}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} on the {W.regions[+s].name} border:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
+            <small key={s}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} on the {borderLabel(W, +s).replace(' border', '') + (+s >= 1000 ? '' : ' border')}:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
           ))}
         </div>
       )}
       {borders.length > 0 && (
         <div className="pad borders">
           {borders.map(({ n, w, d }) => (
-            <small key={n}><b>Facing {W.regions[n].name}:</b> {[w.tr ? `trench ${roman(w.tr)}` : '', w.sand ? 'sandbags' : '', w.wire ? `wire ${roman(w.wire)}` : '', ...d.map(x => DT[x.k].name)].filter(Boolean).join(', ')}</small>
+            <small key={n}><b>{n >= 1000 ? `On the ${borderLabel(W, n)}` : `Facing ${W.regions[n].name}`}:</b> {[w.tr ? `trench ${roman(w.tr)}` : '', w.sand ? 'sandbags' : '', w.wire ? `wire ${roman(w.wire)}` : '', ...d.map(x => DT[x.k].name)].filter(Boolean).join(', ')}</small>
           ))}
         </div>
       )}
@@ -137,7 +138,7 @@ export function Drawer() {
       {own ? (
         <>
           <div className="tabs" role="tablist" aria-label="Orders">
-            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l}</button>)}
+            {TABS.filter(([k]) => k !== 'navy' || wr.zones.length > 0).map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l}</button>)}
           </div>
           <div className="tb-body" role="tabpanel">
             {tab === 'rec' && <RecruitTab region={r} id={sel} />}
@@ -145,6 +146,7 @@ export function Drawer() {
             {tab === 'fort' && <FortifyTab region={r} id={sel} />}
             {tab === 'deploy' && <DeployTab region={r} id={sel} />}
             {tab === 'march' && <MarchTab region={r} id={sel} />}
+            {tab === 'navy' && (wr.zones.length > 0 ? <NavyTab region={r} id={sel} /> : <p className="note">{wr.name} has no coast.</p>)}
           </div>
         </>
       ) : (
@@ -154,6 +156,8 @@ export function Drawer() {
           {myNb.length > 0 && <div className="lbl"><span>Attack from</span></div>}
           {(() => { const t = treatyOf(g, me, r.owner); return t ? <p className="note budget full">{TREATY_NAMES[t.kind]} with {F.name}. Attacking breaks it: war weariness and lost trust.</p> : null; })()}
           {myNb.map(i => <NeighbourRow key={i} from={i} to={sel} list={i} brk={!!treatyOf(g, me, r.owner)} label={treatyOf(g, me, r.owner) ? 'Break treaty' : 'Attack'} />)}
+          <LandingRows target={sel} />
+          <CarrierRows target={sel} />
           {airBases.length > 0 && <div className="lbl"><span>Air strike from</span></div>}
           {airBases.map(x => (
             <div className="it nb" key={x.id}>

@@ -14,7 +14,7 @@ import { clamp, col } from './util';
 import { battleAnchor } from '@riskrts/shared';
 
 /** One front per region and border it is attacked over. */
-const frontKey = (b: { region: number; from: number }) => b.region * 512 + b.from + 1;
+const frontKey = (b: { region: number; from: number }) => b.region * 2048 + b.from + 1;
 
 const EMBER = col('#ff5e1a'), FLAME = col('#ffa23a'), ROCKET = col('#ffe7a8'), BLACK = col('#26231f');
 

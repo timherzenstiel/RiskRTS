@@ -447,8 +447,20 @@ export class Models {
   }
 
   /** Dreadnought (or, with `merchant`, a cargo steamer): tapering hull, turrets, bridge, funnels, masts, boats and a wake. */
-  ship(x: number, z: number, face: number, band: THREE.Color, S: number, t: number, merchant = false) {
-    const y = .12 + Math.sin(t * 2 + x) * .008;
+  ship(x: number, z: number, face: number, band: THREE.Color, S: number, t: number, merchant = false, aim?: number, sink = 0) {
+    const y = .12 + Math.sin(t * 2 + x) * .008 - sink;
+    if (this.mesh?.has(merchant ? 'liner' : 'dreadnought') && sink < .02) {
+      // baked hull; the turrets turn on their own to the bearing of the target
+      this.mesh.push(merchant ? 'liner' : 'dreadnought', x, y, z, face, S, band);
+      if (!merchant && this.mesh.has('turret')) {
+        const sf = Math.sin(face), cf = Math.cos(face);
+        for (const [tz, ty, dir] of [[.17, .066, 1], [.1, .095, 1], [-.17, .066, -1]] as const) {
+          const a = aim ?? (dir > 0 ? 0 : Math.PI);
+          this.mesh.push('turret', x + tz * S * sf, y + ty * S, z + tz * S * cf, face + a, S, band);
+        }
+      }
+      return;
+    }
     this.at(x, y, z, face, S);
     const b = this.b, hi = this.hi, H = merchant ? K.merch : K.navy, D = merchant ? K.deck : K.plank;
     // hull: full midships, tapering bow, rounded stern
@@ -474,9 +486,11 @@ export class Models {
       }
     } else {
       const turret = (tz: number, ty: number, dir: number) => {
-        b(0, ty, tz, .06, .028, .058, K.navy3); b(0, ty + .015, tz, .05, .004, .048, K.navy4);
-        for (let sd = -1; sd <= 1; sd += 2) b(sd * .013, ty + .003, tz + dir * .065, .008, .008, .075, K.gun);
-        if (hi) { b(0, ty + .02, tz - dir * .012, .07, .008, .012, K.navy2); for (let sd = -1; sd <= 1; sd += 2) b(sd * .013, ty + .003, tz + dir * .1, .01, .01, .006, K.gun); }
+        // turned to the bearing of the target when in action (`aim`, relative to the bow), else fore and aft
+        const a = aim ?? (dir > 0 ? 0 : Math.PI), sa = Math.sin(a), ca = Math.cos(a);
+        b(0, ty, tz, .06, .028, .058, K.navy3, a); b(0, ty + .015, tz, .05, .004, .048, K.navy4, a);
+        for (let sd = -1; sd <= 1; sd += 2) b(sd * .013 * ca + sa * .065, ty + .003, tz + ca * .065 - sd * .013 * sa, .008, .008, .075, K.gun, a);
+        if (hi) { b(-sa * .012, ty + .02, tz - ca * .012, .07, .008, .012, K.navy2, a); for (let sd = -1; sd <= 1; sd += 2) b(sd * .013 * ca + sa * .1, ty + .003, tz + ca * .1 - sd * .013 * sa, .01, .01, .006, K.gun, a); }
       };
       turret(.17, .066, 1); b(0, .07, .1, .052, .03, .052, H); turret(.1, .095, 1); turret(-.17, .066, -1);
       b(0, .075, .035, .08, .045, .07, K.navy3); b(0, .104, .045, .1, .014, .05, K.navy3); b(0, .088, .078, .03, .04, .03, K.navy2);
@@ -507,6 +521,72 @@ export class Models {
       b(sd * (.03 + k * .013), wy, -.32 - k * .04, .012 * w + .003, .005, .026 * w + .008, K.cloud2, -sd * .3);
     }
     if (hi) for (let sd = -1; sd <= 1; sd += 2) b(sd * .075, wy, .17, .01, .006, .12, K.cloud2);
+  }
+
+  /** Destroyer: long narrow hull, low bridge, four funnels, a gun fore and aft and torpedo tubes amidships. */
+  destroyer(x: number, z: number, face: number, band: THREE.Color, S: number, t: number, sink = 0) {
+    const y = .12 + Math.sin(t * 2.6 + x) * .01 - sink;
+    if (this.mesh?.has('destroyer') && sink < .02) { this.mesh.push('destroyer', x, y, z, face, S, band); return; }
+    this.at(x, y, z, face, S);
+    const b = this.b, H = K.navy;
+    b(0, .02, 0, .07, .04, .4, H); b(0, .021, .22, .05, .038, .05, H); b(0, .022, .255, .025, .036, .03, H); b(0, .02, -.21, .055, .036, .03, H);
+    b(0, .032, 0, .072, .006, .4, band); b(0, .042, 0, .06, .004, .4, K.plank);
+    b(0, .058, .13, .05, .03, .05, K.navy3); b(0, .078, .14, .03, .02, .03, K.navy2);
+    for (let k = 0; k < 4; k++) { b(0, .07, .06 - k * .05, .022, .05, .026, K.navy2); b(0, .097, .06 - k * .05, .023, .006, .027, K.blk); }
+    b(0, .054, .2, .02, .012, .03, K.gun); b(0, .056, .225, .006, .006, .04, K.gun); b(0, .054, -.17, .02, .012, .03, K.gun);
+    if (this.hi) { for (let sd = -1; sd <= 1; sd += 2) b(sd * .018, .05, -.07, .012, .012, .06, K.gun); b(0, .12, .12, .005, .1, .005, K.pole); }
+    const wy = (.126 - y) / S; b(0, wy, .28, .05, .008, .03, K.white); b(0, wy, -.27, .035, .006, .1, K.white);
+    for (let k = 0; k < 3; k++) for (let sd = -1; sd <= 1; sd += 2) b(sd * (.02 + k * .012), wy, -.3 - k * .045, .01, .004, .03, K.cloud2, -sd * .35);
+  }
+
+  /** Aircraft carrier, Furious style: flight deck forward, bridge and funnel midships, landing deck aft; parked biplanes. */
+  carrier(x: number, z: number, face: number, band: THREE.Color, S: number, t: number, planes: number, sink = 0) {
+    const y = .12 + Math.sin(t * 1.8 + x) * .007 - sink;
+    if (this.mesh?.has('carrier') && sink < .02) { this.mesh.push('carrier', x, y, z, face, S, band); }
+    else {
+      this.at(x, y, z, face, S);
+      const b = this.b, H = K.navy;
+      b(0, .028, 0, .13, .056, .44, H); b(0, .029, .25, .09, .052, .06, H); b(0, .03, .29, .05, .05, .03, H); b(0, .028, -.24, .11, .05, .04, H);
+      b(0, .045, 0, .132, .008, .44, band);
+      b(0, .066, .15, .15, .008, .2, K.plank); b(0, .062, .15, .13, .02, .2, K.navy2);
+      b(0, .066, -.17, .15, .008, .15, K.plank); b(0, .062, -.17, .13, .02, .15, K.navy2);
+      b(0, .08, 0, .06, .05, .07, K.navy3); b(0, .12, -.01, .03, .07, .035, K.navy2); b(0, .156, -.01, .032, .006, .037, K.blk);
+      b(0, .14, .03, .006, .12, .006, K.pole);
+      if (this.hi) { for (let k = 0; k < 7; k++) b(0, .0705, .07 + k * .03, .003, .001, .016, K.white); b(0, .071, -.17, .1, .001, .004, K.white); }
+      const wy = (.126 - y) / S; b(0, wy, .32, .08, .01, .04, K.white); b(0, wy, -.3, .05, .008, .1, K.white);
+    }
+    // biplanes parked on the deck
+    const sf = Math.sin(face), cf = Math.cos(face);
+    for (let k = 0; k < Math.min(3, planes); k++) { const lz = (.2 - k * .07) * S; this.plane(x + lz * sf, y + .075 * S, z + lz * cf, face, band, .4 * S); }
+  }
+
+  /** Landing flotilla: a group of low armoured motor lighters ("Beetles") with bow ramps. */
+  lighters(x: number, z: number, face: number, band: THREE.Color, S: number, t: number, n = 3, sink = 0) {
+    for (let k = 0; k < n; k++) {
+      const off = (k - (n - 1) / 2) * .13 * S, back = (k % 2) * .08 * S, sf = Math.sin(face), cf = Math.cos(face);
+      const px = x + off * cf - back * sf, pz = z - off * sf - back * cf, y = .12 + Math.sin(t * 3 + k + x) * .01 - sink;
+      if (this.mesh?.has('lighter') && sink < .02) { this.mesh.push('lighter', px, y, pz, face, S, band); continue; }
+      this.at(px, y, pz, face, S);
+      const b = this.b;
+      b(0, .012, 0, .06, .024, .16, K.blk); b(0, .016, .085, .05, .02, .02, K.blk);
+      b(0, .026, -.04, .04, .018, .05, K.navy2); b(0, .045, -.05, .01, .025, .01, K.blk);
+      b(0, .026, .02, .05, .003, .08, band);
+      const wy = (.126 - y) / S; b(0, wy, -.1, .03, .006, .06, K.white);
+    }
+  }
+
+  /** Harbour: a stone quay along the water, two cranes and a warehouse; scaffolding while it is being built. */
+  harbour(x: number, y: number, z: number, face: number, S: number, building = false) {
+    if (this.mesh?.has('harbour') && !building) { this.mesh.push('harbour', x, y, z, face, S, K.stone); return; }
+    this.at(x, y, z, face, S);
+    const b = this.b;
+    b(0, .015, .05, .5, .03, .08, K.stone); b(0, .032, .05, .5, .004, .08, K.concrete);
+    if (building) { for (let k = 0; k < 3; k++) b(-.18 + k * .18, .07, -.02, .006, .1, .006, K.pole); b(0, .12, -.02, .4, .006, .006, K.pole); return; }
+    b(-.12, .06, -.05, .16, .09, .08, K.brick); b(-.12, .11, -.05, .17, .02, .09, K.roof);
+    for (const cx of [.08, .2]) {
+      b(cx, .1, .04, .02, .16, .02, K.gun); b(cx, .18, .07, .015, .015, .1, K.gun); b(cx, .15, .12, .003, .06, .003, K.pole);
+      b(cx, .03, .04, .04, .02, .04, K.navy2);
+    }
   }
 
   /** Concrete pillbox with a firing slit facing `face`. `hold` = holdout (cut off, shown with a white flag). */

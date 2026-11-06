@@ -5,6 +5,7 @@ import { nationOf } from '../data/nations';
 import { weatherAt } from '../data/terrain';
 import { buildWorld } from '../world/build';
 import { emit } from './core';
+import { seaQuality } from './navy';
 import type { GameState } from './types';
 
 export const railKey = (a: number, b: number) => a < b ? a + '|' + b : b + '|' + a;
@@ -61,19 +62,11 @@ export function linkQuality(g: GameState, o: number, a: number, b: number): numb
   const W = buildWorld();
   if (!W.seaLane.has(a + '|' + b)) return railOpen(g, a, b) ? 2 : 1;
   if (isFerry(a, b) && railOpen(g, a, b)) return 2;
-  const N = nationOf(o), ra = g.regions[a], rb = g.regions[b];
-  const hub = (r: typeof ra) => r.factory || r.capitalOf === r.owner;
-  let q = hub(ra) && hub(rb) ? 2 : 1;
-  if (N.flags.navy && g.factions[o]?.alive) q = 2;
-  if (N.flags.blockaded || N.flags.poorRails) q = Math.min(q, 1);
-  // a hostile navy next to the lane (the Royal Navy, or a power waging blockade) takes one step off
-  for (const p of g.factions) {
-    if (p.id === o || !p.alive || !(nationOf(p.id).flags.navy || p.doctrines?.includes('blockade'))) continue;
-    if (navyNear(g, p.id, a) || navyNear(g, p.id, b)) { q -= 1; break; }
-  }
-  return Math.max(0, q);
+  // over the water: who holds the zone the lane runs through (an enemy there cuts it; the own navy there makes it full)
+  const ra = g.regions[a], rb = g.regions[b], z = W.laneZone.get(a + '|' + b) ?? -1;
+  const hub = (r: typeof ra) => r.factory || r.capitalOf === r.owner || !!r.port;
+  return seaQuality(g, o, z >= 0 ? [z] : [], hub(ra) && hub(rb));
 }
-const navyNear = (g: GameState, p: number, r: number) => g.regions[r].owner === p || buildWorld().regions[r].seaAdj.some(n => g.regions[n].owner === p);
 
 /** Lay a railway between two neighbouring regions of your own. */
 export function buildRail(g: GameState, fid: number, a: number, b: number): string | null {

@@ -11,6 +11,7 @@
 import { GROUND_TYPES, TICK_SECONDS, UNIT_TYPES, emptyUnits, groundUnits, totalUnits, type Units, type UnitType } from '../data/units';
 import { wrapDx } from '../world/build';
 import { sectorPoint } from '../world/sectors';
+import { coastKey, isCoast, zoneAt, zoneOfKey } from '../world/zones';
 import { emit, frontsOf, menTotal, takeForce, world } from './core';
 import { allied, atPeace } from './diplomacy';
 import { marchFactor, weatherMarch } from './rails';
@@ -39,7 +40,7 @@ export const moveK = (g: GameState) => (PACES[g.cfg?.pace ?? 1] ?? PACES[1]).mov
 /** Map position of a post: -1 the region centre (main army), else the border with that neighbour. */
 export function postPt(region: number, post: number): { x: number; z: number } {
   const W = world(), r = W.regions[region];
-  if (post < 0 || !r.adj.includes(post)) return { x: r.cx, z: r.cz };
+  if (post < 0 || !(r.sectors.includes(post) || r.adj.includes(post))) return { x: r.cx, z: r.cz };
   const p = sectorPoint(W, region, post); return { x: p.x, z: p.z };
 }
 const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(wrapDx(a.x, b.x), b.z - a.z);
@@ -90,8 +91,8 @@ export function fixPosts(g: GameState, r: RegionState) {
   if (r.owner < 0) { r.fr = undefined; r.an = undefined; return; }
   if (groundUnits(mainOf(r)) > 0) armyNo(g, r);
   const fr = r.fr; if (!fr) return;
-  const adj = world().regions[r.id].adj, keys = corpsPosts(r);
-  for (const s of keys) { fr[s].u.plane = 0; if (!adj.includes(s)) delete fr[s]; }
+  const secs = world().regions[r.id].sectors, keys = corpsPosts(r);
+  for (const s of keys) { fr[s].u.plane = 0; if (!secs.includes(s)) delete fr[s]; }
   for (const k of GROUND_TYPES) {
     let over = -r.units[k]; for (const s of keys) if (fr[s]) over += fr[s].u[k];
     while (over > 0) {
@@ -168,14 +169,14 @@ export function column(g: GameState, f: number, from: number, src: number, to: n
   return a;
 }
 
-/** Route through the power's own (and allied) land regions from `from` to `to`: the regions after `from`, or null. */
+/** Route over land through the power's own (and allied) regions from `from` to `to`: the regions after `from`, or null. Sea lanes need ships. */
 export function landRoute(g: GameState, f: number, from: number, to: number): number[] | null {
   if (from === to) return [];
   const W = world(), prev = new Map<number, number>([[from, -1]]), q = [from];
   const ok = (j: number) => { const o = g.regions[j].owner; return o === f || (o >= 0 && allied(g, f, o)); };
   while (q.length) {
     const c = q.shift()!;
-    for (const n of W.regions[c].adj) {
+    for (const n of W.regions[c].land) {
       if (prev.has(n) || !ok(n)) continue;
       prev.set(n, c); if (n === to) { const path = [n]; let p = c; while (p !== from) { path.unshift(p); p = prev.get(p)!; } return path; }
       q.push(n);
@@ -208,7 +209,7 @@ export function columnArrives(g: GameState, a: Army, join: (b: number) => boolea
   }
   if (friendly && t.owner !== a.owner) {
     // an allied region has no post for our troops: they march on to a region of ours next to it
-    const home = world().regions[t.id].adj.find(j => g.regions[j].owner === a.owner);
+    const home = world().regions[t.id].land.find(j => g.regions[j].owner === a.owner);
     if (home !== undefined) column(g, a.owner, t.id, a.post ?? -1, home, -1, a.units, a.men, a.mor, { stance: a.stance });
     return true;
   }
@@ -232,7 +233,7 @@ export function columnArrives(g: GameState, a: Army, join: (b: number) => boolea
   }
   if (a.inner) {
     // the region fell while the column moved inside it: the troops fall back to a neighbouring own region, or are lost
-    const W = world(), back = W.regions[t.id].adj.find(j => g.regions[j].owner === a.owner && !W.seaLane.has(t.id + '|' + j));
+    const W = world(), back = W.regions[t.id].land.find(j => g.regions[j].owner === a.owner);
     if (back !== undefined) column(g, a.owner, t.id, a.post ?? -1, back, -1, a.units, a.men, a.mor, { tired: true, stance: a.stance });
     return true;
   }
@@ -287,10 +288,18 @@ function launchCorps(g: GameState, r: RegionState, s: number, c: Corps, front?: 
 
 // ---------------------------------------------------------------- deploying itself
 
-/** Strength a border faces: the men across it, more when an enemy corps there is ordered to attack. */
+/** Strength a border faces: the men across it, more when an enemy corps there is ordered to attack. A coast: enemy ports and ships on the zone. */
 function threat(g: GameState, r: RegionState, n: number): number {
+  if (isCoast(n)) return coastThreat(g, r.owner, zoneOfKey(n));
   const o = g.regions[n], c = o.fr?.[r.id];
   return 1 + menTotal(o.men) / 400 + (c && (c.ord ?? 0) >= 1 ? 2 + groundUnits(c.u) / 2 : 0);
+}
+/** How much a coast on zone `z` is threatened from the sea: enemy ports on the zone, enemy ships in it, an assault fleet offshore. */
+export function coastThreat(g: GameState, me: number, z: number): number {
+  const W = world(); let t = 0;
+  for (const id of W.zones[z]?.coast ?? []) { const o = g.regions[id]; if (o.port && o.owner >= 0 && o.owner !== me && !allied(g, me, o.owner) && !atPeace(g, me, o.owner)) t += .35; }
+  for (const fl of g.fleets ?? []) if (fl.owner !== me && !allied(g, me, fl.owner) && fl.zs.length && zoneAt(fl.zs, fl.d) === z) t += fl.task === 'assault' ? 2 + groundUnits(fl.cargo) / 4 : .5;
+  return t;
 }
 
 /**
@@ -301,7 +310,8 @@ function threat(g: GameState, r: RegionState, n: number): number {
 export function autoDeploy(g: GameState, r: RegionState, instant = false) {
   if (r.owner < 0 || r.deploy === 1 || r.contested >= 0 || r.battle >= 0) return;
   const W = world(), me = r.owner;
-  const foes = W.regions[r.id].adj.filter(n => { const o = g.regions[n].owner; return o !== me && !(o >= 0 && allied(g, me, o)); });
+  // land borders with foreign powers, and coasts that face a threat from the sea
+  const foes = [...W.regions[r.id].land.filter(n => { const o = g.regions[n].owner; return o !== me && !(o >= 0 && allied(g, me, o)); }), ...W.regions[r.id].zones.map(coastKey).filter(k => coastThreat(g, me, zoneOfKey(k)) > 0)];
   // corps on quiet borders come back to the main army
   for (const s of corpsPosts(r)) {
     const c = r.fr![s]; if ((c.ord ?? 0) >= 1 || foes.includes(s)) continue;

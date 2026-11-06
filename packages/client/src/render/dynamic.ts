@@ -3,7 +3,7 @@
 // All of it is pushed into instanced pools; nothing here allocates.
 import * as THREE from 'three';
 import { toBorderDist } from './borderField';
-import { DEF_KINDS, HW, armyPos, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
+import { DEF_KINDS, HW, armyPos, coastThreat, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { FxSystem } from './fxSystem';
 import { F_DUST, F_MAP } from './fxSystem';
@@ -66,6 +66,7 @@ export class DynamicDraw {
       if (t.airfield && showB) m.airfield(x + .05, this.hAt(x + .05, z + .62 * O, y), z + .62 * O, Math.PI / 2, f, this.layer === 2 ? .95 : .8, t.battle >= 0 ? 0 : t.units.plane, T);
       // up close the painted ground digs the trenches, parapets and wire in along the whole border (groundPaint.ts)
       if (rig.dist < 45 && rig.dist >= CLOSE_PAINT) this.works(t, def.id, y);
+      else if (rig.dist < CLOSE_PAINT) this.works(t, def.id, y, true);
       if (this.layer !== 2) this.frontLines(g, def.id, y, rig.dist);
       if (this.layer === 2) continue;
       // the main army in the middle, each corps at its border (a region in battle keeps only what is not fighting)
@@ -84,8 +85,8 @@ export class DynamicDraw {
   private frontLines(g: GameState, rid: number, y0: number, dist: number) {
     const t = g.regions[rid], R = this.world.regions[rid], m = this.m, f = t.owner; if (f < 0) return;
     const close = dist < 60 || this.layer === 1 || rid === this.sel;
-    for (const n of R.adj) {
-      const c = t.fr?.[n], foe = g.regions[n].owner !== f;
+    for (const n of R.sectors) {
+      const c = t.fr?.[n], foe = n >= 1000 ? coastThreat(g, f, n - 1000) > 0 : g.regions[n].owner !== f;
       if (!c && !(foe && (rid === this.sel || (this.layer === 1 && g.viewer === f)))) continue;
       if (c && !close) continue;
       // up close the dug-in trench shows the front; the staff-map bar would cover the troops
@@ -151,10 +152,12 @@ export class DynamicDraw {
   }
 
   /** Field works on each border: the trench line, sandbags on its parapet, wire belts in front, facing the neighbour. */
-  private works(t: GameState['regions'][number], rid: number, y0: number) {
+  private works(t: GameState['regions'][number], rid: number, y0: number, coastsOnly = false) {
     const W = this.world, R = W.regions[rid], m = this.m;
     for (const [ks, w] of Object.entries(t.works)) {
       if (!w.tr && !w.sand && !w.wire) continue;
+      // the close-up ground paints land borders itself; coasts are drawn here at every zoom
+      if (coastsOnly && +ks < 1000) continue;
       const s = +ks, p = sectorPoint(W, rid, s), face = Math.atan2(p.x - R.cx, p.z - R.cz), ox = Math.sin(face), oz = Math.cos(face);
       const at = (d: number): [number, number, number] => { const x = p.x + ox * d, z = p.z + oz * d; return [x, this.hAt(x, z, y0), z]; };
       if (w.tr) { const [x, y, z] = at(.2); m.trenchLine(x, y, z, face, .7, w.tr, 1.4); }

@@ -108,7 +108,7 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
   if (!sim) return null;
   const { g, me } = sim, W = buildWorld(), supply = g.factions[me].supply;
   const sector = marker && marker[0] === id ? marker[1] : -2;
-  const sectors = [...W.regions[id].adj.map(n => ({ s: n, name: W.regions[n].name, owner: g.regions[n].owner, sea: W.seaLane.has(id + '|' + n) })), { s: -1, name: 'Interior', owner: -1, sea: false }];
+  const sectors = [...W.regions[id].land.map(n => ({ s: n, name: W.regions[n].name, owner: g.regions[n].owner, sea: false })), ...W.regions[id].zones.map(z => ({ s: 1000 + z, name: W.zones[z].name, owner: -1, sea: true })), { s: -1, name: 'Interior', owner: -1, sea: false }];
   const here = (s: number) => region.defs.filter(d => d.s === s && d.f === region.owner);
   return (
     <>
@@ -119,7 +119,7 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
           return (
             <button key={x.s} role="option" aria-selected={sector === x.s} className={'sec' + (hostile ? ' hostile' : '')} onClick={() => { click(); ui().setFortMarker([id, x.s]); }}>
               {F ? <i className="dot" style={{ '--c': F.color } as React.CSSProperties} /> : <i className="dot in" />}
-              <span className="nm">{x.s < 0 ? 'Interior' : `Border · ${x.name}`}{x.sea ? ' (sea)' : ''}{x.s >= 0 && isMountain(id, x.s) ? ' · mountains' : ''}</span>
+              <span className="nm">{x.s < 0 ? 'Interior' : x.sea ? `Coast · ${x.name}` : `Border · ${x.name}`}{x.s >= 0 && !x.sea && isMountain(id, x.s) ? ' · mountains' : ''}</span>
               <span className="have">
                 {w.tr > 0 && <span className="wtag" title={`Trench ${roman(w.tr)}`}><Icon k="trench" size={14} />{roman(w.tr)}</span>}
                 {w.sand > 0 && <Icon k="sand" size={14} />}{w.wire > 0 && <Icon k="wire" size={14} />}
@@ -131,7 +131,7 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
       </div>
       {sector > -2 ? (
         <>
-          <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `Works facing ${W.regions[sector].name} only fight attacks from there · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
+          <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `${sector >= 1000 ? `Works on the ${W.zones[sector - 1000].name} coast only fight landings there` : `Works facing ${W.regions[sector].name} only fight attacks from there`} · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
           <CameoGrid label="Works">
             {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
               const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
@@ -219,7 +219,7 @@ export function NeighbourRow({ from, to, list, label, brk }: { from: number; to:
   return (
     <div className="it nb">
       <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />
-      <div className="tx"><b>{W.regions[list].name}</b><small>{info}{sea ? ' · by sea' : ''}{isMountain(from, to) ? ' · over mountains' : ''}</small></div>
+      <div className="tx"><b>{W.regions[list].name}</b><small>{info}{sea ? (shown.owner === me ? ' · by transport' : ' · amphibious assault') : ''}{isMountain(from, to) ? ' · over mountains' : ''}</small></div>
       <button className={'buy ' + (label === 'Attack' ? 'atk' : 'plain')} disabled={disabled}
         title={src.battle >= 0 ? 'Troops in a battle cannot leave' : groundUnits(src.units) < 2 ? 'Needs at least 2 ground formations' : brk ? 'This breaks the treaty: war weariness and lost trust' : undefined} onClick={() => march(from, to, brk)}>{label}</button>
     </div>

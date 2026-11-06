@@ -12,6 +12,9 @@ import { CONSOLIDATE, DIG_IN, UNREG, addToGroup, armyNo, column, corpsAt, fixPos
 import { checkElim, checkMissions } from './missions';
 import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, combinedMod, crossSpeed, dealtMod, depthBonus, shellMod, wwLossMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
 import { hasDoc, techOn } from './tech';
+import { flyToCarrier } from './carrier';
+import { beachSupplied, bombarding, shipMax, sinkShip } from './navy';
+import { isCoast, zoneOfKey } from '../world/zones';
 import { nationOf } from '../data/nations';
 import { PACES, type Agent, type Army, type Battle, type Defence, type Shell, type GameState, type RegionState, type Stance } from './types';
 
@@ -240,6 +243,8 @@ interface Tick { bunker: boolean; fl: Field; both: Record<number, boolean>; cree
 function damage(g: GameState, b: Battle, t: Agent, dmg: number, src: AgentType, k: Tick, mult: number, sf: number) {
   if (t.dead || t.out) return;
   dmg *= mult * STANCE_DEALT[stanceIn(b, sf)] * dealtMod(g, b, sf, src, t) * takenMod(g, b, t) * fieldMod(g, b, k.fl, sf, src, t) * combinedMod(g, sf, !!k.both[sf]);
+  // Gallipoli: Ottoman defenders of a beach fight a quarter harder
+  if (sf === b.def && b.amph !== undefined && (b.stage ?? 0) === 0 && nationOf(sf).flags.gallipoli) dmg *= 1.25;
   // creeping barrage: attackers advance behind their shells while the defenders are pinned down
   if (k.creep && t.f !== b.def && hasDoc(g, t.f, 'creeping')) dmg *= .7;
   const ts = stanceIn(b, t.f); dmg *= ts === 2 ? (t.trench || !t.moving ? STANCE_TAKEN[2] : 1) : STANCE_TAKEN[ts];
@@ -273,6 +278,8 @@ const inWire = (b: Battle, a: Agent) => { const u = alongOf(b, a.x, a.z), lat = 
 /** Shells for one shot of a gun of side `f`: from the national stockpile when the side is supplied here, else the local dump. */
 export function sideSupplied(g: GameState, b: Battle, f: number) {
   if (f === b.def) { const r = g.regions[b.region]; return r.owner === f && !r.cut; }
+  // over a coast the attackers' shells come by sea, unless an enemy holds the zone
+  if (isCoast(b.from)) return b.src !== undefined && beachSupplied(g, f, zoneOfKey(b.from), b.src);
   const s = b.from >= 0 ? g.regions[b.from] : null; return !!s && s.owner === f && !s.cut;
 }
 /** Shells a side has for this battle. */
@@ -286,7 +293,7 @@ function drawShells(g: GameState, b: Battle, f: number, n: number): boolean {
 /** Shells one shot costs a side (defending guns fire from prepared stocks at half the rate). */
 export const shotCost = (b: Battle, f: number, g?: GameState) => SHELLS.shot * (f === b.def ? .5 : 1) * (g ? (supplyQOf(g, b, f) === 1 ? 1.5 : 1) * shellMod(g, f) : 1);
 /** Supply quality of the region a side draws its shells through (thin supply loses half again on the way). */
-const supplyQOf = (g: GameState, b: Battle, f: number) => (f === b.def ? g.regions[b.region] : b.from >= 0 ? g.regions[b.from] : undefined)?.supplyQ ?? 2;
+const supplyQOf = (g: GameState, b: Battle, f: number) => (f === b.def ? g.regions[b.region] : isCoast(b.from) ? (b.src !== undefined ? { supplyQ: 1 } : undefined) : b.from >= 0 ? g.regions[b.from] : undefined)?.supplyQ ?? 2;
 
 /** The attackers leave their start line. */
 export function goOverTheTop(g: GameState, b: Battle, f: number) {
@@ -318,11 +325,14 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
   for (const a of A) if (!a.dead && !a.out) { if (a.type === 'tank') tk[a.f] = true; else if (a.type === 'inf') inf[a.f] = true; }
   for (const f in tk) if (inf[f]) both[f] = true;
   const k: Tick = { bunker: A.some(a => a.type === 'bunk' && !a.dead && a.f === b.def), fl: fieldOf(g, b), both, creep: (b.supp[b.def] ?? 0) > 50 };
+  // a landing: the boats run in over open water, slower and without cover; battleships offshore fire the barrage
+  const beach = b.amph !== undefined && (b.stage ?? 0) === 0;
+  if (isCoast(b.from) && g.ships?.length) bombard(g, b, dt);
   for (const a of A) {
     if (a.dead || a.out) continue; const s = statsOf(g, a.f, a.type);
     a.cd -= dt; a.rt -= dt;
     if (a.type === 'plane') {
-      if (a.home !== b.region) { a.fuel = (a.fuel ?? 0) - dt; if (a.fuel <= 0) { a.out = true; flyHome(g, b, a.f, a.home ?? b.region, 1); continue; } }
+      if (a.home !== b.region || a.cv !== undefined) { a.fuel = (a.fuel ?? 0) - dt; if (a.fuel <= 0) { a.out = true; flyHome(g, b, a.f, a.home ?? b.region, 1, a.cv); continue; } }
       if (a.tgt < 0 || A[a.tgt].dead || A[a.tgt].out || a.rt <= 0) { a.tgt = nearestEnemy(b, a); a.rt = .6 + rnd(g) * .6; }
       let diff = .9;
       if (a.tgt >= 0) { const t = A[a.tgt]; diff = wrapA(Math.atan2(t.x - a.x, t.z - a.z) - a.face); }
@@ -379,7 +389,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
         }
       }
     } else if (s.speed > 0 && !(a.trench && !charge) && !(a.type === 'art' && a.f === b.def && !charge) && !(attacker && !b.go && a.type !== 'art') && !a.cb) {
-      let st = s.speed * dt * (attacker ? crossSpeed(k.fl, a.type) : 1);
+      let st = s.speed * dt * (attacker ? crossSpeed(k.fl, a.type) * (beach ? 1 / 1.5 : 1) : 1);
       // barbed wire in front of the trench: infantry and gun teams crawl through cutting it slowly, tanks flatten it
       if (b.wire > 0 && a.f !== b.def && inWire(b, a)) { if (a.type === 'tank') b.wire = Math.max(0, b.wire - dt * 3); else { st *= wireSlow(g, a.f, a.type); b.wire = Math.max(0, b.wire - dt * .15); } }
       a.x += dx / d * st; a.z += dz / d * st; a.moving = true; a.phase += dt * 9;
@@ -429,6 +439,44 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
   }
 }
 
+/** Battle units offshore where bombarding battleships lie (beyond the attackers' start line, out to sea). */
+export const OFFSHORE_ALONG = 40;
+/**
+ * Shore bombardment: each battleship squadron offshore fires like three heavy batteries at the defenders of a coast (from the
+ * stockpile of its power; harder on MG nests and gun emplacements). The coast's gun emplacements fire back at the ships.
+ */
+function bombard(g: GameState, b: Battle, dt: number) {
+  const ships = bombarding(g, b); if (!ships.length) return;
+  const A = b.agents, P = paceOf(g), cd = (b.bomb ??= {});
+  const px = -b.az, pz = b.ax;
+  for (const s of ships) {
+    let t = cd[s.id] ?? rnd(g) * 2; t -= dt;
+    if (t <= 0) {
+      t = 3.4 * P.rof * (.8 + rnd(g) * .4);
+      const fac = g.factions[s.owner], share = Math.max(.2, s.hp / shipMax(s)), cost = SHELLS.shot * 2;
+      const lat = ((s.id * 37) % 21) - 10, ox = b.ax * OFFSHORE_ALONG + px * lat, oz = b.az * OFFSHORE_ALONG + pz * lat;
+      for (let k = 0; k < 3; k++) {
+        if (!fac || fac.shells < cost) break;
+        const tg = A.filter(a => !a.dead && !a.out && a.f === b.def && a.type !== 'plane');
+        if (!tg.length) break;
+        const hard = tg.filter(a => a.type === 'pill' || a.type === 'fort'), pick = hard.length && rnd(g) < .5 ? hard : tg, x = pick[Math.floor(rnd(g) * pick.length)];
+        fac.shells -= cost; b.used[s.owner] = (b.used[s.owner] ?? 0) + cost;
+        const sx = x.x + (rnd(g) - .5) * 4, sz = x.z + (rnd(g) - .5) * 4, fl = 1.2 + rnd(g) * .4;
+        b.shells.push({ x: sx, z: sz, time: fl, f: s.owner, dmg: 9 * share * (x.type === 'pill' || x.type === 'fort' ? 1.5 : 1), sp: 3, src: 'fort' });
+        if (g.fx && g.fx.length < FX_CAP) g.fx.push({ k: 'bomb', b: b.id, x: ox, z: oz, tx: sx, tz: sz, fl });
+      }
+    }
+    cd[s.id] = t;
+  }
+  // coast guns answer
+  for (const a of A) if (!a.dead && !a.out && a.f === b.def && a.type === 'fort' && rnd(g) < dt * .25) {
+    const s = ships[Math.floor(rnd(g) * ships.length)];
+    if (rnd(g) < .5) { s.hp -= 5; if (s.hp <= 0) sinkShip(g, s); }
+    if (g.fx && g.fx.length < FX_CAP) g.fx.push({ k: 'fire', b: b.id, x: a.x, z: a.z, face: Math.atan2(b.ax, b.az), tx: b.ax * OFFSHORE_ALONG, tz: b.az * OFFSHORE_ALONG, fl: 1.2 });
+    break;
+  }
+}
+
 /** Morale per side: losses shake it, quiet steadies it, and broken troops give up.  */
 function morale(g: GameState, b: Battle, dt: number) {
   const seen = (b.seen ??= {}), broke = (b.broke ??= {});
@@ -458,8 +506,9 @@ function morale(g: GameState, b: Battle, dt: number) {
 }
 
 /** Send `n` aircraft from a battle back home (or to the nearest friendly region, or they are lost). */
-export function flyHome(g: GameState, b: Battle, f: number, home: number, n: number) {
+export function flyHome(g: GameState, b: Battle, f: number, home: number, n: number, cv?: number) {
   if (n <= 0) return;
+  if (cv !== undefined && flyToCarrier(g, f, b.region, cv, n, home)) return;
   const W = world(), here = g.regions[b.region];
   let dest = -1;
   if (home !== b.region && g.regions[home]?.owner === f) dest = home;
@@ -500,9 +549,9 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
   for (const a of b.agents) {
     if (a.dead || a.out) continue;
     if (isDef(a.type)) { t.defs.push({ id: a.defId ?? g.nextId++, k: a.type, s: a.sector ?? -1, hp: a.hp, f: a.f }); continue; }
-    if (a.type === 'plane') { const k = a.f + ':' + (a.home ?? b.region); home.set(k, (home.get(k) ?? 0) + 1); }
+    if (a.type === 'plane') { const k = a.f + ':' + (a.home ?? b.region) + ':' + (a.cv ?? -1); home.set(k, (home.get(k) ?? 0) + 1); }
   }
-  for (const [k, n] of home) { const [f, h] = k.split(':').map(Number); flyHome(g, b, f, h, n); }
+  for (const [k, n] of home) { const [f, h, cv] = k.split(':').map(Number); flyHome(g, b, f, h, n, cv >= 0 ? cv : undefined); }
   const surv = winner !== null ? forceIn(b, winner, false, g) : null;
   if (surv) consolidate(surv.u, surv.m);
   // barbed wire that was not cut stays; a front that held keeps its works

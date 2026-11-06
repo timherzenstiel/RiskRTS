@@ -1,6 +1,6 @@
 # RiskRTS – Design: Command Overhaul (forces, supply, manpower, situation map, menus)
 
-Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26 · phase 3 in PR #28** · Mockups: design canvas "RiskRTS – Command overhaul"
+Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26 · phase 3 in PR #28 · phase 4 in PR #30** · Mockups: design canvas "RiskRTS – Command overhaul"
 
 ## Problem
 
@@ -480,4 +480,14 @@ Each phase with tests, typecheck, a screenshot pass through `dev/harness.ts` and
 - **Radio**: every new request is called in by its commander in his own voice (one per army; urgent ones with morse and higher priority, routine ones with a cooldown), and he reports corps he sends back (`commanderCall` in `audio/dispatches.ts`). The feed and the alerts carry only critical requests.
 - Merged with `main` (sound and radio, unit art, recruit cards) through the whole stack.
 - Not yet: computer powers still play with the old AI (no armies, no war minister); munitions, rail and air-support requests come with phase 5.
+
+## Implementation notes – phase 4 (branch `command/4-menus`, on top of phase 3)
+
+- **Region card**: three tabs instead of six. *Overview* (deploy mode, depot and corps per post, the share and goal for right-click marches, *Pick a target on the map* for touch, air strikes, reconnaissance, decoy marches from here), *Recruit*, *Build* (buildings, railways, defences in the interior, and the harbour for coastal regions). The Fortify, Deploy, March and Harbour tabs are gone.
+- **Border card** (from a chip, a list, or a click inside the selected own region close to one of its borders or coasts): ours | theirs, then *Send corps…* (the nearest corps that can reach it over land, with march time – `marchEta` in `sim/posts.ts`), *Fortify…* (the works grid for this border), *Scout…* (patrol, flight from an airfield in reach, spy), *Attack*.
+- **Left rail**: Situation, Staff, Forces, **Economy** (supply, shell and manpower ledgers from `incomeTerms` / `shellTerms` / `poolTerms`, buying shells, conscription, supply lines in trouble), **Navy** (fleets and ports), **Intel** (agents, scouts out, the borders we know least about with a patrol button, latest reports), Nation, Reports, Diplomacy, **Rules**, Calendar. The rail scrolls and tightens on short screens.
+- **Preview**: with corps selected, hovering a region shows what a right-click would do – where they go and how long it takes, or the attack with ours : theirs and when they go in.
+- **Rules** overlay: Fronts, Corps, Commanders, Scouting, Supply & men – every number read from the simulation's constants.
+- Fixed on the way: the column list of the Deploy section crashed for columns heading to a coast.
+- Not yet: right-click-and-hold route lines on the map, battle and fleet cards (the existing bottom battle bar and fleet card stay), the top-strip "Staff" counter.
 

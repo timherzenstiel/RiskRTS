@@ -77,16 +77,9 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
           title="Unlocks squadrons and reconnaissance flights here" onBuy={() => build(id, 'airfield')} />; })()}
       </CameoGrid>
       <Railways region={region} id={id} />
-      <div className="lbl"><span>Munitions · {Math.floor(sim.g.factions[sim.me].shells ?? 0)} shells in stock</span></div>
-      <div className="it">
-        <span className="ic"><Icon k="art" /></span>
-        <div className="tx"><b>Shell production</b><small>Turn supply into shells for the guns · 1 supply = {SHELLS.perSupply} shells</small></div>
-        <div className="buys">
-          <button className="buy" disabled={supply < 1} onClick={() => useUi.getState().order({ t: 'produce', kind: 'shells', n: 1 })}>+{SHELLS.perSupply} <SupplyIcon />1</button>
-          <button className="buy five" disabled={supply < 5} aria-label={`Buy ${SHELLS.perSupply * 5} shells for 5 supply`} onClick={() => useUi.getState().order({ t: 'produce', kind: 'shells', n: 5 })}>×5</button>
-        </div>
-      </div>
-      <p className="note">Trenches, sandbags, wire and fixed defences are dug on a specific border in the <b>Fortify</b> tab.</p>
+      <div className="lbl"><span>Defences in the interior · they join the first front of every battle here</span></div>
+      <FortGrid region={region} id={id} sector={-1} />
+      <p className="note">Trenches, wire and defences on a border are built from its border card: click the border on the map, or a chip in Fronts mode.</p>
     </>
   );
 }
@@ -132,24 +125,33 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
           );
         })}
       </div>
-      {sector > -2 ? (
-        <>
-          <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `${sector >= 1000 ? `Works on the ${W.zones[sector - 1000].name} coast only fight landings there` : `Works facing ${W.regions[sector].name} only fight attacks from there`} · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
-          <CameoGrid label="Works">
-            {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
-              const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
-              const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
-              const early = need && !techOn(g, me, need);
-              const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
-              const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
-              const cost = c === null ? 'Max' : !room && !early ? 'Full' : <><SupplyIcon />{c}</>;
-              return <Cameo key={k} k={k} name={FNAME[k]} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
-                count={k === 'trench' || k === 'sand' || k === 'wire' ? undefined : here(sector).filter(d => d.k === k).length}
-                title={FDESC[k]} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
-            })}
-          </CameoGrid>
-        </>
-      ) : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}
+      {sector > -2 ? <FortGrid region={region} id={id} sector={sector} /> : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}
+    </>
+  );
+}
+
+/** What can be dug or built on one sector of an own region (a border, a coast, or -1 the interior), as cameos. */
+export function FortGrid({ region, id, sector }: { region: RegionState; id: number; sector: number }) {
+  const sim = useSim(); const ui = useUi.getState;
+  if (!sim) return null;
+  const { g, me } = sim, W = buildWorld(), supply = g.factions[me].supply;
+  const here = (s: number) => region.defs.filter(d => d.s === s && d.f === region.owner);
+  return (
+    <>
+      <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `${sector >= 1000 ? `Works on the ${W.zones[sector - 1000].name} coast only fight landings there` : `Works facing ${W.regions[sector].name} only fight attacks from there`} · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
+      <CameoGrid label="Works">
+        {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
+          const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
+          const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
+          const early = need && !techOn(g, me, need);
+          const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
+          const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
+          const cost = c === null ? 'Max' : !room && !early ? 'Full' : <><SupplyIcon />{c}</>;
+          return <Cameo key={k} k={k} name={FNAME[k]} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
+            count={k === 'trench' || k === 'sand' || k === 'wire' ? undefined : here(sector).filter(d => d.k === k).length}
+            title={FDESC[k]} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
+        })}
+      </CameoGrid>
     </>
   );
 }
@@ -237,7 +239,7 @@ export function AttackBudget() {
   return <p className={'note budget' + (n >= cap ? ' full' : '')}>Attacks under way: <b>{n} / {cap}</b>{n >= cap ? ' · wait for one to end before opening a new front' : ''}</p>;
 }
 
-function AirSection({ region, id }: { region: RegionState; id: number }) {
+export function AirSection({ region, id }: { region: RegionState; id: number }) {
   const sim = useSim(); const orderMode = useUi(s => s.orderMode); const kind = useUi(s => s.orderKind);
   if (!sim || region.units.plane < 1) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState;
@@ -266,7 +268,7 @@ function AirSection({ region, id }: { region: RegionState; id: number }) {
 }
 
 /** Cavalry patrols over our borders, and reconnaissance flights from this region's airfield. */
-function ReconSection({ region, id }: { region: RegionState; id: number }) {
+export function ReconSection({ region, id }: { region: RegionState; id: number }) {
   const sim = useSim(); if (!sim) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState, supply = g.factions[me].supply;
   const foes = W.regions[id].adj.filter(n => g.regions[n].owner !== me);
@@ -294,7 +296,7 @@ function ReconSection({ region, id }: { region: RegionState; id: number }) {
 }
 
 /** Decoy marches: rivals watching see an army that is not there; into an own border region it fakes a concentration. */
-function Feints({ region, id }: { region: RegionState; id: number }) {
+export function Feints({ region, id }: { region: RegionState; id: number }) {
   const sim = useSim(); if (!sim || region.battle >= 0) return null;
   const { g, me } = sim, W = buildWorld(), supply = g.factions[me].supply;
   const adj = W.regions[id].adj;

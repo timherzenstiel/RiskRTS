@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CORPS_CAP, FORMATION, UNIT_TYPES, applyCommand, autoDeploy, buildWorld, corpsAtPost, corpsIn, createGame, depotOf, emptyUnits, findCorps,
-  frontsOf, groundUnits, migrateState, run, step, updateSupplyLines, type GameState,
+  frontsOf, groundUnits, marchEta, migrateState, run, step, updateSupplyLines, type GameState,
 } from '../src';
 import { setCs } from './helpers';
 
@@ -137,4 +137,12 @@ describe('corps', () => {
     expect(checks).toBeGreaterThan(0); expect(ids).toBeGreaterThan(100);
     expect(g.battles.length + g.reports.length).toBeGreaterThan(0);
   }, 120000);
+
+  it('march times: within a region, through own land (longer the further), none through enemy land', () => {
+    const { g, A, B } = setup(); const C = id('Iberia'); g.regions[C].owner = 0;
+    const inner = marchEta(g, 0, A, -1, A, B)!, out = marchEta(g, 0, A, -1, C, -1)!;
+    expect(inner).toBeGreaterThan(0); expect(out).toBeGreaterThan(inner);
+    expect(marchEta(g, 0, A, -1, B, -1)).toBeNull();
+  });
 });
+

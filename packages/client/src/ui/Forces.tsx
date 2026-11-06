@@ -1,7 +1,7 @@
 // Corps as objects (design-command §2): the Forces panel (order of battle), the corps card for the selected corps, and the
 // orders the map gives them – right-click an own region or border to move the selected corps there, an enemy region to attack.
 import {
-  CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, findCorps,
+  ASSEMBLE, CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderBalance, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, findCorps, marchEta, moveK,
   frontsOf, fullMen, groundUnits, groupName, menTotal, sectorPoint, wrapDx, type Army, type Corps, type GameState, type Order, type RegionState, type Stance, type Units, type World,
 } from '@riskrts/shared';
 import { useState } from 'react';
@@ -68,6 +68,35 @@ export function orderCorps(target: number, pt?: { x: number; z: number }) {
 function pickCorps(r: RegionState, c: Corps, add: boolean) {
   useUi.getState().selectCorps([c.id], add, r.id);
   if (!add) { const p = sectorPoint(buildWorld(), r.id, c.p); rendererRef.current?.flyToPoint?.(p.x, p.z, 22); }
+}
+
+// ---------------------------------------------------------------- preview
+
+/** What a right-click on the hovered region would do with the selected corps: where they go, how long it takes, the odds. */
+export function OrderPreview() {
+  const ids = useUi(s => s.corps); const hover = useUi(s => s.hover); const orderMode = useUi(s => s.orderMode); const goal = useUi(s => s.goal); const sim = useSim();
+  if (!sim || !ids.length || hover < 0 || orderMode) return null;
+  const { g, me } = sim, W = buildWorld(), T = g.regions[hover], found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
+  if (!found.length) return null;
+  const btl = found.reduce((s, x) => s + groundUnits(x.c.u), 0), who = found.length === 1 ? groupName(me, 1, found[0].c.n) : `${found.length} corps`;
+  let line: string, cls = 'mv', sub = '';
+  if (T.owner === me) {
+    const etas = found.map(x => marchEta(g, me, x.r.id, x.c.p, hover, -1)).filter((x): x is number => x !== null);
+    line = `Move ${who} (${btl} btl) to ${W.regions[hover].name}`;
+    sub = etas.length < found.length ? `${found.length - etas.length} cannot get there over land` : `about ${Math.round(Math.max(...etas))} s · right-click near a border to stand there`;
+  } else {
+    cls = 'atk';
+    const can = found.filter(x => W.regions[x.r.id].land.includes(hover));
+    line = `${goal === 2 ? 'Invade' : 'Take the first line of'} ${W.regions[hover].name} with ${can.length === found.length ? who : `${can.length} of ${found.length} corps`}`;
+    if (!can.length) { cls = 'no'; sub = 'None of them borders it'; }
+    else {
+      const b = borderBalance(g, can[0].r.id, hover), mine = can.reduce((s, x) => s + groundUnits(x.c.u), 0);
+      const t = Math.max(...can.map(x => (marchEta(g, me, x.r.id, x.c.p, x.r.id, hover) ?? 0))) + ASSEMBLE * moveK(g);
+      const their = b.know ? `${b.their.btl[0] + b.their.reserve[0]}–${b.their.btl[1] + b.their.reserve[1]}` : '?';
+      sub = `ours ${mine} btl : theirs ${their}${b.massing ? ' · massing' : ''} · goes in after about ${Math.round(t)} s${(T.owner >= 0 && FACTIONS[T.owner]) ? ` · ${FACTIONS[T.owner].short}` : ''}`;
+    }
+  }
+  return <div id="preview" className={'plate ' + cls} role="status"><b>{line}</b><small>{sub}</small></div>;
 }
 
 // ---------------------------------------------------------------- forces panel

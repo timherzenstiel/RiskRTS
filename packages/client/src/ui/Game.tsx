@@ -13,6 +13,8 @@ import { Sidebar } from './Sidebar';
 import { Alerts, LeftRail, SituationPanel } from './Situation';
 import { ForcesPanel } from './Forces';
 import { StaffPanel } from './Staff';
+import { EconomyPanel, IntelPanel, NavyPanel } from './Panels';
+import { OrderPreview } from './Forces';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -96,6 +98,10 @@ export function Game() {
       <SituationPanel />
       <ForcesPanel />
       <StaffPanel />
+      <EconomyPanel />
+      <NavyPanel />
+      <IntelPanel />
+      <OrderPreview />
       <Alerts />
       <OfferBanner />
       <div id="leftcol"><Feed /></div>

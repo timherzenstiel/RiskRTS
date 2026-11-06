@@ -310,6 +310,18 @@ export function landRoute(g: GameState, f: number, from: number, to: number): nu
   return null;
 }
 
+/** Seconds a column of power `f` needs from a post of `from` to a post of `to` through own land (null: no route). */
+export function marchEta(g: GameState, f: number, from: number, fromPost: number, to: number, toPost: number): number | null {
+  if (from === to) return Math.max(MOVE_MIN, legDist(from, fromPost, to, toPost) / POST_SPEED * moveK(g) * weatherMarch(g, f, to));
+  const route = landRoute(g, f, from, to); if (!route) return null;
+  const path = [from, ...route]; let t = 0;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = path[i], b = path[i + 1], pa = i === 0 ? fromPost : path[i - 1], pb = i + 2 < path.length ? path[i + 2] : toPost;
+    t += Math.max(CROSS_MIN * moveK(g), legDist(a, pa, b, pb) / POST_SPEED * moveK(g) * marchFactor(g, f, a, b).k);
+  }
+  return t;
+}
+
 /** First leg of a route: the post to aim for in the next region (its border towards the region after it, or the final post). */
 const legPost = (path: number[], i: number, fin: number) => i + 1 < path.length ? path[i + 1] : fin;
 

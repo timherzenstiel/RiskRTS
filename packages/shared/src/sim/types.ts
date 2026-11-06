@@ -178,6 +178,8 @@ export interface Army {
   inner?: boolean;
   /** Aircraft from (and back to) a carrier. */
   cv?: number;
+  /** Scouts sent out at a commander's request (his traits can help them). */
+  hq?: number;
   /** A whole corps on the move (it takes up its post again on arrival). */
   ct?: CorpsTag;
 }
@@ -402,7 +404,7 @@ export type GameEvent =
   | { k: 'strait'; link: number; open: boolean; region: number }
   /** Commanders: a corps sent back to the player (and why), a critical request filed. */
   | { k: 'release'; faction: number; army: number; n: number; region: number; why: HqNote['why'] }
-  | { k: 'request'; faction: number; army: number; kind: ReqKind; region: number; sector: number };
+  | { k: 'request'; faction: number; army: number; kind: ReqKind; region: number; sector: number; urg: 0 | 1 | 2; req: number };
 
 export interface GameStats { won: number[]; lost: number[] }
 
@@ -473,6 +475,8 @@ export interface Req {
   own?: number; their?: [number, number]; ratio?: number | null; massing?: boolean;
   /** Release: why the corps are not needed (a treaty with the power across, or the border is safe). */
   why?: 'peace' | 'safe';
+  /** Reconnaissance: by cavalry patrol, flight or spy, from which region (patrol: the border region; flight: an airfield), and what for. */
+  by?: 'patrol' | 'recon' | 'spy'; from?: number; for?: 'watch' | 'attack' | 'target';
 }
 
 export interface Spy { id: number; f: number; region: number; eta: number; /** Exposed by sabotage until this day: twice as likely to be caught. */ hot?: number }

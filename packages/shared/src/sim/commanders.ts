@@ -8,16 +8,16 @@
 //    approval or a budget for that kind.
 // Corps the player orders by hand (`man`) stay in the army but the commander leaves them alone. Runs inside the simulation, so
 // every client and the server agree.
-import { COST, TICK_SECONDS, groundUnits } from '../data/units';
+import { AIR_RANGE, COST, TICK_SECONDS, groundUnits } from '../data/units';
 import { commanderName, commanderTraits, type TraitKey } from '../data/commanders';
 import { isCoast, zoneOfKey } from '../world/zones';
-import { emit, frontsOf, rnd, world, worksAt } from './core';
+import { emit, frontsOf, hops, rnd, world, worksAt } from './core';
 import { atWar } from './navy';
 import { allied } from './diplomacy';
 import { borderBalance, WORK_MULT, type Balance } from './balance';
-import { fogView } from './fog';
+import { MAX_SPIES, activeSpies, fogView } from './fog';
 import { income } from './economy';
-import { capCheck, fortCost, fortify, patrol, recruit, setOrder } from './commands';
+import { capCheck, fortCost, fortify, patrol, recon, recruit, setOrder, spy } from './commands';
 import { techOn } from './tech';
 import { unitCost } from './rules';
 import { moraleCap } from './battle';
@@ -30,6 +30,8 @@ export const THINK = 3, MAX_REQ = 3, DENY_WEEKS = 3;
 export const SAFE_RATIO = 2.5, ATTACK_RATIO = 1.5, FALLBACK_RATIO = .5;
 /** Most of a week's income a commander may be given to spend himself. */
 export const BUDGET_MAX = .3;
+/** Days after which a report counts as old for watching a border, and how fresh it must be before a commander proposes an attack. */
+export const REPORT_OLD = 21, REPORT_FRESH = 7;
 /** Fewest battalions a commander proposes to attack with. */
 export const MIN_ATTACK = 3;
 
@@ -102,6 +104,18 @@ export function transferCandidate(g: GameState, f: number, q: Req): { r: RegionS
 }
 
 // ---------------------------------------------------------------- looking at the front
+
+/** An own airfield that reaches `target`: front regions first, then the nearest. -1 if none. */
+export function airfieldFor(g: GameState, f: number, target: number, front: number[] = []): number {
+  let best = -1, bd = Infinity;
+  for (const r of g.regions) {
+    if (r.owner !== f || !r.airfield || r.contested >= 0) continue;
+    const d = hops(r.id, target, AIR_RANGE); if (d > AIR_RANGE) continue;
+    const s = d - (front.includes(r.id) ? 1 : 0);
+    if (s < bd) { bd = s; best = r.id; }
+  }
+  return best;
+}
 
 interface Border { r: RegionState; s: number; bal: Balance; want: number; have: number; theirs: number }
 const worksMult = (b: Balance) => 1 + WORK_MULT.trench * b.own.trench + WORK_MULT.sand * b.own.sand + WORK_MULT.wire * b.own.wire;
@@ -202,6 +216,16 @@ export function think(g: GameState, h: Hq, V: GameState) {
 
   // ---------------------------------------------------------------- requests
   const asks: Omit<Req, 'id' | 'owner' | 'army' | 'at'>[] = [];
+  /** Our latest report on a region is at most `days` old (or we see it in full). */
+  const fresh = (nb: number, days: number) => { const o = V.regions[nb]; return (o.vis ?? 3) >= 3 || (o.seen !== undefined && g.day - o.seen <= days); };
+  /** Ask to scout an enemy region across border `b`: a flight from an airfield in reach (it sees more), else a cavalry patrol. */
+  const scout = (b: Border, urg: 0 | 1, purpose: 'watch' | 'attack' | 'target') => {
+    const key = `recon|${b.s}`; if (asks.some(a => a.key === key)) return;
+    const air = techOn(g, f, 'air') ? airfieldFor(g, f, b.s, h.front) : -1;
+    asks.push(air >= 0
+      ? { kind: 'recon', by: 'recon', from: air, for: purpose, key, urg, region: b.r.id, sector: b.s, cost: COST.recon, ...bal(b) }
+      : { kind: 'recon', by: 'patrol', from: b.r.id, for: purpose, key, urg, region: b.r.id, sector: b.s, cost: COST.patrol, ...bal(b) });
+  };
   const bal = (b: Border) => ({ own: b.bal.own.btl[0] + b.bal.own.reserve[0], their: [b.bal.their.btl[0] + b.bal.their.reserve[0] + b.bal.their.incoming, b.bal.their.btl[1] + b.bal.their.reserve[1] + b.bal.their.incoming] as [number, number], ratio: b.bal.ratio, massing: b.bal.massing });
   for (const b of bs) {
     const fight = fighting(b.r, b.s), mineHere = corpsIn(b.r).filter(c => c.p === b.s && c.army === h.id && !c.man);
@@ -217,17 +241,30 @@ export function think(g: GameState, h: Hq, V: GameState) {
       const cost = kind ? fortCost(b.r, kind, b.s, g) : null;
       if (kind && cost !== null) asks.push({ kind: 'fort', key: `fort|${b.r.id}|${b.s}`, urg: 0, region: b.r.id, sector: b.s, fort: kind, cost, ...bal(b) });
     }
-    // a patrol where we know nothing, or only an old report
-    if (!isCoast(b.s) && (b.bal.know === 0 || (b.bal.know === 2 && g.day - (b.bal.day ?? g.day) > 21))) asks.push({ kind: 'recon', key: `recon|${b.r.id}|${b.s}`, urg: 0, region: b.r.id, sector: b.s, cost: COST.patrol, ...bal(b) });
+    // reconnaissance: where the border is not safe and our report is missing or old (an Intelligence officer wants every border
+    // looked at each week)
+    if (!isCoast(b.s) && !fresh(b.s, has(h, 'intel') ? REPORT_FRESH : REPORT_OLD) && (has(h, 'intel') || b.bal.danger >= 1 || b.bal.massing)) scout(b, 0, 'watch');
     // permission to attack: a local first-line attack under Active defence, the offensive on the target under Offensive
     const idle = mineHere.filter(c => (c.ord ?? 0) === 0);
     const aim = h.mandate === 2 ? (b.s === h.target ? 2 : 0) : h.mandate === 1 ? 1 : 0;
     const going = idle.reduce((n, c) => n + corpsSize(c), 0);
-    if (aim && !isCoast(b.s) && !fight && going >= Math.max(MIN_ATTACK, Math.ceil(b.theirs * 1.5)) && b.bal.know >= 1 && b.bal.ratio !== null && b.bal.ratio >= attackRatio(h) && b.have >= b.want && !frontsOf(g, b.s).length && !capCheck(g, f, b.s))
+    const could = aim && !isCoast(b.s) && !fight && going >= Math.max(MIN_ATTACK, Math.ceil(b.theirs * 1.5)) && b.bal.know >= 1 && b.bal.ratio !== null && b.bal.ratio >= attackRatio(h) && b.have >= b.want && !frontsOf(g, b.s).length && !capCheck(g, f, b.s);
+    // he proposes an attack only on a fresh report; first he asks for one
+    if (could && !fresh(b.s, REPORT_FRESH)) scout(b, 1, 'attack');
+    if (could && fresh(b.s, REPORT_FRESH))
       asks.push({ kind: 'attack', key: `atk|${b.r.id}|${b.s}`, urg: 1, region: b.r.id, sector: b.s, corps: idle.map(c => c.id), goal: aim === 2 ? 2 : 1, ...bal(b) });
     // permission to fall back from a border that cannot be held
     if (!has(h, 'care') && !fight && b.bal.danger === 3 && b.bal.ratio !== null && b.bal.ratio < (has(h, 'caut') ? .7 : FALLBACK_RATIO) && mineHere.length && !spare.length)
       asks.push({ kind: 'fallback', key: `fb|${b.r.id}|${b.s}`, urg: 2, region: b.r.id, sector: b.s, corps: mineHere.map(c => c.id), ...bal(b) });
+  }
+  // an Offensive wants eyes on the target all the time: a spy there if one can be sent, else flights or patrols
+  if (h.mandate === 2 && h.target !== undefined && g.regions[h.target].owner !== f) {
+    const T = h.target, edge = bs.find(b => b.s === T);
+    const spying = activeSpies(g, f).some(s => s.region === T) || g.spies.some(s => s.f === f && s.region === T);
+    const cap = g.regions.find(r => r.capitalOf === f);
+    if (!spying && g.spies.filter(s => s.f === f).length < MAX_SPIES && cap && cap.owner === f)
+      asks.push({ kind: 'recon', by: 'spy', for: 'target', key: `spy|${T}`, urg: 0, region: edge?.r.id ?? h.front[0], sector: T, cost: COST.spy, ...(edge ? bal(edge) : {}) });
+    else if (!spying && edge && !fresh(T, REPORT_FRESH)) scout(edge, 0, 'target');
   }
   // permission to send corps back: those across from a power we have a treaty with, and those the front does not need
   for (const why of ['peace', 'safe'] as const) {
@@ -249,7 +286,8 @@ function file(g: GameState, h: Hq, asks: Omit<Req, 'id' | 'owner' | 'army' | 'at
     const old = byKey.get(a.key) ?? (a.kind === 'release' ? mine.find(q => q.kind === 'release' && q.why === a.why) : undefined);
     const q: Req = { ...(old ?? {}), ...a, id: old?.id ?? g.nextId++, owner: h.owner, army: h.id, at: old?.at ?? g.time } as Req;
     next.push(q);
-    if (!old && q.urg === 2) emit(g, { k: 'request', faction: h.owner, army: h.id, kind: q.kind, region: q.region, sector: q.sector });
+    // a new request (or one that has become critical) goes out over the radio
+    if (!old || (q.urg === 2 && old.urg < 2)) emit(g, { k: 'request', faction: h.owner, army: h.id, kind: q.kind, region: q.region, sector: q.sector, urg: q.urg, req: q.id });
   }
   g.requests = [...all.filter(q => q.army !== h.id), ...next];
   for (const k of Object.keys(h.deny)) if (h.deny[k] < g.time) delete h.deny[k];
@@ -294,7 +332,13 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
       break;
     }
     case 'fort': { const e = fortify(g, f, r, q.fort ?? 'trench', q.sector); if (e) return e; break; }
-    case 'recon': { const e = patrol(g, f, q.region, q.sector); if (e) return e; break; }
+    case 'recon': {
+      const e = q.by === 'spy' ? spy(g, f, q.sector) : q.by === 'recon' ? recon(g, f, q.from ?? q.region, q.sector) : patrol(g, f, q.from ?? q.region, q.sector);
+      if (e) return e;
+      // the scouts remember who sent them (an Intelligence officer's are caught less often)
+      if (q.by !== 'spy') { const a = g.armies[g.armies.length - 1]; if (a?.scout) a.hq = h.id; }
+      break;
+    }
     case 'attack': {
       let ok = 0, err: string | null = null;
       for (const cid of q.corps ?? []) { const c = corpsById(r, cid); if (!c || c.p !== q.sector) continue; const e = setOrder(g, f, q.region, q.sector, q.goal ?? 1, false, undefined, cid); if (e) err ??= e; else ok++; }

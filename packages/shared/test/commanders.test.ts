@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATION, UNIT_TYPES, applyCommand, buildWorld, corpsAtPost, corpsIn, createGame, emptyUnits, findCorps, fogView, hqOf, makeSnapshot,
-  createMirror, initMirrorCapitals, applySnapshot, run, updateSupplyLines, type GameState, type Hq,
+  createMirror, initMirrorCapitals, applySnapshot, recordIntel, run, updateSupplyLines, type GameState, type Hq,
 } from '../src';
 import { setCs } from './helpers';
 
@@ -103,6 +103,11 @@ describe('front commanders', () => {
     setCs(g, A, [[B, { inf: 20 }]]);
     setCs(g, B, [[A, { inf: 4 }]]);
     army(g, A);
+    run(g, 4);
+    // without a fresh report he first asks for one
+    expect(reqs(g, 'attack').length).toBe(0);
+    const sc = reqs(g, 'recon')[0]; expect(sc?.for).toBe('attack');
+    recordIntel(g, 0, B);
     run(g, 30);
     expect(corpsIn(g.regions[A]).every(c => (c.ord ?? 0) === 0)).toBe(true);
     const q = reqs(g, 'attack')[0];
@@ -148,5 +153,28 @@ describe('front commanders', () => {
     }
     expect((g.hq ?? []).every(h => h.front.every(id => g.regions[id].owner === 3))).toBe(true);
   }, 120000);
+
+  it('scouting: a flight where an airfield reaches, a spy on an Offensive target, and Intelligence officers watch every border', () => {
+    const { g, A, B } = setup(); g.regions[A].units.inf = 20; g.regions[B].units.inf = 4; fill(g);
+    setCs(g, A, [[B, { inf: 20 }]]); setCs(g, B, [[A, { inf: 4 }]]);
+    g.regions[A].airfield = true; g.day = 800; // aircraft unlocked
+    const h = army(g, A);
+    run(g, 4);
+    const q = reqs(g, 'recon')[0];
+    expect(q.by).toBe('recon'); expect(q.from).toBe(A); expect(q.for).toBe('attack');
+    expect(applyCommand(g, 0, { t: 'reply', req: q.id, opt: 'yes' })).toBeNull();
+    expect(g.armies.some(a => a.scout === 'recon' && a.hq === h.id)).toBe(true);
+    expect(applyCommand(g, 0, { t: 'armySet', army: h.id, target: B })).toBeNull();
+    run(g, 4);
+    const s = reqs(g, 'recon').find(x => x.by === 'spy');
+    expect(s?.for).toBe('target');
+    expect(applyCommand(g, 0, { t: 'reply', req: s!.id, opt: 'yes' })).toBeNull();
+    expect(g.spies.some(x => x.f === 0 && x.region === B)).toBe(true);
+    // an Intelligence officer wants a look at a quiet border too
+    const t = setup(); t.g.regions[t.A].units.inf = 20; t.g.regions[t.B].units.inf = 2; fill(t.g);
+    setCs(t.g, t.A, [[t.B, { inf: 20 }]]); setCs(t.g, t.B, [[t.A, { inf: 2 }]]);
+    const h2 = army(t.g, t.A); h2.mandate = 0; run(t.g, 4); expect(reqs(t.g, 'recon').length).toBe(0);
+    h2.cmd.tr = ['intel', 'insp']; run(t.g, 4); expect(reqs(t.g, 'recon')[0]?.for).toBe('watch');
+  });
 });
 

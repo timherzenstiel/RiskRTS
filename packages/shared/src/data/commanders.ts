@@ -1,7 +1,7 @@
 // Front commanders (design-command §2.5): traits and invented names per power. The names are made up from common first names
 // and surnames of each country; they are not meant to be, and should not be read as, real persons.
 
-export type TraitKey = 'off' | 'meth' | 'def' | 'caut' | 'insp' | 'care';
+export type TraitKey = 'off' | 'meth' | 'def' | 'caut' | 'insp' | 'care' | 'intel';
 export interface TraitDef { name: string; desc: string }
 export const TRAITS: Record<TraitKey, TraitDef> = {
   off: { name: 'Offensive spirit', desc: 'Proposes attacks at 1.2× our strength instead of 1.5×' },
@@ -10,11 +10,12 @@ export const TRAITS: Record<TraitKey, TraitDef> = {
   caut: { name: 'Cautious', desc: 'Asks to fall back sooner (below 0.7×), sends spare corps back only with a wide margin' },
   insp: { name: 'Inspiring', desc: 'His corps regain morale faster (+3 per week)' },
   care: { name: 'Careless', desc: 'Proposes attacks at 1.3×, never asks to fall back, keeps no reserve' },
+  intel: { name: 'Intelligence officer', desc: 'Wants a fresh report on every hostile border each week; his patrols and flights are caught half as often' },
 };
 export const TRAIT_KEYS = Object.keys(TRAITS) as TraitKey[];
 
 /** Traits each power's officer corps leans to (drawn twice as often). British Empire, France, Russia, Germany, Austria-Hungary, Ottomans, United States. */
-export const TRAIT_BIAS: TraitKey[][] = [['caut', 'off'], ['def', 'meth'], ['off', 'care'], ['meth', 'def'], ['caut', 'care'], ['def', 'insp'], ['off', 'insp']];
+export const TRAIT_BIAS: TraitKey[][] = [['caut', 'intel'], ['def', 'meth'], ['off', 'care'], ['meth', 'intel'], ['caut', 'care'], ['def', 'insp'], ['off', 'insp']];
 
 const FIRST: string[][] = [
   ['Arthur', 'Henry', 'Edward', 'Charles', 'Walter', 'Frederick', 'Hugh', 'Reginald', 'Percy', 'Lionel'],

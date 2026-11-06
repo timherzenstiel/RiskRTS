@@ -25,7 +25,7 @@ import { ASSEMBLE, CORPS_CAP, UNREG, addToGroup, armyNo, autoDeploy, column, col
 import { allied } from './diplomacy';
 import { buildPort, buildShip, coastal, dock, landing, shipTroops, station } from './navy';
 import { breakOff } from './naval';
-import { assignArmy, disband, formArmyHq, relieve, reply, setArmy } from './commanders';
+import { assignArmy, disband, formArmyHq, hqOf, relieve, reply, setArmy } from './commanders';
 import { carrierAir, embarkAir, landOnCarrier } from './carrier';
 import { isCoast } from '../world/zones';
 import { SHIP_KINDS } from '../data/sea';
@@ -501,6 +501,9 @@ export function shift(g: GameState, fid: number, r: RegionState, bid: number): s
 
 export const armyPos = (a: Army): [number, number] => { let x = a.ax + a.dx * a.t; if (x < -HW) x += 2 * HW; if (x > HW) x -= 2 * HW; return [x, a.az + a.dz * a.t]; };
 
+/** Scouts sent by an Intelligence officer are caught half as often. */
+const sharp = (g: GameState, a: Army) => a.hq !== undefined && hqOf(g, a.hq)?.cmd.tr.includes('intel') ? .5 : 1;
+
 /** A patrol or reconnaissance flight reaches its target: it may be caught, otherwise it files its report. */
 function scoutArrives(g: GameState, a: Army) {
   const t = g.regions[a.to];
@@ -508,12 +511,12 @@ function scoutArrives(g: GameState, a: Army) {
   if (a.scout === 'patrol') {
     const nest = t.defs.filter(d => d.f === t.owner && d.s === a.from && (d.k === 'pill' || d.k === 'bunk')).length;
     const p = Math.min(.8, .05 + .12 * nest + .1 * worksAt(t, a.from).wire);
-    if (rnd(g) < p) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'patrol' }); return; }
+    if (rnd(g) < p * sharp(g, a)) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'patrol' }); return; }
     recordIntel(g, a.owner, t.id, a.from);
   } else {
     const flak = t.defs.filter(d => d.f === t.owner && d.k === 'flak').length;
     const p = Math.min(.85, .05 + .2 * flak);
-    if (!hasDoc(g, a.owner, 'air') && rnd(g) < p) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'recon' }); return; }
+    if (!hasDoc(g, a.owner, 'air') && rnd(g) < p * sharp(g, a)) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'recon' }); return; }
     recordIntel(g, a.owner, t.id);
   }
   emit(g, { k: 'intel', faction: a.owner, region: t.id, by: a.scout! });

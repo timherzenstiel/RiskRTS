@@ -146,7 +146,7 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       return { text: `${who} sends ${corpsName(me, e.n)} back to you${e.why === 'peace' ? ': the border is at peace' : e.why === 'lost' ? ': the front is lost' : ': the front can spare it'}. It waits in ${R(e.region)}.`, cls: 'me', region: e.region };
     }
     case 'request': {
-      if (e.faction !== me) return null;
+      if (e.faction !== me || e.urg < 2) return null;
       const h = (g.hq ?? []).find(x => x.id === e.army), who = h ? h.cmd.name : 'A commander';
       const what = e.kind === 'men' ? 'urgently asks for men' : e.kind === 'fallback' ? 'asks permission to fall back' : 'needs an answer';
       return { text: `${who} ${what} at ${R(e.region)}${e.sector >= 0 && e.sector < 1000 ? ` (${R(e.sector)} border)` : ''}. See the Staff panel.`, cls: 'bad', region: e.region };

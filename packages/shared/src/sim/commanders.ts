@@ -151,7 +151,8 @@ function borders(g: GameState, V: GameState, h: Hq): Border[] {
       if (bal.massing) want = Math.ceil(want * 1.5);
       if (h.mandate === 2 && s === h.target) want = Math.max(want, Math.ceil(theirs * 2) + 2);
       want = Math.max(1, want);
-      const have = bal.own.btl[0] + bal.own.incoming + (inc.get(id + '|' + s) ?? 0);
+      // recruits in training for this border count as on their way
+      const have = bal.own.btl[0] + bal.own.incoming + (inc.get(id + '|' + s) ?? 0) + (r.train ?? []).filter(t => t.p === s && t.army === h.id).length;
       out.push({ r, s, bal, want, have, theirs });
     }
   }
@@ -324,10 +325,9 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
       }
       const want = Math.max(1, Math.min(q.n ?? 1, Math.floor(n ?? q.n ?? 1)));
       let got = 0, err: string | null = null;
-      for (let i = 0; i < want; i++) { err = recruit(g, f, r, 'inf'); if (err) break; got++; }
+      // the recruits train for a week, then form up on the border that asked for them, in the army
+      for (let i = 0; i < want; i++) { err = recruit(g, f, r, 'inf', false, { p: q.sector, army: h.id }); if (err) break; got++; }
       if (!got) return err;
-      // the recruits form up on the border that asked for them, in the army
-      if (r.battle < 0) { const out = takeDepot(r, { inf: got }); addToGroup(g, r, q.sector, out.u, out.m, r.mor, { id: -1, n: 0, army: h.id }); }
       if (got < want) { q.n = (q.n ?? want) - got; return err; }
       break;
     }

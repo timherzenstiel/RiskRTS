@@ -33,7 +33,7 @@ export function NationSheet() {
       <div className="kicker">{FACTIONS[me].name} · Ministry of War</div><h2>The nation</h2>
       <NationCard f={me} compact />
       <div className="nstats">
-        <div><small>Manpower pool</small><b>{menStr(f.men ?? 0)}</b><span>+{menStr(grow)} per convoy</span></div>
+        <div><small>Manpower pool</small><b>{menStr(f.men ?? 0)}</b><span>+{menStr(grow)} per week</span></div>
         <div><small>War weariness</small><b className={f.ww >= N.unrest ? 'bad' : ''}>{Math.round(f.ww)}%</b><span>unrest at {N.unrest}%</span></div>
         <div><small>Battalion</small><b>{FORMATION.inf.men}</b><span>men from the pool</span></div>
       </div>
@@ -41,9 +41,9 @@ export function NationSheet() {
       <div className="seg mob" role="group" aria-label="Conscription">
         {MOB.map((m, i) => <button key={m} aria-pressed={mob === i} onClick={() => { click(); ui().order({ t: 'mobilise', level: i }); }}>{['Peacetime', 'Extended', 'Total'][i]}</button>)}
       </div>
-      <p className="muted small">Each level adds {Math.round(MANPOWER.mobGrowth * 100)}% to the manpower growth and {MANPOWER.mobWW} war weariness per convoy; under total conscription the weariness no longer fades. Above {N.unrest}% for {MANPOWER.strikeAfter} convoys, remote home regions go on strike; {MANPOWER.riseAbove} points higher they may rise.</p>
-      {strikes.length > 0 && <p className="notice">On strike: {strikes.map(r => W.regions[r.id].name).join(', ')}. No supply, shells or recruits from there until the weariness eases.</p>}
-      {f.unrestT > 0 && !strikes.length && <p className="notice">Unrest is brewing: {f.unrestT} convoy{f.unrestT === 1 ? '' : 's'} above the threshold.</p>}
+      <p className="muted small">Each level adds {Math.round(MANPOWER.mobGrowth * 100)}% to the manpower growth and {MANPOWER.mobWW} war weariness per week; under total conscription the weariness no longer fades. Above {N.unrest}% for {MANPOWER.strikeAfter} weeks, remote home regions go on strike; {MANPOWER.riseAbove} points higher they may rise.</p>
+      {strikes.length > 0 && <p className="notice">On strike: {strikes.map(r => W.regions[r.id].name).join(', ')}. No Production, shells or recruits from there until the weariness eases.</p>}
+      {f.unrestT > 0 && !strikes.length && <p className="notice">Unrest is brewing: {f.unrestT} week{f.unrestT === 1 ? '' : 's'} above the threshold.</p>}
       <div className="row"><button className="btn primary" onClick={close}>Back to the map</button></div>
     </Modal>
   );

@@ -124,7 +124,7 @@ export function DeployTab({ region, id }: { region: RegionState; id: number }) {
   return (
     <>
       <div className="lv-row deploy-mode">
-        <span className="lv-l" title="A region on Auto keeps about a third of its troops in the middle and spreads the rest over the threatened borders every convoy">Deploy</span>
+        <span className="lv-l" title="A region on Auto keeps about a third of its troops in the middle and spreads the rest over the threatened borders every week">Deploy</span>
         <div className="seg" role="group" aria-label="Deploy mode">
           <button aria-pressed={auto} onClick={() => { click(); ui().order({ t: 'deploy', region: id, mode: 0 }); }}>Auto</button>
           <button aria-pressed={!auto} onClick={() => { click(); ui().order({ t: 'deploy', region: id, mode: 1 }); }}>Manual</button>

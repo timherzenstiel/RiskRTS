@@ -584,6 +584,29 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 #labels.md4 .tl[data-v="1"] .n{background:#6e6a58;color:#f2ecdc}
 #labels.md4 .tl[data-v="2"] .n{background:#a88a56;color:#1b1407}
 #labels.md4 .tl.cp{display:none}
+/* Supply mode: own regions show load / capacity */
+#labels.md3 .tl[data-s="ok"] .n{background:#3f5a3a;color:#eef3e2;opacity:1}
+#labels.md3 .tl[data-s="near"] .n{background:#a88a3a;color:#1b1407;opacity:1}
+#labels.md3 .tl[data-s="over"] .n{background:#c46a2a;color:#fff6e8;opacity:1}
+#labels.md3 .tl[data-s="far"] .n,#labels.md3 .tl[data-s="cut"] .n{background:#9e2a22;color:#fff2ea;opacity:1}
+/* Phase 5: supply bar, training, levies, ledgers */
+.supbar{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin:2px 0 4px;padding:0 10px;font-size:12px}
+.supbar{color:#c9c2a8}.supbar .sb-l b{color:var(--fg)}.supbar .sb-n{font:400 13px var(--f-lcd);color:var(--lcd)}
+.supbar .sb-bar{height:7px;background:rgba(216,207,174,.12);border-radius:4px;overflow:hidden}
+.supbar .sb-bar i{display:block;height:100%;background:#5d7f4c}
+.supbar.near .sb-bar i{background:#b8952f}.supbar.over .sb-bar i{background:#c46a2a}.supbar.far .sb-bar i{background:#9e2a22}
+.supbar.over .sb-n,.supbar.far .sb-n{color:var(--alarm)}
+.training{margin:2px 0 6px;padding:0 10px;display:flex;flex-direction:column;gap:3px}
+#panel .training,.tb-body .training{padding:0}
+.training .tr-row{display:grid;grid-template-columns:1fr 60px 28px;white-space:nowrap;gap:8px;align-items:center;font-size:12px;color:#c9c2a8}
+.training .tr-bar{height:5px;background:rgba(216,207,174,.12);border-radius:3px;overflow:hidden}
+.training .tr-bar i{display:block;height:100%;background:var(--brass,#b59a5a)}
+.training small{text-align:right;opacity:.75}
+.levy{display:flex;gap:6px;align-items:center;font-size:12px;color:#e6dcc0;margin:2px 0 8px;padding:6px 8px;background:rgba(158,42,34,.08);border:1px solid rgba(158,42,34,.3);border-radius:4px}
+.ledger.two thead td{font:600 10px var(--f-body);color:#c9c2a8;text-transform:uppercase;letter-spacing:.06em;opacity:.65;text-align:right}
+.ledger.two thead td:first-child{text-align:left}
+.ledger.two tbody td:nth-child(2){text-align:right;font:400 14px var(--f-lcd);color:var(--lcd);white-space:nowrap;opacity:.8}
+.ledger.two tbody td:nth-child(2).neg{color:var(--alarm)}
 
 /* phase 2: corps as objects – Forces panel (order of battle), corps card, selected corps markers */
 .oob-sum{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:6px 2px 4px}

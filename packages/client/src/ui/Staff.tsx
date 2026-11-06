@@ -30,7 +30,7 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
     case 'men': {
       const k = n ?? q.n ?? 1, cost = (q.cost ?? 0) * k, t = transferCandidate(g, me, q);
       return { title: `${q.n} battalions for ${where}`, why: `The line is short: ${bal}.`, opts: [
-        { label: `Recruit ${k} · ${cost}`, opt: 'recruit', n: k, off: sup < cost, title: `${k} infantry battalions, raised at once in ${R(q.region)} and put on that border` },
+        { label: `Recruit ${k} · ${cost}`, opt: 'recruit', n: k, off: sup < cost, title: `${k} infantry battalions, raised in ${R(q.region)}: they train for a week, then take up that border` },
         { label: t ? `Send ${groupName(me, 1, t.c.n)}` : 'No corps free', opt: 'transfer', off: !t, title: t ? `${groupName(me, 1, t.c.n)} (${groundUnits(t.c.u)} btl) from ${R(t.r.id)} joins the army` : 'Form a corps from a depot first' },
         { label: 'Deny', opt: 'deny' },
       ] };

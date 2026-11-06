@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATION, UNIT_TYPES, applyCommand, buildWorld, corpsAtPost, corpsIn, createGame, emptyUnits, findCorps, fogView, hqOf, makeSnapshot,
-  createMirror, initMirrorCapitals, applySnapshot, recordIntel, run, updateSupplyLines, type GameState, type Hq,
+  createMirror, initMirrorCapitals, applySnapshot, recordIntel, run, step, updateSupplyLines, type GameState, type Hq,
 } from '../src';
 import { setCs } from './helpers';
 
@@ -94,6 +94,10 @@ describe('front commanders', () => {
     const sup = g.factions[0].supply;
     expect(applyCommand(g, 0, { t: 'reply', req: q.id, opt: 'recruit', n: 3 })).toBeNull();
     expect(g.factions[0].supply).toBeLessThan(sup);
+    // they train for a week first – and count as on their way, so he does not ask again for them
+    expect(g.regions[A].train?.filter(t => t.p === B && t.army === h.id).length).toBe(3);
+    for (const t of g.regions[A].train!) t.at = g.time;
+    step(g, .05);
     const here = corpsAtPost(g.regions[A], B).filter(c => c.army === h.id);
     expect(here.reduce((s, c) => s + c.u.inf, 0)).toBe(5);
   });

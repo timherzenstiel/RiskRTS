@@ -7,8 +7,8 @@ import { Modal } from './Modal';
 
 const KINDS: TreatyKind[] = ['cease', 'nap', 'ally'];
 const KDESC: Record<TreatyKind, string> = {
-  cease: `No attacks for ten convoys; running battles between you stop.`,
-  nap: 'No attacks until one side gives three convoys\' notice.',
+  cease: `No attacks for ten weeks; running battles between you stop.`,
+  nap: 'No attacks until one side gives three weeks\' notice.',
   ally: 'Shared vision, and supply lines may run through each other\'s regions.',
 };
 

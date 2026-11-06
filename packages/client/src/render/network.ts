@@ -1,14 +1,17 @@
 // Strategic overlays drawn into the shared line batch: the rail network (own lines bright, cut lines red, lines under
 // construction dashed) and mountain borders (a small range of peaks across the border). Plus weather particles close up.
 import * as THREE from 'three';
-import { MOUNTAINS, allRails, railKey, tileAtW, weatherAt, wrapDx, type GameState, type World } from '@riskrts/shared';
+import { MOUNTAINS, allRails, railKey, tileAtW, weatherAt, wrapDx, type GameState, type RouteLeg, type World } from '@riskrts/shared';
 import type { LineBatch } from './pools';
 import type { Terrain } from './terrain';
 import type { CameraRig } from './camera';
 import { F_DUST, F_THIN, type FxSystem } from './fxSystem';
 import { col } from './util';
 
-const C = { mine: col('#e9dcb4'), other: col('#7a6e58'), cut: col('#e0503c'), build: col('#e6b85c'), peak: col('#d6cdb6'), snow: col('#f2f4f6'), rain: col('#9fb0c0'), dust: col('#c2a46e') };
+/** Supply mode: the route that supplies the region under the cursor (or, when it is cut off, the line to where it broke). */
+export interface SupplyPath { from: number; legs: RouteLeg[] | null; brk: number }
+
+const C = { routeRail: col('#ffffff'), routeRoad: col('#ffcc40'), routeSea: col('#7cd0ff'), routeCut: col('#ff5a44'), mine: col('#e9dcb4'), other: col('#7a6e58'), cut: col('#e0503c'), build: col('#e6b85c'), peak: col('#d6cdb6'), snow: col('#f2f4f6'), rain: col('#9fb0c0'), dust: col('#c2a46e') };
 
 export class NetworkLayer {
   private readonly mtn: [number, number][];
@@ -16,10 +19,11 @@ export class NetworkLayer {
     this.mtn = MOUNTAINS.map(([a, b]) => [world.byName[a].id, world.byName[b].id]);
   }
 
-  /** Draw rails and mountain borders (strategic zoom only). */
-  draw(lines: LineBatch, g: GameState, me: number, rig: CameraRig) {
+  /** Draw rails and mountain borders (strategic zoom only), and in Supply mode the route of one region. */
+  draw(lines: LineBatch, g: GameState, me: number, rig: CameraRig, route: SupplyPath | null = null) {
     if (rig.dist < 9 || rig.dist > 140) return;
     const W = this.world, y = (id: number) => this.terrain.anchorH(id) + .12;
+    if (route) this.drawRoute(lines, route, rig, y);
     const seg = (a: number, b: number, c: THREE.Color, dash: boolean) => {
       const A = W.regions[a], B = W.regions[b], dx = wrapDx(A.cx, B.cx), dz = B.cz - A.cz, ya = y(a), yb = y(b);
       const n = dash ? 14 : 1;
@@ -45,6 +49,30 @@ export class NetworkLayer {
         lines.add(cx, my + h, cz, cx + px * s * .55, my, cz + pz * s * .55, C.peak);
       }
     }
+  }
+
+  /** A supply route as a broad line (several strands side by side), rail white, road amber, sea blue (dashed); a cut-off region
+   *  gets a red dashed line to where its route broke and a cross there. The source end gets a small diamond. */
+  private drawRoute(lines: LineBatch, p: SupplyPath, rig: CameraRig, y: (id: number) => number) {
+    const W = this.world, w = Math.max(.07, rig.dist * .0042), lift = .1 + rig.dist * .002;
+    const strand = (a: number, b: number, c: THREE.Color, dash: boolean) => {
+      const A = W.regions[a], B = W.regions[b], dx = wrapDx(A.cx, B.cx), dz = B.cz - A.cz, l = Math.hypot(dx, dz) || 1, px = -dz / l, pz = dx / l;
+      const ya = y(a) + lift, yb = y(b) + lift, n = dash ? Math.max(6, Math.round(l / .6)) : 1;
+      for (const o of [-1, -.5, 0, .5, 1]) for (let k = 0; k < n; k++) {
+        if (dash && k % 2) continue;
+        const t0 = k / n, t1 = (k + 1) / n, ox = px * o * w, oz = pz * o * w;
+        lines.add(A.cx + dx * t0 + ox, ya + (yb - ya) * t0, A.cz + dz * t0 + oz, A.cx + dx * t1 + ox, ya + (yb - ya) * t1, A.cz + dz * t1 + oz, c);
+      }
+    };
+    const mark = (id: number, c: THREE.Color, cross: boolean) => {
+      const R = W.regions[id], s = w * 6, h = y(id) + lift;
+      if (cross) { lines.add(R.cx - s, h, R.cz - s, R.cx + s, h, R.cz + s, c); lines.add(R.cx - s, h, R.cz + s, R.cx + s, h, R.cz - s, c); return; }
+      const pts: [number, number][] = [[s, 0], [0, s], [-s, 0], [0, -s]];
+      for (let k = 0; k < 4; k++) { const [x0, z0] = pts[k], [x1, z1] = pts[(k + 1) % 4]; lines.add(R.cx + x0, h, R.cz + z0, R.cx + x1, h, R.cz + z1, c); }
+    };
+    if (!p.legs) { if (p.brk >= 0) { strand(p.from, p.brk, C.routeCut, true); mark(p.brk, C.routeCut, true); } return; }
+    for (const l of p.legs) strand(l.a, l.b, l.sea ? C.routeSea : l.q >= 2 ? C.routeRail : C.routeRoad, l.sea);
+    if (p.legs.length) mark(p.legs[p.legs.length - 1].b, C.routeRail, false); else mark(p.from, C.routeRail, false);
   }
 
   /** Rain, snow or dust drifting over the ground near the camera when zoomed in, from the weather of the region in view. */

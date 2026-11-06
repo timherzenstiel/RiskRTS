@@ -1,5 +1,5 @@
 // Supply income, convoys, supply lines, reinforcement of battered formations and war weariness.
-import { deployOnConvoy } from './posts';
+import { corpsIn, deployOnConvoy, fixPosts, refill } from './posts';
 import { CONT, CONT_KEYS } from '../data/regions';
 import { nationOf } from '../data/nations';
 import { DT, FORMATION, SHELLS, TICK_SECONDS, UNIT_TYPES } from '../data/units';
@@ -102,7 +102,7 @@ function rise(g: GameState, r: GameState['regions'][number]) {
   for (const j of W.regions[r.id].adj) { const n = g.regions[j]; if (n.owner !== prev && n.owner >= 0) pw.set(n.owner, (pw.get(n.owner) ?? 0) + 1 + n.units.inf + n.units.mg * 2 + n.units.art * 2); }
   const to = [...pw].sort((a, b) => b[1] - a[1])[0]?.[0]; if (to === undefined) return;
   for (const k of UNIT_TYPES) { r.units[k] = 0; r.men[k] = 0; }
-  r.owner = to; r.strike = false; r.mor = 50; r.defs = []; r.contested = -1; r.stance = 0;
+  r.owner = to; r.strike = false; r.mor = 50; r.defs = []; r.contested = -1; r.stance = 0; r.cs = undefined; r.an = undefined;
   emit(g, { k: 'rising', faction: prev, region: r.id, to });
   updateSupplyLines(g); checkElim(g, prev, to); checkMissions(g);
 }
@@ -173,9 +173,14 @@ export function supplyTick(g: GameState) {
       // encircled: no food, no ammunition, no replacements
       const wear = CUT_WEAR * cutWear(g, r);
       for (const k of UNIT_TYPES) r.men[k] = Math.floor(r.men[k] * (1 - wear));
+      for (const c of corpsIn(r)) { for (const k of UNIT_TYPES) c.m[k] = Math.floor(c.m[k] * (1 - wear)); c.mor = Math.max(0, c.mor - CUT_MORALE); }
       consolidate(r.units, r.men);
       r.mor = Math.max(0, r.mor - CUT_MORALE);
-    } else r.mor = Math.min(moraleCap(g, r.owner), r.mor + 6);
+    } else {
+      r.mor = Math.min(moraleCap(g, r.owner), r.mor + 6);
+      for (const c of corpsIn(r)) c.mor = Math.min(moraleCap(g, r.owner), c.mor + 6);
+    }
+    fixPosts(g, r);
   }
   reinforce(g);
   // war weariness fades in quiet times, but not while the nation stays mobilised
@@ -206,7 +211,7 @@ function reinforce(g: GameState) {
       for (const k of UNIT_TYPES) { const gap = r.units[k] * FORMATION[k].men - r.men[k]; if (gap > 0) { gaps.push([r.id, k, gap * share]); need += gap * share; } }
     }
     const give = Math.min(f.wounded * .5, need);
-    if (give > 0) for (const [i, k, gap] of gaps) g.regions[i].men[k] += Math.floor(gap / need * give);
+    if (give > 0) for (const [i, k, gap] of gaps) refill(g.regions[i], k, Math.floor(gap / need * give));
     f.wounded = Math.max(0, (f.wounded - give) * .85);
   }
 }

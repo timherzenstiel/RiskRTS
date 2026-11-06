@@ -5,6 +5,7 @@ import { ReportsSheet } from './Reports';
 import { NationSheet } from './Nation';
 import { CalendarSheet, DoctrineSheet } from './Calendar';
 import { DiplomacySheet } from './Diplomacy';
+import { RulesSheet } from './RulesSheet';
 
 /** Renders whichever modal the store says is open. Help remembers where it was opened from. */
 export function Overlays() {
@@ -21,6 +22,7 @@ export function Overlays() {
     case 'calendar': return <CalendarSheet />;
     case 'doctrine': return <DoctrineSheet />;
     case 'diplomacy': return <DiplomacySheet />;
+    case 'rules': return <RulesSheet />;
     default: return null;
   }
 }

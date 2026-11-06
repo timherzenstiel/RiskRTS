@@ -11,7 +11,7 @@ function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TY
 /** Everything belongs to power 2, no ships, except what a test hands out. */
 function blank(seed = 3) {
   const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } });
-  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.fr = undefined; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; r.deploy = 1; }
+  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.cs = undefined; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; r.deploy = 1; }
   g.factions.forEach(f => { f.mission = null; f.supply = 100; f.shells = 400; });
   g.ships = []; g.fleets = []; g.seaBattles = [];
   return g;
@@ -165,7 +165,7 @@ describe('start and saves', () => {
     for (const r of old.regions) { delete r.port; }
     old.regions[B].works = { [F]: { tr: 2, sand: 1, wire: 0 } };
     const s = migrateState(old)!;
-    expect(s.v).toBe(6); expect(s.ships.length).toBeGreaterThan(0);
+    expect(s.v).toBe(7); expect(s.ships.length).toBeGreaterThan(0);
     expect(s.regions[B].works[coastKey(W.laneZone.get(B + '|' + F)!)]?.tr).toBe(2);
     expect(s.regions[B].works[F]).toBeUndefined();
   });

@@ -3,7 +3,7 @@
 import { COST, DT, MAX_TRENCH, SHELLS, TRENCH_COST, UT, groundUnits, isDef, unitPower, type FortKind, type UnitType } from '../data/units';
 import { forcePower, frontsOf, hops, offensives, rnd, worksAt, world } from './core';
 import { assault, build, fortify, patrol, recon, recruit, sabotage, sendAir, sendArmy, setOrder, shift, spy } from './commands';
-import { columnsAgainst, corpsPosts, mainOf } from './posts';
+import { columnsAgainst, corpsAtPost, corpsIn, mainOf } from './posts';
 import { buildRail, hasRail, railOpen } from './rails';
 import { activeSpies } from './fog';
 import { atPeace, cancel, enemiesOf, offer, treatyOf } from './diplomacy';
@@ -121,7 +121,7 @@ export function aiThink(g: GameState, f: FactionState) {
     if (attacks >= 2 + (cap ? 0 : 1) || !room()) break; if (groundUnits(t.units) < 3) continue;
     const avail = forcePower({ ...t.units, plane: 0 }, t.men, pw) * (.6 + .4 * t.mor / 100) * .85; let best: RegionState | null = null, bs = -1e9;
     for (const n of enemyNb(V, t, f.id)) {
-      if (g.armies.some(a => a.owner === f.id && a.to === n.id && !a.decoy) || columnsAgainst(g, f.id, n.id).length || (t.fr?.[n.id]?.ord ?? 0) >= 1) continue;
+      if (g.armies.some(a => a.owner === f.id && a.to === n.id && !a.decoy) || columnsAgainst(g, f.id, n.id).length || corpsAtPost(t, n.id).some(c => (c.ord ?? 0) >= 1)) continue;
       if (atPeace(g, f.id, n.owner)) continue;
       // over a sea lane: only with landing craft, and not into an enemy-held sea
       const lane = !W.regions[t.id].land.includes(n.id);
@@ -212,9 +212,9 @@ function levers(g: GameState, f: FactionState, mine: RegionState[]) {
 /** Phased offensives: rush an assembling attack now and then (Russia often); carry a foothold into the depth when it looks good. */
 function offensivesStep(g: GameState, f: FactionState, mine: RegionState[]) {
   const P = nationOf(f.id).ai;
-  for (const r of mine) for (const s of corpsPosts(r)) {
-    const c = r.fr![s]; if ((c.ord ?? 0) < 1 || c.now || g.time >= (c.ready ?? 0)) continue;
-    if (rnd(g) < P.rush * .15) setOrder(g, f.id, r.id, s, c.ord!, true);
+  for (const r of mine) for (const c of corpsIn(r)) {
+    if ((c.ord ?? 0) < 1 || c.now || c.p < 0 || g.time >= (c.ready ?? 0)) continue;
+    if (rnd(g) < P.rush * .15) setOrder(g, f.id, r.id, c.p, c.ord!, true, undefined, c.id);
   }
   for (const b of g.battles) {
     if (b.ended || b.attacker !== f.id || b.stage !== 3 || b.age - (b.stT ?? 0) < 40 || rnd(g) > .2) continue;

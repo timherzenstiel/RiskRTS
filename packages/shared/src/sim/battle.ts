@@ -8,7 +8,7 @@ import { ANTI_AIR, AS, BARRAGE, FORMATION, GROUND_TYPES, MAX_TRENCH, SHELLS, UNI
 import { FACTIONS } from '../data/factions';
 import { wrapDx } from '../world/build';
 import { consolidate, emit, frontsOf, rnd, updateContested, world, worksAt, worksFor } from './core';
-import { CONSOLIDATE, DIG_IN, UNREG, addToGroup, armyNo, column, corpsAt, fixPosts, mainOf, moveK, takeGroup } from './posts';
+import { CONSOLIDATE, DIG_IN, UNREG, XP_DMG, XP_MAX, addToGroup, armyNo, column, corpsAtPost, corpsIn, depotOf, fixPosts, mainOf, moveK, tagOf, takeCorps, takeDepot } from './posts';
 import { checkElim, checkMissions } from './missions';
 import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, combinedMod, crossSpeed, dealtMod, depthBonus, shellMod, wwLossMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
 import { hasDoc, techOn } from './tech';
@@ -16,7 +16,7 @@ import { flyToCarrier } from './carrier';
 import { beachSupplied, bombarding, shipMax, sinkShip } from './navy';
 import { isCoast, zoneOfKey } from '../world/zones';
 import { nationOf } from '../data/nations';
-import { PACES, type Agent, type Army, type Battle, type Defence, type Shell, type GameState, type RegionState, type Stance } from './types';
+import { PACES, type Agent, type Army, type Battle, type CorpsTag, type Defence, type Shell, type GameState, type RegionState, type Stance } from './types';
 
 export const trenchX = (z: number) => 1.8 + ((Math.floor((z + 40) / 3)) % 2 ? .6 : -.6);
 const FX_CAP = 900;
@@ -44,6 +44,7 @@ function newBattle(g: GameState, region: number, dir: { x: number; z: number }, 
  * depth (a region that deploys itself sends half of it to the threatened border). Without one the whole garrison fights at once.
  */
 export function startBattle(g: GameState, region: RegionState, dir: { x: number; z: number }, attacker: number, from: number, goal?: number): Battle {
+  fixPosts(g, region);
   const others = frontsOf(g, region.id).filter(o => o.def === region.owner);
   const b = newBattle(g, region.id, dir, attacker, region.owner, from);
   if (region.battle < 0) region.battle = b.id;
@@ -51,15 +52,13 @@ export function startBattle(g: GameState, region: RegionState, dir: { x: number;
   const first = !others.length;
   if (goal) {
     b.goal = goal; b.stage = 0; b.stT = 0;
-    const c = from >= 0 ? region.fr?.[from] : undefined;
-    if (c && groundUnits(c.u) > 0) {
-      b.cn = c.n;
-      // a corps that has held its border for a while has dug in deeper
-      if ((c.ord ?? 0) === 0 && c.since !== undefined && g.time - c.since >= DIG_IN) b.tr = Math.min(MAX_TRENCH + 1, b.tr + 1);
-      const st = c.st ?? region.stance, out = takeGroup(region, from, 1);
-      joinBattle(g, b, region.owner, out.u, dir, true, region.id, out.m, region.mor, st);
+    const here = from >= 0 ? corpsAtPost(region, from) : [];
+    if (here.length) {
+      b.cn = here[0].n;
+      // corps that have held their border for a while have dug in deeper
+      if (here.some(c => (c.ord ?? 0) === 0 && c.since !== undefined && g.time - c.since >= DIG_IN)) b.tr = Math.min(MAX_TRENCH + 1, b.tr + 1);
+      for (const c of here) { const st = c.st ?? region.stance, mor = c.mor, tag = tagOf(c), out = takeCorps(region, c); joinBattle(g, b, region.owner, out.u, dir, true, region.id, out.m, mor, st, tag); }
     }
-    if (region.fr && from >= 0) delete region.fr[from];
     // the squadrons of the region scramble to the first front
     if (first && region.units.plane > 0) {
       const u = { ...emptyUnits(), plane: region.units.plane }, m = { ...emptyUnits(), plane: region.men.plane };
@@ -69,12 +68,15 @@ export function startBattle(g: GameState, region: RegionState, dir: { x: number;
     fixPosts(g, region);
     // a region that deploys itself sends half of its main army to the threatened border
     if (region.deploy !== 1 && from >= 0) {
-      const main = mainOf(region);
-      if (groundUnits(main) > 1) { const out = takeGroup(region, -1, .5); column(g, region.owner, region.id, -1, region.id, from, out.u, out.m, region.mor, { front: b.id, stance: region.stance, gn: armyNo(g, region), gk: 0 }); }
+      const dep = depotOf(region).u;
+      if (groundUnits(dep) > 1) {
+        const half: Partial<Units> = {}; for (const k of GROUND_TYPES) half[k] = Math.round(dep[k] * .5);
+        const out = takeDepot(region, half);
+        if (groundUnits(out.u)) column(g, region.owner, region.id, -1, region.id, from, out.u, out.m, region.mor, { front: b.id, stance: region.stance, gn: armyNo(g, region), gk: 0 });
+      }
     }
   } else {
-    if (totalUnits(region.units) > 0) joinBattle(g, b, region.owner, region.units, dir, true, region.id, region.men, region.mor, region.stance);
-    region.units = emptyUnits(); region.men = emptyUnits(); region.fr = undefined;
+    joinAll(g, b, region, dir, true);
     // a new front draws its share of the defenders from the fronts already burning in this region
     for (const o of others) transferAgents(g, o, b, region.owner, 1 / (others.length + 1));
   }
@@ -123,18 +125,19 @@ function startDepth(g: GameState, b: Battle) {
   for (const a of b.agents) if (!a.dead && !a.out && a.f !== b.def && !isDef(a.type) && a.type !== 'plane') {
     const u = alongOf(b, a.x, a.z), to = (a.type === 'art' ? 24 : 18) + rnd(g) * 3; a.x += b.ax * (to - u); a.z += b.az * (to - u); a.trench = false;
   }
-  const main = takeGroup(r, -1, 1);
-  if (groundUnits(main.u) > 0) joinBattle(g, b, b.def, main.u, null, true, r.id, main.m, r.mor, r.stance);
+  const main = mainOf(r);
+  joinCentre(g, b, r);
   const own = r.defs.filter(d => d.f === b.def && d.s < 0);
   r.defs = r.defs.filter(d => !own.includes(d));
   placeDefs(b, own, true);
   if (own.some(d => d.k === 'fort')) b.ammo[b.def] = (b.ammo[b.def] ?? 0) + own.filter(d => d.k === 'fort').length * SHELLS.dump;
-  if (!b.sides.includes(b.def) && (own.length || groundUnits(main.u))) b.sides.push(b.def);
+  if (!b.sides.includes(b.def) && (own.length || groundUnits(main))) b.sides.push(b.def);
   emit(g, { k: 'depth', faction: b.attacker, def: b.def, region: b.region });
 }
 
 /** The owner of a contested region storms the holdouts with the region's garrison. */
 export function startAssault(g: GameState, region: RegionState): Battle {
+  fixPosts(g, region);
   const W = world(), h = region.contested, me = region.owner, wr = W.regions[region.id];
   const hold = region.defs.filter(d => d.f === h), sector = hold.find(d => d.s >= 0)?.s ?? -1;
   let dir = { x: 1, z: 0 };
@@ -144,10 +147,23 @@ export function startAssault(g: GameState, region: RegionState): Battle {
   region.battle = b.id; g.battles.push(b);
   region.defs = region.defs.filter(d => d.f !== h);
   placeDefs(b, hold, true);
-  joinBattle(g, b, me, region.units, dir, false, region.id, region.men, region.mor, region.stance);
-  region.units = emptyUnits(); region.men = emptyUnits();
+  joinAll(g, b, region, dir, false);
   emit(g, { k: 'battleStart', region: region.id, attacker: me, defender: h });
   return b;
+}
+
+/** The whole garrison of a region takes the field: every corps with its identity, then the depot (aircraft included). */
+function joinAll(g: GameState, b: Battle, r: RegionState, dir: { x: number; z: number }, def: boolean) {
+  const f = r.owner;
+  for (const c of [...corpsIn(r)]) { const st = c.st ?? r.stance, mor = c.mor, tag = tagOf(c), out = takeCorps(r, c); joinBattle(g, b, f, out.u, dir, def, r.id, out.m, mor, st, tag); }
+  if (totalUnits(r.units) > 0) joinBattle(g, b, f, r.units, dir, def, r.id, r.men, r.mor, r.stance);
+  r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined;
+}
+/** The troops at the centre of a region (depot and reserve corps) join a battle there as defenders. */
+function joinCentre(g: GameState, b: Battle, r: RegionState) {
+  for (const c of corpsAtPost(r, -1)) { const st = c.st ?? r.stance, mor = c.mor, tag = tagOf(c), out = takeCorps(r, c); joinBattle(g, b, b.def, out.u, null, true, r.id, out.m, mor, st, tag); }
+  const d = depotOf(r), u = { ...d.u, plane: 0 };
+  if (groundUnits(u) > 0) { const out = takeDepot(r, u); joinBattle(g, b, b.def, out.u, null, true, r.id, out.m, r.mor, r.stance); }
 }
 
 function placeDefs(b: Battle, defs: Defence[], defending: boolean) {
@@ -172,8 +188,9 @@ function placeDefs(b: Battle, defs: Defence[], defending: boolean) {
  * Put formations on the battlefield. `men` (default: full strength) sets each agent's hit points; `mor` is the morale they bring.
  * `dir` is where attackers come from; pass the reverse of the battle axis for troops breaking in from behind the defenders.
  */
-export function joinBattle(g: GameState, b: Battle, f: number, u: Units, dir: { x: number; z: number } | null, def: boolean, home = b.region, men?: Units, mor = 75, stance?: Stance) {
+export function joinBattle(g: GameState, b: Battle, f: number, u: Units, dir: { x: number; z: number } | null, def: boolean, home = b.region, men?: Units, mor = 75, stance?: Stance, tag?: CorpsTag) {
   if (!b.sides.includes(f)) b.sides.push(f);
+  if (tag) (b.ct ??= {})[tag.id] = tag;
   if (stance !== undefined || b.st[f] === undefined) b.st[f] = stance ?? b.st[f] ?? 0;
   if (u.art) b.ammo[f] = (b.ammo[f] ?? 0) + u.art * SHELLS.dump;
   const a = def ? { x: b.ax, z: b.az } : (dir || { x: b.ax, z: b.az }), p = { x: -a.z, z: a.x }, P = paceOf(g);
@@ -189,6 +206,7 @@ export function joinBattle(g: GameState, b: Battle, f: number, u: Units, dir: { 
       const s = statsOf(g, f, k);
       const ag: Agent = { f, type: k, x: a.x * along + p.x * lat, z: a.z * along + p.z * lat, hp: s.hp * frac, cd: rnd(g) * s.rof, rt: 0, tgt: -1, dead: false, dieT: 0, fireT: -9, face: Math.atan2(-a.x, -a.z) + (def ? Math.PI : 0), phase: rnd(g) * 6, moving: false, trench: def && (k === 'inf' || k === 'mg'), men: FORMATION[k].men };
       if (k === 'plane') { ag.fuel = P.fuel * (.85 + rnd(g) * .3); ag.home = home; }
+      else if (tag) { ag.c = tag.id; if (tag.xp) ag.xp = tag.xp; }
       b.agents.push(ag); n1++;
     }
   }
@@ -209,15 +227,31 @@ export function forceIn(b: Battle, f: number, planes = false, g?: GameState): { 
   return { u, m, mor: b.mor[f] ?? 70 };
 }
 
+/** A faction's ground troops still fighting, per corps (key -1: troops in no corps). */
+export function forceParts(b: Battle, f: number, g: GameState): Map<number, { u: Units; m: Units }> {
+  const out = new Map<number, { u: Units; m: Units }>();
+  for (const a of b.agents) {
+    if (a.dead || a.out || a.f !== f || isDef(a.type) || a.type === 'plane') continue;
+    const key = a.c !== undefined && b.ct?.[a.c] ? a.c : -1;
+    let p = out.get(key); if (!p) out.set(key, p = { u: emptyUnits(), m: emptyUnits() });
+    const k = a.type as UnitType; p.u[k]++; p.m[k] += Math.round(Math.max(0, a.hp) / statsOf(g, f, k).hp * (a.men ?? FORMATION[k].men));
+  }
+  return out;
+}
+
 /** Pull a share of a faction's ground troops out of battle `src` and put them into `dst` on the same side. */
 export function transferAgents(g: GameState, src: Battle, dst: Battle, f: number, frac: number): number {
   const pick = src.agents.filter(a => a.f === f && !a.dead && !a.out && !isDef(a.type) && a.type !== 'plane');
   let n = Math.round(pick.length * frac); if (n >= pick.length) n = pick.length - 1; if (n <= 0) return 0;
   // the reserve leaves from the back: guns and men behind the trench first
   pick.sort((a, b) => (a.x * src.ax + a.z * src.az) - (b.x * src.ax + b.z * src.az));
-  const u = emptyUnits(), m = emptyUnits();
-  for (const a of pick.slice(0, n)) { a.out = true; const k = a.type as UnitType; u[k]++; m[k] += Math.round(a.hp / statsOf(g, f, k).hp * (a.men ?? FORMATION[k].men)); }
-  joinBattle(g, dst, f, u, null, dst.def === f, dst.region, m, src.mor[f] ?? 70, stanceIn(src, f));
+  const parts = new Map<number, { u: Units; m: Units }>();
+  for (const a of pick.slice(0, n)) {
+    a.out = true; const k = a.type as UnitType, key = a.c !== undefined && src.ct?.[a.c] ? a.c : -1;
+    let p = parts.get(key); if (!p) parts.set(key, p = { u: emptyUnits(), m: emptyUnits() });
+    p.u[k]++; p.m[k] += Math.round(a.hp / statsOf(g, f, k).hp * (a.men ?? FORMATION[k].men));
+  }
+  for (const [key, p] of parts) joinBattle(g, dst, f, p.u, null, dst.def === f, dst.region, p.m, src.mor[f] ?? 70, stanceIn(src, f), key >= 0 ? src.ct![key] : undefined);
   return n;
 }
 
@@ -373,7 +407,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
         if (gun) rate = drawShells(g, b, a.f, shotCost(b, a.f, g)) ? (lvl === 2 ? 1 / BARRAGE.heavy : 1) : BARRAGE.rationed;
         a.cd = s.rof * rofK * (.75 + rnd(g) * .5) * rate * suppSlow(sp); a.fireT = g.time;
         if (s.splash && t.type !== 'plane') {
-          const sh: Shell = { x: t.x + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), z: t.z + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), time: .5 + d * .03, f: a.f, dmg: s.dmg, sp: s.splash * splashMod(k.fl), src: a.type };
+          const sh: Shell = { x: t.x + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), z: t.z + (rnd(g) - .5) * 3.5 / morAcc(b, a.f), time: .5 + d * .03, f: a.f, dmg: s.dmg * (1 + XP_DMG * (a.xp ?? 0)), sp: s.splash * splashMod(k.fl), src: a.type };
           b.shells.push(sh);
           if (fx && fx.length < FX_CAP) fx.push({ k: 'fire', b: b.id, x: a.x + Math.sin(a.face) * 2, z: a.z + Math.cos(a.face) * 2, face: a.face, tx: sh.x, tz: sh.z, fl: sh.time });
         } else {
@@ -381,7 +415,7 @@ export function stepBattle(g: GameState, b: Battle, dt: number) {
           const hit = rnd(g) < acc * (1 - .45 * d / s.range);
           // anti-air guns concentrated on one border hit harder over it and weaker elsewhere
           const focus = a.type === 'flak' && (a.sector ?? -1) >= 0 ? (a.sector === b.from ? 1.5 : .5) : 1;
-          if (hit) damage(g, b, t, s.dmg, a.type, k, focus, a.f);
+          if (hit) damage(g, b, t, s.dmg, a.type, k, focus * (1 + XP_DMG * (a.xp ?? 0)), a.f);
           if (fx && fx.length < FX_CAP) {
             if (a.type === 'flak') fx.push({ k: 'flak', b: b.id, x: t.x + (hit ? 0 : (rnd(g) - .5) * 3), z: t.z + (hit ? 0 : (rnd(g) - .5) * 3) });
             else fx.push({ k: 'shot', b: b.id, x0: a.x + Math.sin(a.face) * 1.2, z0: a.z + Math.cos(a.face) * 1.2, x1: t.x + (hit ? 0 : (rnd(g) - .5) * 1.5), z1: t.z + (hit ? 0 : (rnd(g) - .5) * 1.5), type: a.type, hit, air });
@@ -553,6 +587,12 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
   }
   for (const [k, n] of home) { const [f, h, cv] = k.split(':').map(Number); flyHome(g, b, f, h, n, cv >= 0 ? cv : undefined); }
   const surv = winner !== null ? forceIn(b, winner, false, g) : null;
+  // survivors per corps; a won battle adds a star of experience to every corps of the winner
+  const parts = winner !== null ? [...forceParts(b, winner, g)].map(([key, p]) => {
+    consolidate(p.u, p.m);
+    const tag = key >= 0 && b.ct?.[key] ? { ...b.ct[key], xp: Math.min(XP_MAX, (b.ct[key].xp ?? 0) + 1) } : undefined;
+    return { ...p, tag };
+  }).filter(p => groundUnits(p.u) > 0) : [];
   if (surv) consolidate(surv.u, surv.m);
   // barbed wire that was not cut stays; a front that held keeps its works
   if (b.from >= 0 && (b.wire0 > 0 || b.wire > 0)) worksFor(t, b.from).wire = Math.ceil(b.wire / WIRE_HP - 1e-6);
@@ -563,10 +603,10 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
     if (surv && totalUnits(surv.u) > 0) {
       if (winner === b.def) {
         const o = others.find(o => o.def === winner) ?? others[0];
-        joinBattle(g, o, winner!, surv.u, null, o.def === winner, t.id, surv.m, Math.min(100, surv.mor + 5));
+        for (const p of parts) joinBattle(g, o, winner!, p.u, null, o.def === winner, t.id, p.m, Math.min(100, surv.mor + 5), undefined, p.tag);
       } else {
         const o = others.find(o => o.attacker === winner) ?? others[0];
-        joinBattle(g, o, winner!, surv.u, { x: -o.ax, z: -o.az }, false, t.id, surv.m, Math.min(100, surv.mor + 8));
+        for (const p of parts) joinBattle(g, o, winner!, p.u, { x: -o.ax, z: -o.az }, false, t.id, p.m, Math.min(100, surv.mor + 8), undefined, p.tag);
         emit(g, { k: 'breakthrough', faction: winner!, region: t.id, from: b.from });
       }
     }
@@ -579,18 +619,24 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
   if (winner !== null && winner !== prev) {
     // defenders still standing elsewhere in the region (corps on other borders, what is left of the main army) fall back
     evacuate(g, t, prev);
-    t.owner = winner; t.strike = false; t.fake = undefined; t.stance = 0; t.fr = undefined; t.an = undefined; t.deploy = undefined;
+    t.owner = winner; t.strike = false; t.fake = undefined; t.stance = 0; t.cs = undefined; t.an = undefined; t.deploy = undefined;
     for (const w of Object.values(t.works)) { w.tr = Math.max(0, w.tr - 1); }
     if (b.from >= 0) worksFor(t, b.from).wire = 0;
-    t.units = surv ? surv.u : emptyUnits(); t.men = surv ? surv.m : emptyUnits();
-    t.mor = surv ? Math.min(moraleCap(g, winner!), surv.mor + 10) : 60;
+    t.units = emptyUnits(); t.men = emptyUnits();
+    const mor = surv ? Math.min(moraleCap(g, winner!), surv.mor + 10) : 60;
+    t.mor = mor;
+    // the conquerors stand in the middle of the region: the corps the player commands as reserve corps, the rest as its depot
+    if (winner !== null) for (const p of parts) addToGroup(g, t, -1, p.u, p.m, mor, p.tag);
   } else if (surv && winner === t.owner && totalUnits(surv.u) > 0) {
     // the region held: the survivors rejoin the troops still there, the defenders of a border man it again
-    const holds = winner === b.def && !!b.goal && b.from >= 0;
-    const ground = { ...surv.u, plane: 0 }, gm = { ...surv.m, plane: 0 };
-    addToGroup(g, t, holds ? b.from : -1, ground, gm, Math.min(moraleCap(g, winner!), surv.mor + 10), b.cn);
-    if (holds) { const c = corpsAt(g, t, b.from, b.cn); c.ord = 0; c.since = g.time; }
-    t.units.plane += surv.u.plane; t.men.plane += surv.m.plane;
+    const holds = winner === b.def && !!b.goal && b.from >= 0, secs = world().regions[t.id].sectors;
+    const mor = Math.min(moraleCap(g, winner!), surv.mor + 10);
+    for (const p of parts) {
+      // each corps goes back to the post it came from; the defenders of a border man it again
+      const back = p.tag?.p !== undefined && (p.tag.p < 0 || secs.includes(p.tag.p)) ? p.tag.p : holds ? b.from : -1;
+      const got = addToGroup(g, t, back, p.u, p.m, mor, p.tag ?? (holds ? b.cn : undefined));
+      for (const c of got) if (c.p === b.from && holds) { c.ord = 0; c.since = g.time; }
+    }
   }
   updateContested(t);
   const capital = t.capitalOf === prev && t.owner !== prev;
@@ -608,12 +654,13 @@ function evacuate(g: GameState, t: RegionState, f: number) {
   const W = world(), land = W.regions[t.id].adj.filter(j => g.regions[j].owner === f && !W.seaLane.has(t.id + '|' + j));
   const dest = land.sort((a, b) => (g.regions[a].cut ? 1 : 0) - (g.regions[b].cut ? 1 : 0))[0];
   if (dest !== undefined) {
+    for (const c of [...corpsIn(t)]) { const tag = tagOf(c), mor = c.mor, out = takeCorps(t, c); column(g, f, t.id, tag.p ?? -1, dest, -1, out.u, out.m, Math.max(0, mor - 15), { tired: true, ct: tag.man || tag.army !== undefined ? tag : undefined, gn: tag.n, gk: 1 }); }
     const u = { ...t.units, plane: 0 }, m = { ...t.men, plane: 0 };
     if (groundUnits(u) > 0) column(g, f, t.id, -1, dest, -1, u, m, Math.max(0, t.mor - 15), { tired: true, gn: t.an, gk: 0 });
     if (t.units.plane > 0) launch(g, f, t.id, dest, { ...emptyUnits(), plane: t.units.plane }, true, { ...emptyUnits(), plane: t.men.plane });
     emit(g, { k: 'withdraw', faction: f, region: t.id, to: dest });
   } else if (groundUnits(t.units) > 0) emit(g, { k: 'surrender', faction: f, region: t.id, n: groundUnits(t.units) });
-  t.units = emptyUnits(); t.men = emptyUnits();
+  t.units = emptyUnits(); t.men = emptyUnits(); t.cs = undefined;
 }
 
 /** How far the attackers got, from the closest distance to the trench line: 0 start line, 1 no-man's-land, 2 the wire, 3 the trench. */

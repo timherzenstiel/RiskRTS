@@ -6,7 +6,7 @@ import { isCoast, zoneAt, zoneOfKey } from '../world/zones';
 import { emptyUnits, groundUnits, type Units } from '../data/units';
 import { emit, menTotal, rnd, world } from './core';
 import type { Army, Battle, Corps, Defence, GameState, Intel, RegionState, Works } from './types';
-import { groupMen } from './posts';
+import { corpsIn } from './posts';
 import { allied } from './diplomacy';
 
 export const MAX_SPIES = 3;
@@ -15,7 +15,7 @@ export const STALE_DAYS = 21;
 
 const cloneWorks = (w: Record<number, Works>) => { const o: Record<number, Works> = {}; for (const [k, v] of Object.entries(w)) o[+k] = { ...v }; return o; };
 const cloneDefs = (d: Defence[]) => d.map(x => ({ ...x }));
-const cloneCorps = (fr?: Record<number, Corps>) => { if (!fr) return undefined; const o: Record<number, Corps> = {}; for (const [k, c] of Object.entries(fr)) o[+k] = { ...c, u: { ...c.u } }; return o; };
+const cloneCorps = (cs?: Corps[]) => cs?.length ? cs.map(c => ({ ...c, u: { ...c.u }, m: { ...c.m } })) : undefined;
 
 /** File a report on `region` for `fid`. With `sector`, only the troops and that border's defences are seen (a patrol). */
 export function recordIntel(g: GameState, fid: number, region: number, sector?: number) {
@@ -28,11 +28,11 @@ export function recordIntel(g: GameState, fid: number, region: number, sector?: 
     works = prev ? cloneWorks(prev.works) : {}; if (r.works[sector]) works[sector] = { ...r.works[sector] }; else delete works[sector];
   }
   // corps: every border on a full report, the patrolled border (and what was known of the others) on a patrol
-  let fr: Record<number, Corps> | undefined;
-  if (sector === undefined) fr = cloneCorps(r.fr);
-  else { fr = { ...(prev?.fr ?? {}) }; delete fr[sector]; if (r.fr?.[sector]) fr[sector] = { ...r.fr[sector], u: { ...r.fr[sector].u } }; }
+  let cs: Corps[] | undefined;
+  if (sector === undefined) cs = cloneCorps(r.cs);
+  else cs = cloneCorps([...(prev?.cs ?? []).filter(c => c.p !== sector), ...corpsIn(r).filter(c => c.p === sector)]);
   const it: Intel = {
-    day: g.day, time: g.time, owner: r.owner, units: { ...r.units }, men: { ...r.men }, defs, works, fr,
+    day: g.day, time: g.time, owner: r.owner, units: { ...r.units }, men: { ...r.men }, defs, works, cs,
     factory: sector === undefined ? r.factory : prev?.factory ?? false, barracks: sector === undefined ? r.barracks : prev?.barracks ?? false, airfield: sector === undefined ? r.airfield : prev?.airfield ?? false,
   };
   (g.intel[fid] ??= [])[region] = it;
@@ -110,16 +110,19 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   if (vis >= 1) for (const s of W.regions[r.id].sectors) if (mine(s)) { for (const d of r.defs) if (d.s === s && d.f === r.owner) defs.push(d); if (r.works[s]) works[s] = r.works[s]; else delete works[s]; }
   const known = it && it.owner === r.owner ? it : null;
   // corps: those on a report, and those across the viewer's own borders as an estimate (a fake concentration swells the biggest)
-  let fr: Record<number, Corps> | undefined = known?.fr ? cloneCorps(known.fr) : undefined;
+  // across a border the viewer sees how many men stand there in all, not how they are split into corps
+  let cs: Corps[] = (known?.cs ? cloneCorps(known.cs) : undefined) ?? [];
+  const posts = new Set(corpsIn(r).filter(c => c.p >= 0).map(c => c.p));
   if (vis >= 1) for (const s of W.regions[r.id].sectors) if (mine(s)) {
-    const c = r.fr?.[s];
-    if (fr) delete fr[s];
-    if (!c) continue;
-    const fake = r.fake && r.fake.until > g.day && (it?.day ?? -1) < r.fake.day ? r.fake.men / Math.max(1, Object.keys(r.fr ?? {}).length) : 0;
-    (fr ??= {})[s] = { u: emptyUnits(), n: -1, est: estimateMen(g, r.id * 64 + s, groupMen(r, c.u) + fake), ord: (c.ord ?? 0) >= 1 && g.time >= (c.ready ?? 0) - 30 ? c.ord : undefined };
+    cs = cs.filter(c => c.p !== s);
+    const here = corpsIn(r).filter(c => c.p === s);
+    if (!here.length) continue;
+    const fake = r.fake && r.fake.until > g.day && (it?.day ?? -1) < r.fake.day ? r.fake.men / Math.max(1, posts.size) : 0;
+    const men = here.reduce((m, c) => m + menTotal(c.m), 0), att = here.find(c => (c.ord ?? 0) >= 1 && g.time >= (c.ready ?? 0) - 30);
+    cs.push({ id: -1 - s, n: -1, p: s, u: emptyUnits(), m: emptyUnits(), mor: 70, est: estimateMen(g, r.id * 64 + s, men + fake), ord: att?.ord });
   }
   return {
-    fr,
+    cs: cs.length ? cs : undefined,
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
     factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false, port: r.port, portAt: vis >= 1 ? r.portAt : undefined,
     supplyQ: undefined, bombed: vis >= 1 ? r.bombed : undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
@@ -149,6 +152,8 @@ export function fogView(g: GameState, fid: number): GameState {
     armies: g.armies.filter(seeArmy).map(a => !a.decoy || a.owner === fid ? a : { ...a, decoy: undefined, fake: undefined, units: { ...a.units, inf: a.fake ?? 8 }, men: { ...a.men, inf: (a.fake ?? 8) * 100 } }),
     battles: g.battles.filter(seeBattle),
     intel: g.intel.map((row, i) => i === fid ? row : []),
+    // armies and requests are a power's own business
+    hq: g.over ? g.hq : (g.hq ?? []).filter(h => h.owner === fid), requests: (g.requests ?? []).filter(q => q.owner === fid),
     spies: g.spies.filter(s => s.f === fid),
     reports: (g.reports ?? []).filter(r => g.over || r.sides.some(s => s.f === fid)).slice(-20),
     viewer: fid,

@@ -7,7 +7,7 @@
 // dictionary (i18n/de/audio-render.ts) when the interface speaks German. The pieces put into a line
 // (corps names, numbers of men, "the Germans", region names) are built in the right language here
 // already, so L() inserts them as they are.
-import { AS, FACTIONS, FORMATION, battleCounts, isDef, world, type Battle, type GameEvent, type GameState, type UnitType } from '@riskrts/shared';
+import { AS, FACTIONS, FORMATION, SHIP, battleCounts, isDef, world, type Battle, type GameEvent, type GameState, type UnitType, corpsAtPost } from '@riskrts/shared';
 import { getLang, missing, tx, type Case } from '../i18n';
 import { DE, DECL } from '../i18n/de';
 import type { Stinger } from './sfx';
@@ -130,8 +130,8 @@ const sum = (r: Record<number, number> | undefined, fs: number[]) => fs.reduce((
 /** Who is speaking for `me` at battle `b`: the corps on that border if known ("Seventh Corps, Flanders"), else the sector. */
 export function station(g: GameState, b: Battle, me: number): { name: string; voice: number } {
   let n = -1;
-  if (b.def === me) n = b.cn ?? g.regions[b.region]?.fr?.[b.from]?.n ?? -1;
-  else if (b.from >= 0 && b.from < 1000) n = g.regions[b.from]?.fr?.[b.region]?.n ?? -1;
+  if (b.def === me) n = b.cn ?? corpsAtPost(g.regions[b.region], b.from)[0]?.n ?? -1;
+  else if (b.from >= 0 && b.from < 1000) n = corpsAtPost(g.regions[b.from], b.region)[0]?.n ?? -1;
   if (n > 0) return { name: `${ordinal(n)} ${de() ? 'Korps' : 'Corps'}, ${R(b.region)}`, voice: n };
   return { name: sector(b.region), voice: b.region + 100 };
 }
@@ -143,6 +143,63 @@ function moraleWord(m: number) { return L(m >= 75 ? 'Morale is good.' : m >= 50 
 /** Clean up a line for speech and subtitles: capital letter at every sentence start, no stray spaces. */
 export function tidy(s: string): string {
   return s.replace(/\s+/g, ' ').trim().replace(/(^|[.!?]\s+)([a-zäöü])/g, (_, a: string, c: string) => a + c.toUpperCase());
+}
+
+/** "General von Albeck": a commander's rank spoken in full. */
+export function rankSpoken(name: string): string { return name.replace(/^Gen\.\s/, 'General ').replace(/^Gén\.\s/, 'Général ').replace(/^GdI\s/, 'General '); }
+const surname = (name: string) => { const n = rankSpoken(name); return n.startsWith('General ') || n.startsWith('Général ') ? n.split(' ')[0] + ' ' + n.split(' ').slice(2).join(' ') : n; };
+
+/** A front commander on the line: his requests and the corps he sends back (design-command §2.5). One voice per army. */
+export function commanderCall(g: GameState, e: Extract<GameEvent, { k: 'request' | 'release' }>, me: number): Dispatch | null {
+  const h = (g.hq ?? []).find(x => x.id === e.army); if (!h) return null;
+  const G = de();
+  // "Seventh Army" / "Siebte Armee" (Armee is feminine); "Seventh Corps" / "Siebtes Korps"
+  const army = G ? `${ordinal(h.n).replace(/s$/, '')} Armee` : `${ordinal(h.n)} Army`;
+  const corpsName = (n: number) => `${ordinal(n)} ${G ? 'Korps' : 'Corps'}`;
+  const who = surname(h.cmd.name), voice = 200 + h.n, over = overAndOut();
+  const head = L('{0}, this is {1}, {2}.', call(), who, army);
+  const base = { front: .15, who: 'front' as const, voice, region: e.region };
+  if (e.k === 'release') {
+    const tpl = e.why === 'peace' ? '{0} Now that the border is at peace, {1} is pulling back to {2} and is at your disposal. {3}'
+      : e.why === 'lost' ? '{0} With our front gone, {1} is pulling back to {2} and is at your disposal. {3}'
+      : '{0} {1} is pulling back to {2} and is at your disposal. {3}';
+    return { say: L(tpl, head, corpsName(e.n), R(e.region), over), pri: 0, ...base, key: 'rel-' + h.id, cool: 20 };
+  }
+  const q = (g.requests ?? []).find(x => x.id === e.req);
+  const land = e.sector >= 0 && e.sector < 1000;
+  // the border, in German nominative/accusative or dative ("die Grenze zu Flandern" / "der Grenze zu Flandern")
+  const border = (dat = false) => land ? (G ? `${dat ? 'der' : 'die'} Grenze zu ${R(e.sector)}` : `the ${R(e.sector)} border`)
+    : (G ? `${dat ? 'der' : 'die'} Küste bei ${R(e.region)}` : `the coast at ${R(e.region)}`);
+  const corps = (q?.corps ?? []).map(id => { for (const r of g.regions) { const c = r.cs?.find(x => x.id === id); if (c) return corpsName(c.n); } return null; }).filter(Boolean) as string[];
+  const many = corps.length > 1;
+  const names = corps.length ? corps.length === 1 ? corps[0] : `${corps.slice(0, -1).join(', ')} ${G ? 'und' : 'and'} ${corps[corps.length - 1]}` : L('the corps');
+  const count = (fallback: string) => q?.n !== undefined ? String(q.n) : L(fallback);
+  let say: string;
+  switch (e.kind) {
+    case 'men': say = e.urg === 2
+      ? pick([L('{0} Urgent. They are massing against {1}. I need {2} battalions or the line will not hold. {3}', head, border(), count('more'), over),
+        L('{0} {1} is too thin. Request reinforcements at once, {2} battalions. {3}', head, border(), count('several'), over)])
+      : L('{0} Request reinforcements for {1}, {2} battalions. {3}', head, border(), count('a few'), over); break;
+    case 'fort': say = pick([
+      L('{0} Request permission to dig in on {1}. {2} {3}', head, border(true), L(q?.fort === 'wire' ? 'We want wire out in front.' : 'The men need a proper trench.'), over),
+      L('{0} {1} has no proper works. Request {2}. {3}', head, border(), L(q?.fort === 'wire' ? 'barbed wire' : 'a trench line'), over)]); break;
+    case 'recon': {
+      const there = R(e.sector);
+      say = q?.by === 'spy' ? L('{0} Before we go in, I want an agent inside {1}. Request a spy from the capital. {2}', head, there, over)
+        : q?.by === 'recon' ? L('{0} Request a reconnaissance flight over {1}. {2} {3}', head, there, L(q?.for === 'attack' ? 'I will not send the men in blind.' : 'Our picture of it is out of date.'), over)
+        : L('{0} Request a cavalry patrol across to {1}. {2} {3}', head, there, L(q?.for === 'attack' ? 'I want to know what is waiting before we attack.' : 'We are blind on that side.'), over);
+      break;
+    }
+    case 'attack': say = pick([
+      L(many ? '{0} {1} are ready on {2}. Request permission to {3}. {4}' : '{0} {1} is ready on {2}. Request permission to {3}. {4}', head, names, border(true), L(q?.goal === 2 ? 'invade' : 'take their first line'), over),
+      L('{0} We have the advantage facing {1}. Request permission to attack. {2}', head, R(e.sector), over)]); break;
+    case 'fallback': say = L('{0} We cannot hold {1}. Request permission to fall back to the centre. {2}', head, border(), over); break;
+    case 'release': say = q?.why === 'peace'
+      ? L(many ? '{0} With the treaty in force, {1} are not needed on {2}. Shall I send them back to you? {3}' : '{0} With the treaty in force, {1} is not needed on {2}. Shall I send it back to you? {3}', head, names, border(true), over)
+      : L(many ? '{0} The front is quiet. I can spare {1}. Shall I send them back? {2}' : '{0} The front is quiet. I can spare {1}. Shall I send it back? {2}', head, names, over); break;
+    default: return null;
+  }
+  return { say, pri: e.urg === 2 ? 2 : e.urg === 1 ? 1 : 0, ...base, front: e.urg === 2 ? .6 : .15, morse: e.urg === 2 ? '..- .-. --.' : undefined, key: `rq-${h.id}-${e.kind}`, cool: e.urg === 2 ? 15 : 45 };
 }
 
 /** Decide what (if anything) the radio says about an event, from the point of view of faction `me`. */
@@ -158,6 +215,7 @@ function eventCall(g: GameState, e: GameEvent, me: number): Dispatch | null {
   const at = (region: number) => { const b = myBattle(g, region, me); return b ? station(g, b, me) : { name: sector(region), voice: region + 100 }; };
   const front = (region: number, pri: number, say: string, x: Partial<Dispatch> = {}): Dispatch => { const s = at(region); return { say, pri, front: 1, who: 'front', voice: s.voice, region, ...x }; };
   switch (e.k) {
+    case 'request': case 'release': return e.faction === me ? commanderCall(g, e, me) : null;
     case 'start': return { say: L('All stations, all stations. War has been declared. Open your sealed orders and stand by.'), pri: 3, front: 0, who: 'hq', morse: '-.-. --.-', stinger: 'declare' };
     case 'air':
       if (e.faction === me || g.regions[e.to].owner !== me) return null;

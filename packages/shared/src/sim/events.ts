@@ -1,5 +1,6 @@
 // Turns structured game events into text for a given viewer, so server and clients phrase them identically.
 import { FACTIONS, cap } from '../data/factions';
+import { corpsName } from '../data/names';
 import { world } from './core';
 import { SHIP } from '../data/sea';
 import { sectorName } from '../world/zones';
@@ -139,6 +140,17 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       return { text: e.by === 'uboat' ? `Convoy torpedoed in the ${Z(e.zone)}: ${e.ships} ${e.ships === 1 ? 'transport' : 'transports'}, ${e.men} men lost.` : e.ships ? `${e.ships} of our ships sunk in the ${Z(e.zone)}${e.men ? `, ${e.men} men lost with them` : ''}.` : `${e.men} men lost at sea in the ${Z(e.zone)}.`, cls: 'bad' };
     case 'scuttled': return e.faction === me ? { text: `Our ships in the port of ${R(e.region)} were scuttled as the town fell.`, cls: 'bad', region: e.region } : null;
     case 'strait': return null;
+    case 'release': {
+      if (e.faction !== me) return null;
+      const h = (g.hq ?? []).find(x => x.id === e.army), who = h ? h.cmd.name : 'The commander';
+      return { text: `${who} sends ${corpsName(me, e.n)} back to you${e.why === 'peace' ? ': the border is at peace' : e.why === 'lost' ? ': the front is lost' : ': the front can spare it'}. It waits in ${R(e.region)}.`, cls: 'me', region: e.region };
+    }
+    case 'request': {
+      if (e.faction !== me || e.urg < 2) return null;
+      const h = (g.hq ?? []).find(x => x.id === e.army), who = h ? h.cmd.name : 'A commander';
+      const what = e.kind === 'men' ? 'urgently asks for men' : e.kind === 'fallback' ? 'asks permission to fall back' : 'needs an answer';
+      return { text: `${who} ${what} at ${R(e.region)}${e.sector >= 0 && e.sector < 1000 ? ` (${R(e.sector)} border)` : ''}. See the Staff panel.`, cls: 'bad', region: e.region };
+    }
     case 'seaBattle': {
       const side = e.sides.findIndex(s => s.includes(me)); if (side < 0) return null;
       const foe = e.sides[1 - side].map(f => F(f).short).join(', ');

@@ -3,7 +3,7 @@
 // All of it is pushed into instanced pools; nothing here allocates.
 import * as THREE from 'three';
 import { toBorderDist } from './borderField';
-import { DEF_KINDS, HW, armyPos, coastThreat, groundUnits, mainOf, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
+import { DEF_KINDS, HW, armyPos, coastThreat, corpsAtPost, groundUnits, mainOf, postUnits, tileAtW, type GameState, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { FxSystem } from './fxSystem';
 import { F_DUST, F_MAP } from './fxSystem';
@@ -73,10 +73,10 @@ export class DynamicDraw {
       if (this.layer !== 2) this.frontLines(g, def.id, y, rig.dist);
       if (this.layer === 2) continue;
       // the main army in the middle, each corps at its border (a region in battle keeps only what is not fighting)
-      if (t.battle < 0 || !near) this.garrison(x, y, z, f, t.fr ? mainOf(t) : t.units, S);
-      if (t.fr) for (const [ks, c] of Object.entries(t.fr)) {
-        const p = sectorPoint(this.world, def.id, +ks), dx = x - p.x, dz = z - p.z, L = Math.hypot(dx, dz) || 1, px = p.x + dx / L * .22, pz = p.z + dz / L * .22;
-        this.garrison(px, this.hAt(px, pz, y), pz, f, c.u, S * .9, Math.atan2(-dx, -dz));
+      if (t.battle < 0 || !near) this.garrison(x, y, z, f, t.cs ? mainOf(t) : t.units, S);
+      if (t.cs) for (const ks of new Set(t.cs.filter(c => c.p >= 0).map(c => c.p))) {
+        const p = sectorPoint(this.world, def.id, ks), dx = x - p.x, dz = z - p.z, L = Math.hypot(dx, dz) || 1, px = p.x + dx / L * .22, pz = p.z + dz / L * .22;
+        this.garrison(px, this.hAt(px, pz, y), pz, f, postUnits(t, ks), S * .9, Math.atan2(-dx, -dz));
       }
     }
   }
@@ -89,7 +89,7 @@ export class DynamicDraw {
     const t = g.regions[rid], R = this.world.regions[rid], m = this.m, f = t.owner; if (f < 0) return;
     const close = dist < 60 || this.layer === 1 || rid === this.sel;
     for (const n of R.sectors) {
-      const c = t.fr?.[n], foe = n >= 1000 ? coastThreat(g, f, n - 1000) > 0 : g.regions[n].owner !== f;
+      const c = corpsAtPost(t, n).length ? { u: postUnits(t, n) } : undefined, foe = n >= 1000 ? coastThreat(g, f, n - 1000) > 0 : g.regions[n].owner !== f;
       if (!c && !(foe && (rid === this.sel || (this.layer === 1 && g.viewer === f)))) continue;
       if (c && !close) continue;
       // up close the dug-in trench shows the front; the staff-map bar would cover the troops

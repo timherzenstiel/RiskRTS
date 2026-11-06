@@ -4,6 +4,7 @@ import type { AgentType, DefKind, FortKind, Units, UnitType } from '../data/unit
 import type { DoctrineKey } from '../data/nations';
 import type { TechKey } from '../data/tech';
 import type { ShipKind } from '../data/sea';
+import type { TraitKey } from '../data/commanders';
 
 export type Mission =
   | { type: 'conts' | 'conts1'; conts: ContKey[] }
@@ -62,22 +63,35 @@ export interface Works { tr: number; sand: number; wire: number }
 export type Order = 0 | 1 | 2;
 export const ORDERS = ['Hold', 'Take the first line', 'Invade'] as const;
 /**
- * A corps: the troops holding one border of a region. Its formations are part of the region's `units` (the main army in the
- * middle of the region is whatever is not in a corps); men are spread evenly, so a corps fights at the region's strength.
+ * A corps: a formation of up to CORPS_CAP battalions standing at one post of a region (its centre, a land border or a coast).
+ * Several corps may share a post. Its battalions and men are part of the region's `units`/`men` totals; whatever is in no corps
+ * is the region's depot (recruits, stragglers, the troops a region on Auto arranges itself).
  */
 export interface Corps {
+  /** Unique id (kept while the corps marches, sails and fights), and its number within its power (names, see data/names.ts; -1 unknown). */
+  id: number; n: number;
+  /** Post: -1 the region centre (reserve), ≥0 the land border with that neighbour, ≥1000 a coast (see world/zones). */
+  p: number;
   u: Units;
-  /** Corps number within its power (names are made from it, see data/names.ts); -1 when the viewer does not know it. */
-  n: number;
+  /** Men present per type, and morale 0..100. */
+  m: Units; mor: number;
+  /** Experience 0..3 stars: +1 per battle won, each star +5 % damage. */
+  xp?: number;
+  /** Ordered by the player: Auto and its army's commander never move or dissolve it. */
+  man?: boolean;
+  /** The army (Hq id) it belongs to: its commander deploys it. */
+  army?: number;
   /** Standing order and stance. `ready`: game time from which the corps is assembled (jump-off trenches dug, guns registered). */
   ord?: Order; ready?: number; st?: Stance;
-  /** Game time the corps has been holding its border since (it digs in over time). */
+  /** Game time the corps has been holding its post since (it digs in over time). */
   since?: number;
   /** Attack now without waiting for assembly. */
   now?: boolean;
   /** Fog-of-war views only: estimated men [low, high]. */
   est?: [number, number];
 }
+/** What a corps keeps while it is away from a region (on the march, aboard, in battle): its identity, the post it left, experience. */
+export interface CorpsTag { id: number; n: number; p?: number; xp?: number; man?: boolean; st?: Stance; army?: number }
 
 /** A fixed defence. `s` is the border sector it covers (a neighbouring region id) or -1 for the interior. */
 export interface Defence { id: number; k: DefKind; s: number; hp: number; f: number }
@@ -90,7 +104,7 @@ export interface RegionState {
   defs: Defence[];
   /** Field works per border sector, keyed by neighbouring region id. Missing = none. */
   works: Record<number, Works>;
-  /** Morale of the garrison, 0..100. */
+  /** Morale of the depot (troops in no corps), 0..100. */
   mor: number;
   /** Power that held this region when the war began (its home territory is always a source of supply for it), or -1. */
   home: number;
@@ -112,9 +126,9 @@ export interface RegionState {
   stance: Stance;
   /** Fatigue bookkeeping: when marching troops last arrived, after how many borders in a row, and when a battle here last ended. */
   arrT?: number; legs?: number; foughtT?: number;
-  /** Corps per border (keyed by neighbouring region id). The main army is `units` minus every corps. */
-  fr?: Record<number, Corps>;
-  /** Number of the main army (names, see data/names.ts), and the deploy mode (1 manual; otherwise the region deploys itself). */
+  /** Corps standing in the region. The depot is `units`/`men` minus every corps. */
+  cs?: Corps[];
+  /** Number of the region's army (the depot's name, see data/names.ts), and the deploy mode (1 manual; otherwise the region deploys itself). */
   an?: number; deploy?: number;
   /** Shell craters per border sector, left by past battles (visual). */
   cr?: Record<number, number>;
@@ -164,6 +178,10 @@ export interface Army {
   inner?: boolean;
   /** Aircraft from (and back to) a carrier. */
   cv?: number;
+  /** Scouts sent out at a commander's request (his traits can help them). */
+  hq?: number;
+  /** A whole corps on the move (it takes up its post again on arrival). */
+  ct?: CorpsTag;
 }
 
 export interface Agent {
@@ -178,6 +196,8 @@ export interface Agent {
   defId?: number; sector?: number;
   /** Aircraft: remaining time over the battlefield, home region, and whether it has left; the carrier they fly back to. */
   fuel?: number; home?: number; out?: boolean; cv?: number;
+  /** Ground troops: the corps they belong to, and its experience. */
+  c?: number; xp?: number;
 }
 export interface Shell { x: number; z: number; time: number; f: number; dmg: number; sp: number; src: AgentType }
 
@@ -226,6 +246,8 @@ export interface Battle {
   src?: number; amph?: number;
   /** Reload timers of battleships bombarding this coast (ship id → seconds). */
   bomb?: Record<number, number>;
+  /** Corps fighting here (id → tag); their agents carry the id. */
+  ct?: Record<number, CorpsTag>;
 }
 
 /** A ship: docked in a port, or at sea with a fleet. Battleship squadrons and carriers carry their hit points over from battle to battle. */
@@ -266,6 +288,8 @@ export interface Fleet {
   gn?: number; gk?: number;
   /** The assault is held offshore by storms. */
   storm?: boolean;
+  /** A whole corps aboard. */
+  ct?: CorpsTag;
   /** Just out of a naval battle: not caught again until this game time. */
   calm?: number;
 }
@@ -377,7 +401,10 @@ export type GameEvent =
   | { k: 'shipped'; faction: number; from: number; to: number; units: number }
   | { k: 'landing'; faction: number; region: number; zone: number; ok: boolean; owner: number }
   | { k: 'seaBattle'; zone: number; sides: number[][]; winner: number; sunk: Record<string, number>[]; start: boolean; id: number }
-  | { k: 'strait'; link: number; open: boolean; region: number };
+  | { k: 'strait'; link: number; open: boolean; region: number }
+  /** Commanders: a corps sent back to the player (and why), a critical request filed. */
+  | { k: 'release'; faction: number; army: number; n: number; region: number; why: HqNote['why'] }
+  | { k: 'request'; faction: number; army: number; kind: ReqKind; region: number; sector: number; urg: 0 | 1 | 2; req: number };
 
 export interface GameStats { won: number[]; lost: number[] }
 
@@ -400,14 +427,62 @@ export const PACES = [
 export interface Intel {
   day: number; time: number; owner: number; units: Units; men: Units; defs: Defence[]; works: Record<number, Works>;
   factory: boolean; barracks: boolean; airfield: boolean;
-  /** Corps seen on the borders. */
-  fr?: Record<number, Corps>;
+  /** Corps seen in the region. */
+  cs?: Corps[];
 }
 /** A spy: travelling until `eta`, then reporting continuously from `region` until found. */
+/** What an army's commander is allowed to do (design-command §2.5). */
+export type Mandate = 0 | 1 | 2;
+export const MANDATES = ['Hold', 'Active defence', 'Offensive'] as const;
+/** Requests a commander files: more men, field works, a patrol, permission to attack, to fall back, to send corps back to you. */
+export type ReqKind = 'men' | 'fort' | 'recon' | 'attack' | 'fallback' | 'release';
+/** Kinds a standing approval may cover (an attack is always asked). */
+export const STANDING_KINDS: ReqKind[] = ['men', 'fort', 'recon', 'fallback', 'release'];
+/** A note in an army's log: a corps sent back to the player or moved along the front, and why. */
+export interface HqNote { t: number; day: number; k: 'release' | 'move'; n: number; region: number; post: number; why: 'peace' | 'safe' | 'quiet' | 'need' | 'lost' }
+/** An army: a group of corps on a stretch of front (its regions) under a commander. */
+export interface Hq {
+  id: number; owner: number;
+  /** Army number (names, see data/names.ts). */
+  n: number;
+  cmd: { name: string; tr: [TraitKey, TraitKey]; xp: number };
+  /** Own regions the army holds; its commander deploys its corps over their hostile borders. */
+  front: number[];
+  mandate: Mandate;
+  /** Offensive: the enemy region to take. */
+  target?: number;
+  /** Share of weekly income the commander may spend himself (0..0.3), and what he spent this week (week number `wk`). */
+  budget: number; spent: number; wk: number;
+  /** Request kinds approved in advance. */
+  standing: ReqKind[];
+  /** Requests denied, by key, not asked again until this game time. */
+  deny: Record<string, number>;
+  /** Game time of the next look at the front, the last report counted for experience, recent notes. */
+  next: number; rep: number; notes: HqNote[];
+}
+/** A commander's request. Numbers only; the client words it. */
+export interface Req {
+  id: number; owner: number; army: number; kind: ReqKind;
+  /** Same key = same request (updated in place while the reason lasts). */
+  key: string;
+  /** 0 routine, 1 urgent, 2 critical. */
+  urg: 0 | 1 | 2;
+  at: number;
+  region: number; sector: number;
+  /** Battalions wanted (men), cost in supply (men per battalion, fort, recon), corps concerned (attack, fall back), goal, work. */
+  n?: number; cost?: number; corps?: number[]; goal?: Order; fort?: 'trench' | 'wire';
+  /** The balance behind it: ours, theirs (range), ratio, massing. */
+  own?: number; their?: [number, number]; ratio?: number | null; massing?: boolean;
+  /** Release: why the corps are not needed (a treaty with the power across, or the border is safe). */
+  why?: 'peace' | 'safe';
+  /** Reconnaissance: by cavalry patrol, flight or spy, from which region (patrol: the border region; flight: an airfield), and what for. */
+  by?: 'patrol' | 'recon' | 'spy'; from?: number; for?: 'watch' | 'attack' | 'target';
+}
+
 export interface Spy { id: number; f: number; region: number; eta: number; /** Exposed by sabotage until this day: twice as likely to be caught. */ hot?: number }
 
 export interface GameState {
-  v: 6; seed: number; rng: number;
+  v: 7; seed: number; rng: number;
   time: number; day: number; supplyT: number; diff: number;
   cfg: GameSettings;
   regions: RegionState[]; factions: FactionState[];
@@ -421,6 +496,8 @@ export interface GameState {
   railCut: Record<string, number>; railNew: [number, number, number][];
   /** Treaties in force and offers waiting for an answer. */
   treaties: Treaty[]; offers: Offer[];
+  /** Armies with their commanders, and the requests waiting for an answer. */
+  hq?: Hq[]; requests?: Req[];
   /** The navy: every ship, fleets at sea, naval battles. */
   ships: Ship[]; fleets: Fleet[]; seaBattles: SeaBattle[];
   /** Fog-of-war views only: the faction this view was made for. */
@@ -452,8 +529,25 @@ export type Command =
   | { t: 'march'; from: number; to: number; frac: number; brk?: boolean; goal?: Order; post?: number }
   /** Move a share of a group (`post` -1 the main army, else the corps of that border) to another post of the region, or through own land to a post of region `to`. */
   | { t: 'move'; region: number; post: number; to: number; toPost: number; frac: number }
-  /** Standing order of the corps on border `post`: 0 hold, 1 take the first line, 2 invade. `now`: attack without waiting for assembly. */
-  | { t: 'order'; region: number; post: number; k: Order; now?: boolean; brk?: boolean }
+  /** Standing order of the corps on border `post` (one corps with `id`, else every corps there): 0 hold, 1 take the first line, 2 invade. `now`: attack without waiting for assembly. */
+  | { t: 'order'; region: number; post: number; k: Order; now?: boolean; brk?: boolean; id?: number }
+  /** Corps orders: march a corps to a post of an own region; attack a neighbouring region with it (it moves up to that border first). */
+  | { t: 'moveCorps'; region: number; id: number; to: number; toPost: number }
+  | { t: 'attackCorps'; region: number; id: number; to: number; goal: Order; now?: boolean; brk?: boolean }
+  /** Split battalions off a corps into a new corps at the same post; merge corps `b` into corps `a` (same post). */
+  | { t: 'detach'; region: number; id: number; u: Partial<Units> }
+  | { t: 'merge'; region: number; a: number; b: number }
+  /** Form a new corps at the region centre from the depot. */
+  | { t: 'form'; region: number; u: Partial<Units> }
+  /** Corps settings: stance, and whether Auto may manage it (`man` false hands it back to the region). */
+  | { t: 'corpsSet'; region: number; id: number; st?: Stance; man?: boolean }
+  /** Armies: form one from corps (its front starts with their regions), put corps in or out, change its settings, answer a request. */
+  | { t: 'army'; corps: number[] }
+  | { t: 'armyAssign'; army: number; corps: number[]; on: boolean }
+  | { t: 'armySet'; army: number; mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[] }
+  | { t: 'reply'; req: number; opt: 'yes' | 'recruit' | 'transfer' | 'deny'; n?: number }
+  | { t: 'relieve'; army: number }
+  | { t: 'disband'; army: number }
   /** Deploy mode of a region: 0 the region deploys itself, 1 manual. */
   | { t: 'deploy'; region: number; mode: number }
   /** Fly aircraft from `from` to a region up to AIR_RANGE borders away. */

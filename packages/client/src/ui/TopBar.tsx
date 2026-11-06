@@ -1,6 +1,9 @@
 // Top strip: sealed orders, radio dispatch ticker, phosphor counters (supply, shells, men, weariness), powers, date, speed, menu.
 import { useEffect, useRef, useState } from 'react';
-import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, missionFrac, missionText, poolGrowth, shellIncome, weatherAt } from '@riskrts/shared';
+import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, incomeTerms, missionFrac, missionText, poolGrowth, poolTerms, shellIncome, shellTerms, weatherAt, type Term } from '@riskrts/shared';
+
+/** A breakdown for a tooltip: one line per term, then the total. */
+const why = (terms: Term[], unit: string) => '\n\n' + [...terms.map(t => `${t.v >= 0 ? '+' : '−'}${Math.abs(Math.round(t.v * 10) / 10)}  ${t.label}${t.note ? ` (${t.note})` : ''}`), `= ${Math.round(terms.reduce((a, t) => a + t.v, 0))} ${unit}`].join('\n');
 import { dateStr, useSim, useUi } from '../game/store';
 import { buildWorld } from '@riskrts/shared';
 import { GuestSession } from '../game/session';
@@ -73,13 +76,13 @@ export function TopBar() {
       <Ticker />
 
       <div className="counters">
-        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title={t('Supply: the money of the war. Recruiting, building, fortifying and scouting all cost supply. +{0} arrives with every convoy (the ring counts down to it): more for more regions, factories and whole continents, less with high war weariness. Cut-off or contested regions pay nothing.', income(g, me))}>
-          <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={t('Next convoy in {0} seconds', convoyIn(g))}><span>{Math.max(0, convoyIn(g))}</span></div>
-          <small>{t('Supply')}</small><span className="lcd-w"><b key={f.supply}>{f.supply}</b><i>+{income(g, me)}</i></span>
+        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title={`Supply: the money of the war. Recruiting, building, fortifying and scouting all cost supply. +${income(g, me)} arrives with every convoy (the ring counts down to it): more for more regions, factories and whole continents, less with high war weariness. Cut-off or contested regions pay nothing.` + why(incomeTerms(g, me), 'per convoy')}>
+          <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next convoy in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
+          <small>Supply</small><span className="lcd-w"><b key={f.supply}>{f.supply}</b><i>+{income(g, me)}</i></span>
         </div>
-        <Lcd label={t('Shells')} value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls="sh" title={t('Shells: ammunition for artillery and gun emplacements. Every gun shot in a battle uses some; with none left the guns fall silent. Factories and the capital make more each convoy, and the Build tab turns supply into shells.')} />
-        <Lcd label={t('Men')} value={men >= 10000 ? `${Math.round(men / 1000)}k` : menStr(Math.floor(men))} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
-          title={t('Men: the manpower pool. Every new formation takes men from it (an infantry battalion needs 100). +{0} come in each convoy, a new age class from every home region you still hold, so losing home regions or a long war makes recruits scarce. Raise conscription on the nation screen (click) for more, at the cost of war weariness.', poolGrowth(g, me))} onClick={() => { click(); ui().setOverlay('nation'); }} />
+        <Lcd label="Shells" value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls="sh" title={'Shells: ammunition for artillery and gun emplacements. Every gun shot in a battle uses some; with none left the guns fall silent. Factories and the capital make more each convoy, and the Build tab turns supply into shells.' + why(shellTerms(g, me), 'shells per convoy')} />
+        <Lcd label="Men" value={men >= 10000 ? `${Math.round(men / 1000)}k` : Math.floor(men).toLocaleString('en-GB')} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
+          title={`Men: the manpower pool. Every new formation takes men from it (an infantry battalion needs 100). +${poolGrowth(g, me)} come in each convoy, a new age class from every home region you still hold, so losing home regions or a long war makes recruits scarce. Raise conscription on the nation screen (click) for more, at the cost of war weariness.` + why(poolTerms(g, me), 'men per convoy')} onClick={() => { click(); ui().setOverlay('nation'); }} />
         <Needle v={f.ww} unrest={NATIONS[me].unrest} />
         <div className="pills" role="group" aria-label={t('Powers')}>
           {FACTIONS.map((x, i) => (
@@ -96,9 +99,11 @@ export function TopBar() {
         <button id="date" className="lcd datebtn" title={t('War calendar: unlocks, rushes and doctrines')} onClick={() => { click(); ui().setOverlay('calendar'); }}><small>{t('Date')}</small><span className="lcd-w"><b>{(dateStr(g.day))}</b></span></button>
         <span className={'wx w' + w} title={t('Weather in {0}: {1}', buildWorld().regions[at].name, WEATHER[w]) + (w === 1 ? ' · ' + t('marches and assaults 30% slower, shells sink into the mud') : w === 2 ? ' · ' + t('marches 40% slower, cut-off troops wear down twice as fast') : w === 3 ? ' · ' + t('cut-off troops wear down 50% faster') : '')}>{tx(WEATHER[w])}</span>
         {session.canControlTime ? (
-          <div className="seg speed" role="group" aria-label={t('Game speed')}>
-            <button aria-label={t('Pause')} aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
-            {SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)}
+          <div className="seg speed" role="group" aria-label="Game speed">
+            <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
+            {session.canChangeSpeed
+              ? SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)
+              : <button aria-pressed={speed === 1} title="Against other players the war runs at 1×. 2× and 4× are only for games against computers." onClick={() => { click(); ui().setSpeed(1); }}>1×</button>}
           </div>
         ) : (
           <span className="speedro" title={session instanceof GuestSession && session.spectator ? t('Watching with full vision, a little delayed') : t('The host controls the game speed')}>{session instanceof GuestSession && session.spectator ? t('Spectating') : speed === 0 ? t('Paused') : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ' + t('ranked') : ''}</span>

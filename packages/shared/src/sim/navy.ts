@@ -12,7 +12,7 @@ import { coastKey, isCoast, pathAt, seaPath, seaPlan, tilePos as tileXZ, zoneAt,
 import { emit, frontsOf, rnd, world } from './core';
 import { allied, atPeace } from './diplomacy';
 import { hasDoc } from './tech';
-import { POST_SPEED, addToGroup, armyNo, column, groupUnits, legDist, moveK, takeGroup } from './posts';
+import { POST_SPEED, addToGroup, armyNo, column, corpsById, groupUnits, legDist, moveK, tagOf, takeCorps, takeGroup, type Taken } from './posts';
 import { joinBattle, startBattle } from './battle';
 import { joinSeaBattle, seaBattleCheck } from './naval';
 import type { Fleet, GameState, Order, RegionState, Ship, Stance } from './types';
@@ -164,7 +164,7 @@ const shareOf = (src: Units, frac: number): Partial<Units> => {
   return n;
 };
 
-export interface ShipOpts { /** Leave guns and tanks behind instead of refusing when a port is missing (the AI). */ quay?: 'drop'; gn?: number; gk?: number; st?: Stance }
+export interface ShipOpts { /** Leave guns and tanks behind instead of refusing when a port is missing (the AI). */ quay?: 'drop'; gn?: number; gk?: number; st?: Stance; /** Ship this one corps (`frac` then applies to it). */ cid?: number }
 
 /**
  * Ship a share of a group (`post` -1 the main army, else a corps) of an own coastal region over the sea to post `toPost` of
@@ -182,7 +182,9 @@ export function shipTroops(g: GameState, fid: number, from: number, post: number
   if (from === to) return 'The troops are already there.';
   if (toPost >= 0 && !W.regions[to].sectors.includes(toPost)) toPost = -1;
   if (A.battle >= 0 && frontsOf(g, from).some(b => !b.goal)) return `${an} is under attack. Its troops cannot leave.`;
-  const src = groupUnits(A, post); if (groundUnits(src) < 1) return post < 0 ? `The main army of ${an} has no ground troops.` : 'There is no corps on that border.';
+  const one = o.cid !== undefined ? corpsById(A, o.cid) : undefined; if (o.cid !== undefined && !one) return 'That corps is not in this region.';
+  if (one) post = one.p;
+  const src = one ? one.u : groupUnits(A, post); if (groundUnits(src) < 1) return post < 0 ? `The main army of ${an} has no ground troops.` : 'There is no corps on that border.';
   const tot = groundUnits(A.units); if (tot < 2) return `${an} needs at least 2 ground formations to ship any. One always stays behind.`;
   const route = planRoute(g, fid, coastNodes(from), coastNodes(to));
   if (!route) return `No sea route open to ${bn}: the straits on the way are closed.`;
@@ -202,10 +204,14 @@ export function shipTroops(g: GameState, fid: number, from: number, post: number
   if (!pool.length) return 'No transports free. Build one in a port, or wait for one to come home.';
   const need = Math.ceil(slotsOf(want) / SHIP.trans.cap), picked = pool.slice(0, need);
   const cargo = fit(want, picked.length * SHIP.trans.cap);
-  const out = takeGroup(A, post, 0, cargo); if (groundUnits(out.u) < 1) return 'No troops to ship.';
+  let out: Taken;
+  if (one) { const c1 = one, tag = tagOf(c1), mor = c1.mor, st = c1.st, whole = GROUND_TYPES.every(k => (cargo[k] ?? 0) >= c1.u[k]), t = takeCorps(A, c1, cargo); out = { ...t, mor, st, n: tag.n, tag: whole ? { ...tag, man: true } : undefined }; }
+  else out = takeGroup(A, post, 0, cargo);
+  if (groundUnits(out.u) < 1) return 'No troops to ship.';
   const appr = muster(g, fid, picked, at);
   const ships = picked.map(p => p.s);
-  const fl = newFleet(g, fid, ships, { task: 'move', state: 'muster', cargo: out.u, men: out.m, mor: A.mor, from, to, toPost, zone: z1, st: post >= 0 ? A.fr?.[post]?.st ?? A.stance : A.stance, gn: o.gn ?? (post < 0 ? armyNo(g, A) : A.fr?.[post]?.n), gk: o.gk ?? (post < 0 ? 0 : 1) });
+  const fl = newFleet(g, fid, ships, { task: 'move', state: 'muster', cargo: out.u, men: out.m, mor: out.mor, from, to, toPost, zone: z1, st: out.st ?? A.stance, gn: o.gn ?? out.n ?? armyNo(g, A), gk: o.gk ?? (out.n !== undefined ? 1 : 0) });
+  if (out.tag) fl.ct = out.tag;
   setRoute(fl, appr);
   const march = legDist(from, post, from, coastKey(z0)) / POST_SPEED * moveK(g);
   fl.t = Math.max(march, sailTime(g, appr.len, fl.v, appr.zs));
@@ -386,7 +392,7 @@ function landTroops(g: GameState, fl: Fleet, region: number, post: number) {
   if (groundUnits(fl.cargo) < 1) return;
   const coast = coastKey(fl.zone >= 0 && world().regions[region].zones.includes(fl.zone) ? fl.zone : world().regions[region].zones[0]);
   const front = frontsOf(g, region).find(b => b.def === fl.owner && b.from === (post >= 0 ? post : coast));
-  column(g, fl.owner, region, coast, region, post, fl.cargo, fl.men, fl.mor, { stance: fl.st, gn: fl.gn, gk: fl.gk, front: front?.id });
+  column(g, fl.owner, region, coast, region, post, fl.cargo, fl.men, fl.mor, { stance: fl.st, gn: fl.gn, gk: fl.gk, front: front?.id, ct: fl.ct });
   fl.cargo = emptyUnits(); fl.men = emptyUnits();
 }
 
@@ -593,7 +599,7 @@ function arriveFleet(g: GameState, fl: Fleet) {
       return;
     case 'return': {
       if (B.owner === fl.owner && portReady(g, B)) {
-        if (groundUnits(fl.cargo) > 0) { addToGroup(g, B, -1, fl.cargo, fl.men, fl.mor); fl.cargo = emptyUnits(); fl.men = emptyUnits(); }
+        if (groundUnits(fl.cargo) > 0) { addToGroup(g, B, -1, fl.cargo, fl.men, fl.mor, fl.ct); fl.cargo = emptyUnits(); fl.men = emptyUnits(); }
         dockAt(g, fl, B.id); return;
       }
       if (!goHome(g, fl)) { failCargo(g, fl); for (const s of fleetShips(g, fl)) sinkShip(g, s); dissolve(g, fl); }
@@ -620,7 +626,7 @@ function startLanding(g: GameState, fl: Fleet) {
   const l2 = Math.hypot(dx, dz) || 1, dir = { x: dx / l2, z: dz / l2 };
   let b = frontsOf(g, B.id).find(x => x.from === sector && x.attacker === fl.owner);
   if (!b) { b = startBattle(g, B, dir, fl.owner, sector, fl.goal ?? 2); b.src = fl.from; b.amph = fl.id; }
-  joinBattle(g, b, fl.owner, u, dir, false, B.id, m, fl.mor, fl.st);
+  joinBattle(g, b, fl.owner, u, dir, false, B.id, m, fl.mor, fl.st, fl.ct);
   fl.state = 'beach'; fl.battle = b.id; fl.t = 0;
   emit(g, { k: 'landing', faction: fl.owner, region: B.id, zone: fl.zone, ok: true, owner: B.owner });
 }
@@ -630,7 +636,7 @@ function stepBeach(g: GameState, fl: Fleet, dt: number) {
   const b = g.battles.find(x => x.id === fl.battle);
   const B = g.regions[fl.to];
   if (!b || b.ended) {
-    if (B.owner === fl.owner) { if (groundUnits(fl.cargo) > 0) { addToGroup(g, B, -1, fl.cargo, fl.men, fl.mor); fl.cargo = emptyUnits(); fl.men = emptyUnits(); } }
+    if (B.owner === fl.owner) { if (groundUnits(fl.cargo) > 0) { addToGroup(g, B, -1, fl.cargo, fl.men, fl.mor, fl.ct); fl.cargo = emptyUnits(); fl.men = emptyUnits(); } }
     else {
       // repulsed: a quarter of the landing craft is lost to the coast guns, the rest carry home whatever did not land
       const lc = fleetShips(g, fl).filter(s => s.kind === 'land'); for (let k = 0; k < Math.ceil(lc.length / 4); k++) sinkShip(g, lc[k]);
@@ -650,7 +656,7 @@ function stepBeach(g: GameState, fl: Fleet, dt: number) {
   fl.t -= dt; if (fl.t > 0) return;
   if (groundUnits(fl.cargo) > 0) {
     const dir = { x: b.ax, z: b.az };
-    joinBattle(g, b, fl.owner, fl.cargo, dir, false, B.id, fl.men, fl.mor, fl.st);
+    joinBattle(g, b, fl.owner, fl.cargo, dir, false, B.id, fl.men, fl.mor, fl.st, fl.ct);
     fl.cargo = emptyUnits(); fl.men = emptyUnits();
   }
   // the battleships stay to bombard while the beach is fought over; the rest sail home
@@ -721,7 +727,9 @@ export function migrateNavy(g: GameState) {
       const z = W.laneZone.get(r.id + '|' + n); if (z === undefined || z < 0) continue; const k = coastKey(z);
       const w = r.works[n]; if (w) { const t = (r.works[k] ??= { tr: 0, sand: 0, wire: 0 }); t.tr = Math.max(t.tr, w.tr); t.sand = Math.max(t.sand, w.sand); t.wire = Math.max(t.wire, w.wire); delete r.works[n]; }
       for (const d of r.defs) if (d.s === n) d.s = k;
-      const c = r.fr?.[n]; if (c && r.fr) { const t = r.fr[k]; if (t) for (const u of GROUND_TYPES) t.u[u] += c.u[u]; else r.fr[k] = { ...c, ord: 0, now: false }; delete r.fr[n]; }
+      // corps of the old format (see game.ts to7): one per border, keyed by neighbour
+      const fr = (r as unknown as { fr?: Record<number, { u: Units; ord?: number; now?: boolean }> }).fr;
+      const c = fr?.[n]; if (c && fr) { const t = fr[k]; if (t) for (const u of GROUND_TYPES) t.u[u] += c.u[u]; else fr[k] = { ...c, ord: 0, now: false }; delete fr[n]; }
     }
   }
 }

@@ -1,4 +1,5 @@
-// Region file in the War Office sidebar: header, fronts, intelligence, garrison, works, and (for own regions) Recruit / Build / Fortify / March tabs.
+// Region card in the War Office sidebar: header, fronts, intelligence, garrison, works, and (for own regions) the Overview, Recruit
+// and Build tabs. Border works live on the border card; nation-wide business in the left panels (design-command §5).
 import { useState } from 'react';
 import { WEATHER, TREATY_NAMES, railOpen, railsOf, weatherAt, activeSpies, techOn, treatyOf } from '@riskrts/shared';
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
@@ -7,7 +8,7 @@ import { click } from './actions';
 import { Sfx } from '../audio/sfx';
 import { CloseIcon, Icon, SupplyIcon } from './icons';
 import { rendererRef } from './refs';
-import { AttackBudget, BuildTab, FortifyTab, MarchTab, RecruitTab, SharePicker, NeighbourRow, knownTroops, reportAge } from './DrawerTabs';
+import { AirSection, AttackBudget, BuildTab, Feints, GoalPicker, ReconSection, RecruitTab, SharePicker, NeighbourRow, knownTroops, reportAge } from './DrawerTabs';
 import { forceOf } from './garrison';
 import { menOf, menStr, nm, strengthOf } from './format';
 import { t, tx } from '../i18n';
@@ -17,7 +18,7 @@ import { DeployTab, corpsState, unitsLine } from './DeployTab';
 import { borderLabel, groupName } from '@riskrts/shared';
 import { CarrierRows, LandingRows, NavyTab } from './Navy';
 
-const TABS: [Tab, () => string][] = [['rec', () => t('Recruit')], ['fort', () => t('Fortify')], ['build', () => t('Build')], ['deploy', () => t('Deploy')], ['march', () => t('March')], ['navy', () => t('Harbour')]];
+const TABS: [Tab, string][] = [['over', 'Overview'], ['rec', 'Recruit'], ['build', 'Build']];
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 
 /** One line per front: where the attack comes from, who is left, morale, and (for the defender) a reserves button. */
@@ -44,6 +45,18 @@ function Fronts({ g, me, fronts, own }: { g: GameState; me: number; fronts: Batt
         );
       })}
     </div>
+  );
+}
+
+/** Touch screens have no right-click: march on a region picked on the map. */
+function PickTarget({ region }: { region: { battle: number; units: { inf: number; mg: number; art: number; tank: number; plane: number } } }) {
+  const orderMode = useUi(s => s.orderMode); const kind = useUi(s => s.orderKind), active = orderMode && kind === 'march';
+  const ground = region.units.inf + region.units.mg + region.units.art + region.units.tank;
+  return (
+    <button className="btn sm wide pick-target" aria-pressed={active} disabled={region.battle >= 0 || ground < 2}
+      onClick={() => { click(); const u = useUi.getState(); if (active) u.cancelOrder(); else u.beginOrder('march'); }}>
+      {active ? 'Cancel · pick a target on the map' : 'Pick a target on the map'}
+    </button>
   );
 }
 
@@ -121,10 +134,10 @@ export function Drawer() {
           </div>
         </div>
       )}
-      {!own && r.fr && Object.keys(r.fr).length > 0 && (
+      {!own && r.cs && r.cs.length > 0 && (
         <div className="pad borders corps-seen">
-          {Object.entries(r.fr).map(([s, c]) => (
-            <small key={s}><b>{t('{0} on the {1}:', c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops', borderLabel(W, +s))}</b> {c.est ? t('est. {0}–{1} men', menStr(c.est[0]), menStr(c.est[1])) : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · ' + t('massing for an attack') : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
+          {r.cs.map(c => (
+            <small key={c.id}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} {c.p < 0 ? 'in the centre' : `on the ${borderLabel(W, c.p).replace(' border', '') + (c.p >= 1000 ? '' : ' border')}`}:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
           ))}
         </div>
       )}
@@ -138,16 +151,30 @@ export function Drawer() {
 
       {own ? (
         <>
-          <div className="tabs" role="tablist" aria-label={t('Orders')}>
-            {TABS.filter(([k]) => k !== 'navy' || wr.zones.length > 0).map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l()}</button>)}
+          <div className="tabs" role="tablist" aria-label="Region">
+            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l}</button>)}
           </div>
           <div className="tb-body" role="tabpanel">
+            {tab === 'over' && (
+              <>
+                <DeployTab region={r} id={sel} />
+                <div className="lbl"><span>Operations from {wr.name}</span></div>
+                <AttackBudget />
+                <GoalPicker />
+                <PickTarget region={r} />
+                <p className="note">With nothing but this region selected, right-click a neighbour to march the share above there, or attack it (the troops form up, move to the border, assemble and go in). With corps selected, right-click moves or attacks with them.</p>
+                <AirSection region={r} id={sel} />
+                <ReconSection region={r} id={sel} />
+                <Feints region={r} id={sel} />
+              </>
+            )}
             {tab === 'rec' && <RecruitTab region={r} id={sel} />}
-            {tab === 'build' && <BuildTab region={r} id={sel} />}
-            {tab === 'fort' && <FortifyTab region={r} id={sel} />}
-            {tab === 'deploy' && <DeployTab region={r} id={sel} />}
-            {tab === 'march' && <MarchTab region={r} id={sel} />}
-            {tab === 'navy' && (wr.zones.length > 0 ? <NavyTab region={r} id={sel} /> : <p className="note">{t('{0} has no coast.', wr.name)}</p>)}
+            {tab === 'build' && (
+              <>
+                <BuildTab region={r} id={sel} />
+                {wr.zones.length > 0 && <><div className="lbl"><span>Harbour</span></div><NavyTab region={r} id={sel} /></>}
+              </>
+            )}
           </div>
         </>
       ) : (

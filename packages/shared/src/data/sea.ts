@@ -115,10 +115,10 @@ export const START_FLEETS: StartFleet[] = [
   { trans: 5, land: 2, bb: 3, at: [{ region: 'Western States', bb: 1, trans: 2 }] },
 ];
 
-/** Naval battles: ship agents per type. Ranges and speeds in battle units (1 battle unit = 0.25 world units). */
+/** Naval battles: ship agents per type. Ranges and speeds in battle units (1 battle unit = 0.16 world units). */
 export const NAVAL = {
   /** World units per battle unit. */
-  scale: .25,
+  scale: .16,
   /** Half extent of the battle area. */
   halfW: 26, halfH: 18,
   dn: { speed: .32, turrets: 5, dmg: 4, reload: 6, range: 14, hpShare: .44, spacing: 2.6 },

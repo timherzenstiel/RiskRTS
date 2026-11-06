@@ -14,6 +14,8 @@ import { Sfx } from '../audio/sfx';
 
 /** Map scale of ships at sea and in port (a dreadnought is about a third of a region's town wide). */
 const SHIP_S = .9;
+/** Ships in a naval battle are drawn smaller, so a battle line fits the battle area. */
+const BATTLE_S = .6;
 const R = Math.random;
 
 interface Pending { t: number; x: number; z: number; hit: boolean; big: boolean; y?: number; bomb?: boolean }
@@ -28,8 +30,9 @@ export class NavyDraw {
 
   /** Coast point of a region's harbour: the coast with the longest shore. */
   harbourAt(region: number) {
-    const R0 = this.world.regions[region]; let z = R0.zones[0], n = -1;
-    for (const k of R0.zones) if (R0.coast[k].n > n) { n = R0.coast[k].n; z = k; }
+    // the coast nearest the region's town (where the capital or main city lies)
+    const R0 = this.world.regions[region]; let z = R0.zones[0], bd = 1e9;
+    for (const k of R0.zones) { const c = R0.coast[k], d = wrapDx(R0.cx, c.x) ** 2 + (R0.cz - c.z) ** 2 - Math.min(40, c.n) * .02; if (d < bd) { bd = d; z = k; } }
     return z === undefined ? null : { zone: z, c: R0.coast[z] };
   }
 
@@ -118,11 +121,11 @@ export class NavyDraw {
       if (a.dead && since > 14) continue;
       const sink = a.dead ? Math.min(.2, since * .016) : 0;
       if (a.kind === 'pl') { if (!a.dead) this.m.plane(p.x, .55 + Math.sin(T * 2 + a.id) * .03, p.z, hd, band, .55, a.f); continue; }
-      if (a.kind === 'dn') this.m.ship(p.x, p.z, hd, band, SHIP_S, T + a.id, false, a.dead ? undefined : a.aim, sink);
-      else if (a.kind === 'dd') this.m.destroyer(p.x, p.z, hd, band, SHIP_S * .75, T + a.id, sink);
-      else if (a.kind === 'cv') this.m.carrier(p.x, p.z, hd, band, SHIP_S, T + a.id, 0, sink);
-      else if (a.kind === 'tr') this.m.ship(p.x, p.z, hd, band, SHIP_S * .8, T + a.id, true, undefined, sink);
-      else this.m.lighters(p.x, p.z, hd, band, SHIP_S * .5, T + a.id, 3, sink);
+      if (a.kind === 'dn') this.m.ship(p.x, p.z, hd, band, BATTLE_S, T + a.id, false, a.dead ? undefined : a.aim, sink);
+      else if (a.kind === 'dd') this.m.destroyer(p.x, p.z, hd, band, BATTLE_S * .75, T + a.id, sink);
+      else if (a.kind === 'cv') this.m.carrier(p.x, p.z, hd, band, BATTLE_S, T + a.id, 0, sink);
+      else if (a.kind === 'tr') this.m.ship(p.x, p.z, hd, band, BATTLE_S * .8, T + a.id, true, undefined, sink);
+      else this.m.lighters(p.x, p.z, hd, band, BATTLE_S * .5, T + a.id, 3, sink);
       // funnel smoke, fires and the oil slick of the sunk
       if (puff && !a.dead) this.fx.spawn(p.x - Math.sin(hd) * .05, .3, p.z - Math.cos(hd) * .05, -Math.sin(hd) * .06, .1, -Math.cos(hd) * .06, 0, 2.6, .05, .16, K.smoke, F_THIN);
       if (puff && (a.fire > 0 || (a.dead && since < 10))) { this.fx.spawn(p.x, .2, p.z, (R() - .5) * .02, .14, (R() - .5) * .02, 0, 3, .08, .3, K.smoke2, F_HOT); this.fx.spawn(p.x, .16, p.z, 0, .05, 0, 0, .5, .05, .09, K.fire, F_FLAME); }

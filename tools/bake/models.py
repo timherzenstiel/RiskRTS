@@ -305,10 +305,13 @@ def main():
     hires = importlib.util.module_from_spec(spec); sys.modules['models'] = sys.modules[__name__]; spec.loader.exec_module(hires)
     lo = [soldier('soldier_lo'), soldier('soldier_kneel_lo', True)]
     hi = hires.build()
-    objs = lo + hi
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import ships
+    navy = ships.build(Kit, srgb)
+    objs = lo + hi + navy
     print('baking ambient occlusion ...')
     big = {'house_a', 'house_b', 'church', 'house_ruin', 'house_ruin_b', 'house_a_lo', 'house_b_lo'}   # modelled in a unit frame (scaled down per house): occlusion reaches further
-    bake_ao([o for o in objs if o.name not in big], ground_for=lambda o: not (o.name.startswith(('helm', 'plane', 'prop', 'mark'))))  # scenery bakes with the ground too
+    bake_ao([o for o in objs if o.name not in big], ground_for=lambda o: not (o.name.startswith(('helm', 'plane', 'prop', 'mark', 'dreadnought', 'turret', 'destroyer', 'liner', 'carrier', 'lighter'))))  # scenery bakes with the ground too
     bake_ao([o for o in objs if o.name in big], dist=.16, strength=.55)
     for o in objs:
         o.select_set(True)

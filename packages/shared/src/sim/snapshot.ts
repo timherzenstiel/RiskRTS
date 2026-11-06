@@ -156,10 +156,11 @@ export function applySnapshot(m: GameState, s: Snapshot) {
   }
   m.battles = m.battles.filter(b => keep.has(b.id));
   m.ships = s.sh ?? []; m.fleets = s.fl ?? [];
+  const oldSea = new Map((m.seaBattles ?? []).map(x => [x.id, x]));
   m.seaBattles = (s.sb ?? []).map((x): SeaBattle => ({
     id: x.id, zone: x.zone, x: x.x, z: x.z, ax: x.ax, az: x.az, sides: x.sides, fleets: x.fleets, age: x.age, ended: x.ended, removeAt: 0, night: x.night, hp0: x.hp0, brk: x.brk, sunk: x.sunk, winner: x.winner, shells: [],
     torps: x.tp.map(([tx, tz, hd]) => ({ x: tx, z: tz, hd, t: 1, f: -1 })),
-    agents: x.ag.map(a => ({ id: 0, ship: a[9], f: a[1], kind: SHIP_AGENT_KINDS[a[0]], x: a[2], z: a[3], hd: a[4], v: 0, hp: a[5], hp0: 1, tur: 5, torps: 0, tgt: -1, cd: 0, fire: a[6] & 4 ? 1 : 0, str: 0, aim: a[7], fireT: m.time - a[8], out: !!(a[6] & 2), dead: !!(a[6] & 1), dieT: 0, brk: !!(a[6] & 8) })),
+    agents: x.ag.map((a, i) => ({ id: i, ship: a[9], f: a[1], kind: SHIP_AGENT_KINDS[a[0]], x: a[2], z: a[3], hd: a[4], v: 0, hp: a[5], hp0: 1, tur: 5, torps: 0, tgt: -1, cd: 0, fire: a[6] & 4 ? 1 : 0, str: 0, aim: a[7], fireT: m.time - a[8], out: !!(a[6] & 2), dead: !!(a[6] & 1), dieT: a[6] & 1 ? (oldSea.get(x.id)?.agents[i]?.dieT || m.time) : 0, brk: !!(a[6] & 8) })),
   }));
   if (s.fx && m.fx) m.fx.push(...s.fx);
 }

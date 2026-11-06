@@ -454,7 +454,7 @@ export class Models {
       this.mesh.push(merchant ? 'liner' : 'dreadnought', x, y, z, face, S, band);
       if (!merchant && this.mesh.has('turret')) {
         const sf = Math.sin(face), cf = Math.cos(face);
-        for (const [tz, ty, dir] of [[.17, .066, 1], [.1, .095, 1], [-.17, .066, -1]] as const) {
+        for (const [tz, ty, dir] of [[.21, .066, 1], [.145, .088, 1], [-.045, .052, -1], [-.15, .072, -1], [-.215, .052, -1]] as const) {
           const a = aim ?? (dir > 0 ? 0 : Math.PI);
           this.mesh.push('turret', x + tz * S * sf, y + ty * S, z + tz * S * cf, face + a, S, band);
         }

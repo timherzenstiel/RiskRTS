@@ -45,7 +45,8 @@ export function navyAi(g: GameState, f: FactionState, mine: R[], V: GameState, a
       const e = enemyIn(z), own = c.at[fid][z] + mineHere;
       const enemyCoast = W.zones[z].coast.some(x => atWar(g, fid, g.regions[x].owner));
       if (!enemyCoast) continue;
-      const need = fid === 0 ? 1 : 1.3;
+      // Britain holds the North Sea at parity; bold powers now and then sortie at parity too, the rest want 1.3×
+      const need = fid === 0 ? 1 : P.aggr >= 1.2 && rnd(g) < .15 ? 1 : 1.3;
       if (own >= e * need && own > 0) { const s = own - e + (z === W.regions[r.id].zones[0] ? 1 : 0) + rnd(g); if (s > bs) { bs = s; best = z; } }
     }
     if (best >= 0 && rnd(g) < .3 * Math.max(.5, P.navy)) station(g, fid, best, r.id, undefined, 'bb');

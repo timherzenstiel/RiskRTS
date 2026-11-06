@@ -161,7 +161,7 @@ export const useUi = create<Ui>((set, get) => ({
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
   say: (text) => set({ toast: { text, id: ++feedId } }),
-  setSpeed: (n) => { const s = get().session; if (s?.canControlTime) { s.speed = n; get().bump(); } },
+  setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; get().bump(); } },
   setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
   setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; if (!sound) Radio.reset(); set({ sound }); },

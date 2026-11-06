@@ -34,7 +34,7 @@ export function useGameKeys() {
       } else if (e.key >= '1' && e.key <= '5' || (e.code >= 'Digit1' && e.code <= 'Digit5')) {
         if (ui.overlay || ui.sel < 0 || s.state.regions[ui.sel].owner !== s.me) return;
         const i = (e.code.startsWith('Digit') ? Number(e.code.slice(5)) : Number(e.key)) - 1;
-        ui.recruit(ui.sel, KEY_UNITS[i], e.shiftKey ? 5 : 1);
+        ui.recruit(ui.sel, KEY_UNITS[i], 1);
       }
     };
     window.addEventListener('keydown', onKey);

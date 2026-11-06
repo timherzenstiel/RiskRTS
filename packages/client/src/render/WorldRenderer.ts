@@ -28,6 +28,7 @@ import { LineBatch, Pool, litMaterial, uChrome } from './pools';
 import { Terrain } from './terrain';
 import { Water } from './water';
 import { Shroud } from './shroud';
+import { GlobeBackdrop } from './globe';
 import { battleAnchor, sectorPoint } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
@@ -49,6 +50,9 @@ class WorldRenderer implements WorldRendererApi {
   private readonly terrain: Terrain;
   private readonly water: Water;
   private readonly shroud: Shroud;
+  private readonly backdrop: GlobeBackdrop;
+  /** Objects whose frustum culling is switched off while the map is bent into a globe (the flat frustum no longer matches). */
+  private unculled: THREE.Object3D[] | null = null;
   private readonly meshes: MeshPools;
   private readonly impostors: Impostors;
   private cursorCls = '';
@@ -107,6 +111,7 @@ class WorldRenderer implements WorldRendererApi {
       this.terrain = new Terrain(this.scene, this.world);
       this.water = new Water(this.scene, this.world, this.terrain.coastTex);
       this.shroud = new Shroud(this.scene, this.world);
+      this.backdrop = new GlobeBackdrop(this.scene);
       this.lit = new Pool(this.scene, 120000, litMaterial(), true);
       this.glow = new Pool(this.scene, 5000, new THREE.MeshBasicMaterial({ toneMapped: false }), false);
       this.detail = new GroundDetail(this.scene, this.world, this.terrain);
@@ -253,6 +258,8 @@ class WorldRenderer implements WorldRendererApi {
 
     const [px, pz] = this.input.pan();
     this.rig.update(dt, px, pz);
+    this.globeCulling();
+    this.backdrop.update(this.rig.camera, this.rig.k, this.rig.tx, this.rig.tz);
     if (!this.terrain.hasScenery && this.meshes.ready) this.terrain.useModels(this.meshes);
     this.terrain.setCameraDistance(this.rig.dist);
     this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
@@ -290,7 +297,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input.dispose(); this.labels.dispose();
     for (const v of this.views.values()) v.dispose();
     this.views.clear();
-    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.meshes.dispose(); this.impostors.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.trenches.dispose(); this.lines.dispose(); this.sprites.dispose();
+    this.terrain.dispose(); this.water.dispose(); this.shroud.dispose(); this.backdrop.dispose(); this.meshes.dispose(); this.impostors.dispose(); this.lit.dispose(); this.glow.dispose(); this.detail.dispose(); this.trenches.dispose(); this.lines.dispose(); this.sprites.dispose();
     this.post.dispose(); this.rig.dispose();
     this.canvas.classList.remove('order', 'drag', 'smooth');
     // The context is deliberately not force-lost: the page may mount a new renderer on the same canvas.
@@ -298,6 +305,15 @@ class WorldRenderer implements WorldRendererApi {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  /** On the globe every object may be on screen wherever it is on the flat map: frustum culling goes off, and comes back when flat. */
+  private globeCulling() {
+    const on = this.rig.k > 0;
+    if (on && (!this.unculled || this.frameNo % 60 === 0)) {
+      const list = this.unculled ?? (this.unculled = []);
+      this.scene.traverse(o => { if (o.frustumCulled) { o.frustumCulled = false; list.push(o); } });
+    } else if (!on && this.unculled) { for (const o of this.unculled) o.frustumCulled = true; this.unculled = null; }
+  }
 
   /** Render-buffer pixels per world unit at the current zoom. */
   private ppu() { return this.canvas.height / (2 * .344 * this.rig.dist); }

@@ -7,6 +7,7 @@
 // All three are instanced quads refilled every frame; smoke is depth-sorted back to front.
 import * as THREE from 'three';
 import { SUN_DIR } from './camera';
+import { GLOBE_GLSL, uGlobe } from './globe';
 
 const CELL = 128, ATLAS = CELL * 2, NOISE = 64;
 
@@ -78,7 +79,8 @@ function puffTexture(noise: Float32Array) {
 
 // ---------------------------------------------------------------- shaders
 
-const HEAD = `attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iCol; attribute vec4 iMisc;
+const HEAD = `${GLOBE_GLSL}
+attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iCol; attribute vec4 iMisc;
 varying vec2 vP; varying vec4 vCol; varying vec4 vMisc;`;
 
 /** Camera-facing quad; pushed toward the camera by half its size so puffs sitting on the ground are not cut by it. */
@@ -87,7 +89,7 @@ void main(){
   vP=position.xy; vCol=iCol; vMisc=iMisc;
   float c=cos(iMisc.x), s=sin(iMisc.x);
   vec2 q=position.xy*iSize; q=vec2(c*q.x-s*q.y, s*q.x+c*q.y);
-  vec4 mv=modelViewMatrix*vec4(iPos,1.);
+  vec4 mv=viewMatrix*vec4(globeP((modelMatrix*vec4(iPos,1.)).xyz),1.);
   mv.xy+=q; mv.z+=max(iSize.x,iSize.y)*.5;
   gl_Position=projectionMatrix*mv;
 }`;
@@ -98,7 +100,7 @@ void main(){
   vP=position.xy; vCol=iCol; vMisc=iMisc;
   float c=cos(iMisc.x), s=sin(iMisc.x);
   vec2 q=position.xy*iSize; q=vec2(c*q.x-s*q.y, s*q.x+c*q.y);
-  gl_Position=projectionMatrix*viewMatrix*vec4(iPos+vec3(q.x,0.,-q.y),1.);
+  gl_Position=projectionMatrix*viewMatrix*vec4(globeP(iPos+vec3(q.x,0.,-q.y)),1.);
 }`;
 
 const ATLAS_UV = `vec2 cellUv(vec2 p, float seed){ float cell=floor(fract(seed)*4.); return ((p+.5)*.96+.02+vec2(mod(cell,2.),floor(cell/2.)))*.5; }`;
@@ -252,7 +254,7 @@ export class Sprites {
   private readonly uni = {
     uPuff: { value: null as THREE.Texture | null }, uNoise: { value: null as THREE.Texture | null }, uTime: { value: 0 },
     uSunV: { value: new THREE.Vector3() }, uSunC: { value: new THREE.Color(1.02, .93, .78) }, uAmbC: { value: new THREE.Color(.5, .5, .49) },
-    uHeatC: { value: new THREE.Color(1, .4, .09) },
+    uHeatC: { value: new THREE.Color(1, .4, .09) }, uGlobe,
   };
   private readonly fwd = new THREE.Vector3();
 

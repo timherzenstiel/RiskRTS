@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { COLS, HH, HW, N, ROWS, TS, type GameState, type World } from '@riskrts/shared';
 import { PITCH } from './camera';
+import { GLOBE_GLSL, uGlobe } from './globe';
 
 const H = 2.2;              // plane height
 const GROUND = .38;         // typical ground height the shift is computed for
@@ -40,13 +41,21 @@ export class Shroud {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter; this.tex.needsUpdate = true;
     this.mat = new THREE.ShaderMaterial({
       transparent: true, depthTest: false, depthWrite: false,
-      uniforms: { uVis: { value: this.tex }, uGrid: { value: new THREE.Vector2(COLS, ROWS) }, uShift: { value: (H - GROUND) / Math.tan(PITCH) }, uTime: { value: 0 } },
-      vertexShader: 'varying vec2 vXZ; void main(){ vec4 w=modelMatrix*vec4(position,1.); vXZ=w.xz; gl_Position=projectionMatrix*viewMatrix*w; }',
-      fragmentShader: `varying vec2 vXZ; uniform sampler2D uVis; uniform vec2 uGrid; uniform float uShift, uTime;
+      uniforms: { uVis: { value: this.tex }, uGrid: { value: new THREE.Vector2(COLS, ROWS) }, uShift: { value: (H - GROUND) / Math.tan(PITCH) }, uTime: { value: 0 }, uGlobe },
+      // on the globe the shroud is bent at the ground point it stands for (the pitch shift only lines it up in the flat view);
+      // it is drawn without a depth test, so the far side of the globe is dropped by facing
+      vertexShader: `${GLOBE_GLSL}
+  uniform float uShift; varying vec2 vXZ; varying float vFace; varying vec2 vSeam;
+  void main(){ vec4 w=modelMatrix*vec4(position,1.); vXZ=w.xz; float gd=globeDx(w.x)/${HW.toFixed(4)}; vSeam=vec2(gd,abs(gd));
+    if(uGlobe.y>.001){ mat3 F; float f; vec3 b=globeBend(vec3(w.x,${GROUND.toFixed(3)},w.z-uShift),F,f); vFace=f; gl_Position=projectionMatrix*viewMatrix*vec4(b,1.); }
+    else { vFace=1.; gl_Position=projectionMatrix*viewMatrix*w; } }`,
+      fragmentShader: `varying vec2 vXZ; varying float vFace; varying vec2 vSeam; uniform sampler2D uVis; uniform vec2 uGrid; uniform float uShift, uTime;
   float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
   float n1(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h1(i),h1(i+vec2(1,0)),f.x),mix(h1(i+vec2(0,1)),h1(i+vec2(1,1)),f.x),f.y); }
   float fbm(vec2 p){ return n1(p)*.5+n1(p*2.1+7.)*.26+n1(p*4.3+3.)*.14+n1(p*9.1+1.)*.1; }
   void main(){
+    // a triangle stretched across the wrap seam interpolates dx through zero while |dx| stays large: drop it
+    if(vFace<0.||vSeam.y-abs(vSeam.x)>.05) discard;
     vec2 g=vec2(vXZ.x, vXZ.y-uShift);
     // domain warp of about a tile, so tile edges never show as blocks up close
     vec2 wq=vec2(fbm(g*1.7),fbm(g*1.7+11.3))-.5;
@@ -66,7 +75,7 @@ export class Shroud {
     gl_FragColor=vec4(mix(col,vec3(0.),black),a);
   }`,
     });
-    this.geo = new THREE.PlaneGeometry(HW * 2, HH * 2 + 4).rotateX(-Math.PI / 2);
+    this.geo = new THREE.PlaneGeometry(HW * 2, HH * 2 + 4, 240, 96).rotateX(-Math.PI / 2);
     this.mesh = new THREE.Mesh(this.geo, this.mat);
     this.mesh.position.set(0, H, (H - GROUND) / Math.tan(PITCH));
     this.mesh.renderOrder = 50; this.mesh.frustumCulled = false;

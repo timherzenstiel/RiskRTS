@@ -2,6 +2,7 @@
 // camera plane, cut from an atlas of every nation x 8 facings x 3 frames rendered with the game's camera pitch and sun. With the
 // orthographic camera a card of `span` world units centred `cy` above the feet matches the baked projection exactly.
 import * as THREE from 'three';
+import { GLOBE_GLSL, uGlobe } from './globe';
 
 interface AtlasInfo { cell: number; span: number; cy: number; facings: number; frames: number; rows: number }
 
@@ -32,14 +33,15 @@ export class Impostors {
     const ip = new THREE.InstancedBufferAttribute(this.P, 4).setUsage(THREE.DynamicDrawUsage), ic = new THREE.InstancedBufferAttribute(this.C, 2).setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('iPos', ip); geo.setAttribute('iCell', ic); geo.instanceCount = 0;
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: tex }, uGrid: { value: new THREE.Vector2(cols, I.rows) }, uSpan: { value: I.span }, uCy: { value: I.cy } },
-      vertexShader: `attribute vec4 iPos; attribute vec2 iCell; uniform vec2 uGrid; uniform float uSpan, uCy; varying vec2 vUv;
+      uniforms: { uMap: { value: tex }, uGrid: { value: new THREE.Vector2(cols, I.rows) }, uSpan: { value: I.span }, uCy: { value: I.cy }, uGlobe },
+      vertexShader: `${GLOBE_GLSL}
+attribute vec4 iPos; attribute vec2 iCell; uniform vec2 uGrid; uniform float uSpan, uCy; varying vec2 vUv;
   void main(){
     vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
     float s = iPos.w * uSpan;
     vec3 w = iPos.xyz + vec3(0., uCy * iPos.w, 0.) + right * position.x * s + up * position.y * s;
     vUv = (iCell + vec2(position.x + .5, .5 - position.y)) / uGrid; vUv.y = 1. - vUv.y;
-    gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.);
+    gl_Position = projectionMatrix * viewMatrix * vec4(globeP(w), 1.);
   }`,
       fragmentShader: `uniform sampler2D uMap; varying vec2 vUv;
   void main(){ vec4 c = texture2D(uMap, vUv); if (c.a < .5) discard; gl_FragColor = vec4(c.rgb, 1.); }`,

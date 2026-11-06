@@ -1,6 +1,6 @@
 // Seeing the situation (design-command §1, §5): the left rail of panels, the Situation panel (our wars, borders in danger,
 // other wars), the border card opened from a balance chip, and the alerts queue.
-import { OVER, capacity, load, AIR_RANGE, COST, FACTIONS, TREATY_NAMES, activeSpies, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hops, hostileBorders, income, marchEta, techOn, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
+import { OVER, capacity, load, worksAt, type RegionState, AIR_RANGE, COST, FACTIONS, TREATY_NAMES, activeSpies, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hops, hostileBorders, income, marchEta, techOn, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
 import { useSim, useUi, type Overlay, type Panel } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
@@ -12,7 +12,6 @@ import { rendererRef } from './refs';
 import { reqText, staffBadge } from './Staff';
 import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
-import { useState } from 'react';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
@@ -35,8 +34,8 @@ export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
   const sim = useSim(); if (!sim) return null;
   const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, staff = staffBadge(sim.g, sim.me);
-  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false) => (
-    <button className={'rb' + (panel === k ? ' on' : '')} aria-pressed={panel === k} title={t(label)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
+  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false, title = label, pulse = false) => (
+    <button className={'rb' + (panel === k ? ' on' : '') + (pulse ? ' pulse' : '')} aria-pressed={panel === k} title={t(title)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
       {icon}<span>{t(label)}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={t(what, badge)}>{badge}</em> : null}
     </button>
   );
@@ -46,12 +45,11 @@ export function LeftRail() {
   return (
     <nav id="rail" className="plate" aria-label={t('War Office panels')}>
       {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
-      {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, '{0} requests waiting', !staff.crit)}
-      {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />)}
-      {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />)}
+      {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, '{0} requests waiting', !staff.crit, 'Staff: requests from your commanders (G)', staff.crit && panel !== 'staff')}
+      {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />, 0, undefined, false, 'Forces: your corps and armies (O)')}
+      {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />, 0, undefined, false, 'Economy: Production, shells, men, conscription and the nation')}
       {p('navy', 'Navy', <RailIcon d="M12 3v14M7 8h10M4 14c2 4 5 6 8 6s6-2 8-6" />)}
       {p('intel', 'Intel', <RailIcon d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" />)}
-      {o('nation', 'Nation', <RailIcon d="M4 20V8l8-5 8 5v12M9 20v-6h6v6" />, 'Nation: manpower, conscription, national strengths and weaknesses')}
       {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
       {o('diplomacy', 'Diplo', <HandshakeIcon />, 'Diplomacy: treaties and messages')}
       {o('rules', 'Rules', <RailIcon d="M5 4h11l3 3v13H5zM9 9h7M9 13h7M9 17h4" />, 'Rules: how fronts, corps, commanders, scouting, supply and men work, with the numbers')}
@@ -103,6 +101,7 @@ export function SituationPanel() {
   return (
     <section id="panel" className="plate" aria-label={t('Situation')}>
       <div className="pn-h"><h2>{t('Situation')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+      <p className="pn-sub">{t('Your wars and the borders that need you. Click a row to go there.')}</p>
       <div className="pn-body">
         <div className="lbl"><span>{t('Our wars')}</span><small>{t('{0} at war · {1} battles', wars.filter(w => !w.treaty).length, g.battles.filter(b => !b.ended && b.sides.includes(me)).length)}</small></div>
         {wars.map(w => (
@@ -138,8 +137,8 @@ export function SituationPanel() {
 // ---------------------------------------------------------------- border card
 
 export function BorderCard() {
-  const border = useUi(s => s.border); const sel = useUi(s => s.sel); const sim = useSim();
-  const [open, setOpen] = useState<'' | 'fort' | 'send' | 'scout'>('');
+  const border = useUi(s => s.border); const sel = useUi(s => s.sel); const open = useUi(s => s.borderTool); const sim = useSim();
+  const setOpen = useUi.getState().setBorderTool;
   if (!sim || !border || border[0] !== sel) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState, [rid, sec] = border, r = g.regions[rid];
   if (r.owner !== me) return null;
@@ -197,7 +196,7 @@ function SendCorps({ g, me, rid, sec }: { g: GameState; me: number; rid: number;
     }
   }
   list.sort((a, z) => a.eta - z.eta);
-  if (!list.length) return <p className="note">{t('No corps of ours can reach this border over land. Form one from a depot (Forces panel).')}</p>;
+  if (!list.length) return <p className="note">{t('No corps of ours can reach this border over land. Form one from a region\'s reserve (Forces panel).')}</p>;
   return (
     <div className="bc-send">
       {list.slice(0, 5).map(x => (
@@ -225,6 +224,42 @@ function ScoutAcross({ g, me, rid, nb }: { g: GameState; me: number; rid: number
         <button className="buy plain" disabled={sup < COST.recon} onClick={() => ui().order({ t: 'recon', from: air.id, to: nb })}>{COST.recon}</button></div>}
       <div className="it nb"><div className="tx"><b>{here ? (activeSpies(g, me).some(s => s.region === nb) ? t('Our agent works there') : t('Our agent is on the way')) : t('Spy from the capital')}</b><small>{here ? t('Reports everything until unmasked') : t('{0}/3 agents in the field', spies.length)}</small></div>
         {!here && <button className="buy plain" disabled={!cap || sup < COST.spy || spies.length >= 3} onClick={() => ui().order({ t: 'spy', to: nb })}>{COST.spy}</button>}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- borders list (region Overview)
+
+/** Every border and coast of an own region, one row each: who is across, the balance where it matters, the works, and a
+ *  Fortify button that opens the border card with its works (design-play §1). */
+export function BordersList({ r }: { r: RegionState }) {
+  const sim = useSim(); const border = useUi(s => s.border);
+  if (!sim) return null;
+  const { g, me } = sim, W = buildWorld(), ui = useUi.getState, wr = W.regions[r.id];
+  const hostile = new Map(hostileBorders(g, me).filter(b => b.region === r.id).map(b => [b.sector, b]));
+  const rows = [...wr.land.map(n => ({ s: n, name: nm(W.regions[n].name), owner: g.regions[n].owner })), ...wr.zones.map(z => ({ s: 1000 + z, name: t('Coast · {0}', W.zones[z].name), owner: -1 }))];
+  const rank = (x: { s: number; owner: number }) => { const b = hostile.get(x.s); return b ? 10 + (b.danger < 0 ? 1.5 : b.danger) : x.owner === me ? 0 : x.owner >= 0 ? 2 : 1; };
+  rows.sort((a, b) => rank(b) - rank(a));
+  return (
+    <div id="borders-list" className="blist">
+      <div className="lbl"><span>{t('Borders')}</span><small>{t('ours : theirs')}</small></div>
+      {rows.map(x => {
+        const b = hostile.get(x.s), w = worksAt(r, x.s), defs = r.defs.filter(d => d.s === x.s && d.f === r.owner).length;
+        const F = x.owner >= 0 ? FACTIONS[x.owner] : null, tr = x.owner >= 0 && x.owner !== me ? treatyOf(g, me, x.owner) : undefined;
+        const state = b ? t(dangerOf(b)) : x.owner === me ? t('our region') : tr ? tx(TREATY_NAMES[tr.kind]) : x.s >= 1000 ? t('coast') : x.owner >= 0 ? t('quiet') : '';
+        const on = border && border[0] === r.id && border[1] === x.s;
+        const workTxt = [w.tr ? tn('Trench {0}', { raw: roman(w.tr) }) : '', w.sand ? t('sandbags') : '', w.wire ? t('wire') : '', defs ? t(defs > 1 ? '{0} defences' : '{0} defence', defs) : ''].filter(Boolean).join(' · ');
+        return (
+          <div key={x.s} className={'bl-row' + (b ? ' d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '') : '') + (on ? ' on' : '')}>
+            <button className="bl-main" onClick={() => openBorder({ region: r.id, sector: x.s })}>
+              <i className="dot" style={{ '--c': F?.color ?? '#7fb4d8' } as React.CSSProperties} />
+              <span className="tx"><b>{x.name}</b><small>{state}{workTxt ? ' · ' + workTxt : ''}</small></span>
+              {b && <span className="lcdn bl-bal">{b.own.btl[0] + b.own.reserve[0]} : {b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?'}</span>}
+            </button>
+            {x.owner !== me && <button className="btn sm" onClick={() => { click(); ui().selectBorder(r.id, x.s, 'fort'); rendererRef.current?.flyTo(r.id, 22); }}>{t('Fortify')}</button>}
+          </div>
+        );
+      })}
     </div>
   );
 }

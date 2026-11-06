@@ -17,6 +17,8 @@ import { rich, tn } from './LangPicker';
 
 const KIND: Record<ReqKind, string> = { men: 'Reinforcements', fort: 'Field works', recon: 'Reconnaissance', attack: 'Permission to attack', fallback: 'Permission to fall back', release: 'Send corps back' };
 const URG = ['Routine', 'Urgent', 'Critical'] as const;
+/** Mandates in short words (design-play §4.3); the simulation's names are MANDATES. */
+export const MAND = ['Hold', 'Defend', 'Attack'] as const;
 const SHORT: Record<ReqKind, string> = { men: 'Men', fort: 'Works', recon: 'Patrols', attack: 'Attacks', fallback: 'Falling back', release: 'Sending back' };
 const rng = (a?: [number, number]) => !a ? '?' : a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
 /** One decimal, with a German decimal comma when German is on. */
@@ -36,7 +38,7 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
       const k = n ?? q.n ?? 1, cost = (q.cost ?? 0) * k, tc = transferCandidate(g, me, q);
       return { title: tn('{0} battalions for {1}', q.n, where), why: tn('The line is short: {0}.', bal), opts: [
         { label: t('Recruit {0} · {1}', k, cost), opt: 'recruit', n: k, off: sup < cost, title: t('{0} infantry battalions, raised in {1}: they train for a week, then take up that border', k, R(q.region)) },
-        { label: tc ? tn('Send {0}', { raw: groupName(me, 1, tc.c.n) }) : t('No corps free'), opt: 'transfer', off: !tc, title: tc ? tn('{0} ({1} btl) from {2} joins the army', { raw: groupName(me, 1, tc.c.n) }, groundUnits(tc.c.u), R(tc.r.id)) : t('Form a corps from a depot first') },
+        { label: tc ? tn('Send {0}', { raw: groupName(me, 1, tc.c.n) }) : t('No corps free'), opt: 'transfer', off: !tc, title: tc ? tn('{0} ({1} btl) from {2} joins the army', { raw: groupName(me, 1, tc.c.n) }, groundUnits(tc.c.u), R(tc.r.id)) : t('Form a corps from a reserve first') },
         { label: t('Deny'), opt: 'deny' },
       ] };
     }
@@ -87,6 +89,7 @@ export function StaffPanel() {
   return (
     <section id="panel" className="plate" aria-label={t('Staff')}>
       <div className="pn-h"><h2>{t('Staff')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+      <p className="pn-sub">{t('Requests from your commanders. Answer them here, or let them approve small things by themselves.')}</p>
       <div className="pn-body">
         {!armies.length && <p className="note">{rich(t('No armies yet. Select corps (Forces panel, or click them on the map) and press <b>Form army</b> on the corps card. Its commander then holds that stretch of front, shifts his corps where they are needed and asks you for men, works, patrols and permission to attack, fall back or send corps back.'))}</p>}
         {armies.map(h => {
@@ -94,14 +97,14 @@ export function StaffPanel() {
           return (
             <div key={h.id} className="st-army">
               <button className="oob-rh" onClick={() => { click(); ui().selectArmy(h.id); }}>
-                <b>{hqName(h)}</b><small>{h.cmd.name} · {tx(MANDATES[h.mandate])}{h.mandate === 2 && h.target !== undefined ? ` → ${nm(W.regions[h.target].name)}` : ''} · {t('{0} corps', cs.length)}</small>
+                <b>{hqName(h)}</b><small>{h.cmd.name} · {t(MAND[h.mandate])}{h.mandate === 2 && h.target !== undefined ? ` → ${nm(W.regions[h.target].name)}` : ''} · {t('{0} corps', cs.length)}</small>
               </button>
               {qs.length ? qs.map(q => <ReqRow key={q.id} g={g} me={me} q={q} />) : <p className="note">{t('No requests.')}</p>}
               {h.notes.length > 0 && <div className="st-log">{h.notes.slice(0, 3).map((n, i) => <small key={i}>{n.k === 'move' ? tn('Moved {0} to {1} of {2}', { raw: groupName(me, 1, n.n) }, borderLabel(W, n.post), W.regions[n.region].name) : tn('Sent {0} back ({1})', { raw: groupName(me, 1, n.n) }, n.why === 'peace' ? 'border at peace' : n.why === 'lost' ? 'front lost' : 'not needed')}</small>)}</div>}
             </div>
           );
         })}
-        <p className="note">{t('Commanders never attack or send troops back without your answer. Standing approvals and a front budget (army card) let them carry out the small things themselves.')}</p>
+        <p className="note">{t('Commanders never attack or send troops back without your answer. "Approves by himself" and a front budget (army card) let them carry out the small things themselves.')}</p>
       </div>
     </section>
   );
@@ -127,7 +130,7 @@ export function ArmyCard() {
       <p className="ac-tr">{h.cmd.tr.filter((x, i, a) => a.indexOf(x) === i).map(x => <span key={x} className="tag" title={tx(TRAITS[x].desc)}>{tx(TRAITS[x].name)}</span>)}<span className="oc-xp" title={t('Experience: battles won on his front')}>{stars(Math.floor(h.cmd.xp)) || t('new to command')}</span></p>
       <div className="lv-row"><span className="lv-l" title={t('What the commander may do on his own')}>{t('Mandate')}</span>
         <div className="seg" role="group" aria-label={t('Mandate')}>
-          {MANDATES.map((m, k) => <button key={m} aria-pressed={h.mandate === k} title={t(['Hold the line: no attacks', 'Hold, and propose local attacks on the first line', 'Prepare an offensive on the target and ask for the go'][k])} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{tx(m)}</button>)}
+          {MANDATES.map((m, k) => <button key={m} aria-pressed={h.mandate === k} title={t(['Hold the line: no attacks', 'Hold, and propose local attacks on the first line', 'Prepare an offensive on the target and ask for the go'][k])} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{t(MAND[k])}</button>)}
         </div>
       </div>
       {h.mandate === 2 && (
@@ -142,7 +145,7 @@ export function ArmyCard() {
         <input type="range" min={0} max={BUDGET_MAX * 100} step={5} value={Math.round(h.budget * 100)} onChange={e => set({ budget: +e.target.value / 100 })} aria-label={t('Front budget')} />
         <small className="lcdn">{t('{0}% · {1}/wk', Math.round(h.budget * 100), perWeek)}</small>
       </div>
-      <div className="lv-row ac-st"><span className="lv-l" title={t('Carried out without asking')}>{t('Always approve')}</span>
+      <div className="lv-row ac-st"><span className="lv-l" title={t('Carried out without asking')}>{t('Approves by himself')}</span>
         {STANDING_KINDS.map(k => { const on = h.standing.includes(k); return <button key={k} className="tgl" aria-pressed={on} onClick={() => { click(); set({ standing: on ? h.standing.filter(x => x !== k) : [...h.standing, k] }); }}>{t(SHORT[k])}</button>; })}
       </div>
       <div className="lbl"><span>{t('Front')}</span>{own && !h.front.includes(sel) && <button className="lnk" onClick={() => { click(); set({ front: [...h.front, sel] }); }}>+ {nm(W.regions[sel].name)}</button>}</div>
@@ -173,7 +176,7 @@ export function CorpsArmyRow({ ids }: { ids: number[] }) {
     <div className="lv-row ac-row"><span className="lv-l">{t('Army')}</span>
       {h ? <><button className="lnk" onClick={() => { click(); ui().selectArmy(h.id); }}>{hqName(h)} · {h.cmd.name}</button><button className="btn sm" title={t('Take out of the army: the corps come under your own orders')} onClick={() => { click(); send({ t: 'armyAssign', army: h.id, corps: ids, on: false }); }}>{t('Take out')}</button></> : (
         <>
-          <button className="btn sm" title={t('A commander takes these corps and the regions they stand in as his front')} onClick={() => { click(); if (send({ t: 'army', corps: ids })) { const a = (useUi.getState().session?.state.hq ?? []).filter(x => x.owner === me).slice(-1)[0]; if (a) ui().selectArmy(a.id); } }}>{t('Form army')}</button>
+          <button className="btn sm" title={t('A commander takes these corps and the regions they stand in as his front')} onClick={() => { click(); if (send({ t: 'army', corps: ids })) { const a = (useUi.getState().session?.state.hq ?? []).filter(x => x.owner === me).slice(-1)[0]; if (a) ui().selectArmy(a.id); } }}>{ids.length === 1 ? t('Appoint a commander') : t('Form army')}</button>
           {armies.length > 0 && <select className="sel" value="" aria-label={t('Assign to army')} onChange={e => { if (e.target.value) send({ t: 'armyAssign', army: +e.target.value, corps: ids, on: true }); }}>
             <option value="">{t('Assign to…')}</option>{armies.map(a => <option key={a.id} value={a.id}>{hqName(a)}</option>)}
           </select>}

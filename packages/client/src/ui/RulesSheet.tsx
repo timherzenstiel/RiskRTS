@@ -48,7 +48,7 @@ export function RulesSheet() {
             <tr><td>{t('Holding a border this long digs one trench level deeper')}</td><td>{DIG_IN} s</td></tr>
           </tbody></table>
           <h3>{t('Who moves them')}</h3>
-          <p>{rich(t('Regions on <b>Auto</b> arrange their depot and the corps they raised themselves. Corps you move, attack with, split, merge or form are yours (✋): Auto leaves them alone. Corps in an army are moved by its commander unless you take one by hand.'))}</p>
+          <p>{rich(t('Regions on <b>Auto</b> arrange their reserve and the corps they raised themselves. Corps you move, attack with, split, merge or form are yours (✋): Auto leaves them alone. Corps in an army are moved by its commander unless you take one by hand.'))}</p>
         </>}
         {page === 2 && <>
           <h3>{t('Armies and commanders')}</h3>
@@ -59,7 +59,7 @@ export function RulesSheet() {
             <tr><td>{t('Report needed before an attack')}</td><td>{t('≤ {0} days old', REPORT_FRESH)}</td></tr>
             <tr><td>{t('Front budget')}</td><td>{t('up to {0} of income', pct(BUDGET_MAX))}</td></tr>
           </tbody></table>
-          <p>{t('No attack starts and no corps leaves the front without your answer. Standing approvals (not for attacks) and the budget let him do the small things himself.')}</p>
+          <p>{t('No attack starts and no corps leaves the front without your answer. "Approves by himself" (not for attacks) and the budget let him do the small things himself.')}</p>
           <h3>{t('Traits')}</h3>
           <table className="ledger"><tbody>{TRAIT_KEYS.map(k => <tr key={k}><td>{tx(TRAITS[k].name)}</td><td>{tx(TRAITS[k].desc)}</td></tr>)}</tbody></table>
         </>}

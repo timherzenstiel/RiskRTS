@@ -76,8 +76,8 @@ function pickCorps(r: RegionState, c: Corps, add: boolean) {
 
 /** What a right-click on the hovered region would do with the selected corps: where they go, how long it takes, the odds. */
 export function OrderPreview() {
-  const ids = useUi(s => s.corps); const hover = useUi(s => s.hover); const orderMode = useUi(s => s.orderMode); const goal = useUi(s => s.goal); const sim = useSim();
-  if (!sim || !ids.length || hover < 0 || orderMode) return null;
+  const ids = useUi(s => s.corps); const hover = useUi(s => s.hover); const orderMode = useUi(s => s.orderMode); const kind = useUi(s => s.orderKind); const goal = useUi(s => s.goal); const sim = useSim();
+  if (!sim || !ids.length || hover < 0 || (orderMode && kind !== 'corps')) return null;
   const { g, me } = sim, W = buildWorld(), T = g.regions[hover], found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
   if (!found.length) return null;
   const btl = found.reduce((s, x) => s + groundUnits(x.c.u), 0), who = found.length === 1 ? groupName(me, 1, found[0].c.n) : t('{0} corps', found.length);
@@ -134,6 +134,7 @@ export function ForcesPanel() {
   return (
     <section id="panel" className="plate" aria-label={t('Forces')}>
       <div className="pn-h"><h2>{t('Forces')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+      <p className="pn-sub">{t('Corps you command, by army and region. Select one to give orders.')}</p>
       <div className="pn-body">
         <div className="oob-sum">
           <span><small>{t('Corps')}</small><b className="lcdn">{all.length + away.length}</b></span>
@@ -162,8 +163,8 @@ export function ForcesPanel() {
                 <b>{nm(W.regions[r.id].name)}</b>{r.battle >= 0 && <span className="tag red">{t('battle')}</span>}<small>{t('{0} btl', groundUnits(r.units))} · {r.deploy === 1 ? t('Manual') : t('Auto')}</small>
               </button>
               {cs.map(c => <CorpsRow key={c.id} g={g} me={me} r={r} c={c} sel={selC.includes(c.id)} />)}
-              {!mine && dn > 0 && <div className="oob-c dep" title={t('Battalions in no corps: recruits and the troops Auto arranges')}><span className="oc-n"><b>{t('Depot')}</b><small>{unitsLine(dep)}</small></span><span className="oc-v"><b className="lcdn">{dn}</b><small>{t('btl')}</small></span>
-                <button className="btn sm" title={t('Form a corps of up to {0} battalions from the depot, under your orders', CORPS_CAP)} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>{t('Form corps')}</button></div>}
+              {!mine && dn > 0 && <div className="oob-c dep" title={t('Battalions in no corps: recruits and the troops Auto arranges')}><span className="oc-n"><b>{t('Reserve')}</b><small>{unitsLine(dep)}</small></span><span className="oc-v"><b className="lcdn">{dn}</b><small>{t('btl')}</small></span>
+                <button className="btn sm" title={t('Form a corps of up to {0} battalions from the reserve, under your orders', CORPS_CAP)} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>{t('Form corps from reserve')}</button></div>}
             </div>
           );
         })}
@@ -228,7 +229,7 @@ function OneCorps({ g, me, r, c }: { g: GameState; me: number; r: RegionState; c
       <div className="cc-acts">
         <button className="btn sm" aria-expanded={det} disabled={groundUnits(c.u) < 2} onClick={() => { click(); setDet(!det); }}>{t('Detach…')}</button>
         {mates.map(m => <button key={m.id} className="btn sm" disabled={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP} title={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP ? t('Together more than {0} battalions', CORPS_CAP) : tn('Merge {0} into this corps', { raw: groupName(me, 1, m.n) })} onClick={() => { click(); ui().order({ t: 'merge', region: r.id, a: c.id, b: m.id }); }}>{tn('Merge {0}', { raw: groupName(me, 1, m.n).split(' ')[0] })}</button>)}
-        <button className="btn sm" title={c.man ? t('Hand the corps back to the region: Auto may move it or fold it into the depot') : t('Keep the corps under your orders: Auto leaves it alone')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, man: !c.man }); }}>{c.man ? t('Hand to Auto') : t('Take command')}</button>
+        <button className="btn sm" title={c.man ? t('Hand the corps back to the region: Auto may move it or fold it into the reserve') : t('Keep the corps under your orders: Auto leaves it alone')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, man: !c.man }); }}>{c.man ? t('Hand to Auto') : t('Take command')}</button>
         <button className="btn sm" aria-pressed={!c.nr} title={c.nr ? t('Refill off: this corps takes no replacements from the manpower pool') : t('Refill on: each week this corps takes men from the pool to make good its losses (front-line corps first)')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, refill: !!c.nr }); }}>{c.nr ? t('Refill off') : t('Refill on')}</button>
       </div>
       {det && <Detach r={r} c={c} done={() => setDet(false)} />}

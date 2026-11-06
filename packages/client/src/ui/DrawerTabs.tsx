@@ -35,7 +35,7 @@ export function TrainingRows({ region }: { region: RegionState }) {
       {[...by].map(([k, ats]) => {
         const left = Math.max(0, Math.min(...ats) - g.time), share = 1 - left / TICK_SECONDS;
         return (
-          <div key={k} className="tr-row" title={t('Recruits train for a week before they join the depot (barracks: until the next week)')}>
+          <div key={k} className="tr-row" title={t('Recruits train for a week before they join the reserve (barracks: until the next week)')}>
             <span>{t('In training · {0} {1}', ats.length, ats.length === 1 ? FORMATION[k].one : FORMATION[k].many)}</span>
             <span className="tr-bar"><i style={{ width: `${Math.round(share * 100)}%` }} /></span>
             <small>{Math.ceil(left)} s</small>
@@ -77,7 +77,7 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
         })}
       </CameoGrid>
       <TrainingRows region={region} />
-      <p className="note">{t('Each formation is raised at full strength; its men come from the manpower pool (a battalion is 100 men).')} {region.barracks ? t('It trains for a week – here, with barracks, until the next week – and then joins the depot') : t('It trains for a week and then joins the depot')}{attacked ? '; ' + t('emergency levies join the defence at once') : ''}.</p>
+      <p className="note">{t('Each formation is raised at full strength; its men come from the manpower pool (a battalion is 100 men).')} {region.barracks ? t('It trains for a week – here, with barracks, until the next week – and then joins the reserve') : t('It trains for a week and then joins the reserve')}{attacked ? '; ' + t('emergency levies join the defence at once') : ''}.</p>
     </>
   );
 }
@@ -109,7 +109,7 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
       <Railways region={region} id={id} />
       <div className="lbl"><span>{t('Defences in the interior · they join the first front of every battle here')}</span></div>
       <FortGrid region={region} id={id} sector={-1} />
-      <p className="note">{t('Trenches, wire and defences on a border are built from its border card: click the border on the map, or a chip in Fronts mode.')}</p>
+      <p className="note">{t('Trenches, wire and defences on a border are built from its border card: pick it in the Borders list of the Overview, click it on the map, or click its chip.')}</p>
     </>
   );
 }

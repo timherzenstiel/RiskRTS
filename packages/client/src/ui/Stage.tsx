@@ -28,7 +28,7 @@ export function Stage() {
           const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal, corps } = ui();
           if (!s) return;
           // selected corps take the order: move to an own region or border, attack an enemy region
-          if (corps.length && !orderMode && id >= 0) { orderCorps(id, pt); return; }
+          if (corps.length && (!orderMode || orderKind === 'corps') && id >= 0) { if (orderMode) ui().cancelOrder(); orderCorps(id, pt); return; }
           const W = buildWorld(), me = s.me, g = s.state;
           // the navy: station warships in the zone clicked (or off the region clicked), carrier strikes, shipping, landings
           if (orderMode && orderKind === 'station') {

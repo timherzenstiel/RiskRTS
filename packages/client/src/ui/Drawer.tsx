@@ -18,6 +18,7 @@ import { Briefing } from './Briefing';
 import { DeployTab, corpsState, unitsLine } from './DeployTab';
 import { borderLabel, groupName } from '@riskrts/shared';
 import { CarrierRows, LandingRows, NavyTab } from './Navy';
+import { BordersList } from './Situation';
 
 const TABS: [Tab, string][] = [['over', 'Overview'], ['rec', 'Recruit'], ['build', 'Build']];
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
@@ -160,6 +161,7 @@ export function Drawer() {
             {tab === 'over' && (
               <>
                 <DeployTab region={r} id={sel} />
+                <BordersList r={r} />
                 <div className="lbl"><span>{t('Operations from {0}', wr.name)}</span></div>
                 <AttackBudget />
                 <GoalPicker />

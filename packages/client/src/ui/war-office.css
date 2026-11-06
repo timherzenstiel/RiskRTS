@@ -489,6 +489,7 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .ncard .flag{position:absolute;left:6px;top:6px;width:42px;height:28px;box-shadow:0 0 0 1px #000,0 2px 5px rgba(0,0,0,.6);transform:perspective(80px) rotateY(-14deg);transform-origin:left center}
 .orders .stamp{right:-10px;top:-14px}
 
+/* =====================================================================
    Command overhaul, phase 1 (design: claude/design-command.md §1, §5): map modes, balance chips, left rail,
    Situation panel, border card, alerts.
    ===================================================================== */
@@ -623,7 +624,7 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
   #panel{left:0;z-index:5}
   #alerts{left:8px;width:min(300px,70vw)}
 }
-=======
+
 /* Radio subtitle: the line on air, under the top strip */
 .radio-line{position:absolute;z-index:6;top:calc(var(--strip) + env(safe-area-inset-top,0px) + 8px);left:calc((100% - var(--side)) / 2);transform:translateX(-50%);
   max-width:min(680px,calc(100% - var(--side) - 40px));display:flex;align-items:flex-start;gap:9px;padding:7px 12px 7px 10px;text-align:left;cursor:pointer;
@@ -635,5 +636,3 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 @keyframes rl-blink{50%{opacity:.25}}
 @media (max-width:900px){.radio-line{left:50%;max-width:calc(100% - 24px);font-size:12px}}
 #app.look-ra .radio-line{color:#8fd6ff;text-shadow:0 0 7px rgba(143,214,255,.45);box-shadow:inset 0 0 0 1px rgba(143,214,255,.2),0 3px 10px rgba(0,0,0,.55)}
-
-/* ==============================================================

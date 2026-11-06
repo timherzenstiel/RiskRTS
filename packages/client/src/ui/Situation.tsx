@@ -1,6 +1,6 @@
 // Seeing the situation (design-command §1, §5): the left rail of panels, the Situation panel (our wars, borders in danger,
 // other wars), the border card opened from a balance chip, and the alerts queue.
-import { FACTIONS, TREATY_NAMES, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hostileBorders, income, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
+import { AIR_RANGE, COST, FACTIONS, TREATY_NAMES, activeSpies, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hops, hostileBorders, income, marchEta, techOn, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
 import { useSim, useUi, type Overlay, type Panel } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
@@ -8,6 +8,8 @@ import { CloseIcon, HandshakeIcon, Icon, SwordsIcon } from './icons';
 import { menOf, menStr } from './format';
 import { rendererRef } from './refs';
 import { reqText, staffBadge } from './Staff';
+import { FortGrid } from './DrawerTabs';
+import { useState } from 'react';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
@@ -43,9 +45,13 @@ export function LeftRail() {
       {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
       {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, 'requests waiting', !staff.crit)}
       {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />)}
+      {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />)}
+      {p('navy', 'Navy', <RailIcon d="M12 3v14M7 8h10M4 14c2 4 5 6 8 6s6-2 8-6" />)}
+      {p('intel', 'Intel', <RailIcon d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" />)}
       {o('nation', 'Nation', <RailIcon d="M4 20V8l8-5 8 5v12M9 20v-6h6v6" />, 'Nation: manpower, conscription, national strengths and weaknesses')}
       {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
       {o('diplomacy', 'Diplo', <HandshakeIcon />, 'Diplomacy: treaties and messages')}
+      {o('rules', 'Rules', <RailIcon d="M5 4h11l3 3v13H5zM9 9h7M9 13h7M9 17h4" />, 'Rules: how fronts, corps, commanders, scouting and supply work, with the numbers')}
       {o('calendar', 'Calendar', <RailIcon d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4" />, 'War calendar: unlocks, rushes and doctrines')}
     </nav>
   );
@@ -130,6 +136,7 @@ export function SituationPanel() {
 
 export function BorderCard() {
   const border = useUi(s => s.border); const sel = useUi(s => s.sel); const sim = useSim();
+  const [open, setOpen] = useState<'' | 'fort' | 'send' | 'scout'>('');
   if (!sim || !border || border[0] !== sel) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState, [rid, sec] = border, r = g.regions[rid];
   if (r.owner !== me) return null;
@@ -161,12 +168,61 @@ export function BorderCard() {
       </div>
       {b.massing && <p className="note budget full">Troops across this border are assembling for an attack.</p>}
       <div className="bc-acts">
-        <button className="btn sm" onClick={() => { click(); ui().setTab('deploy'); }}>Send troops…</button>
-        <button className="btn sm" onClick={() => { click(); ui().setTab('fort'); ui().setFortMarker([rid, sec]); }}>Fortify…</button>
-        {b.nb >= 0 && b.know < 3 && <button className="btn sm" disabled={supply < 1} title="Cavalry patrol over this border: troops across and the defences of this border · 1 supply" onClick={() => ui().order({ t: 'patrol', from: rid, to: b.nb })}><Icon k="patrol" size={14} /> Scout · 1</button>}
-        {b.nb >= 0 && b.foe !== me && <button className="btn sm danger" disabled={groundUnits(r.units) < 2 || r.battle >= 0} title="Quick attack from this region over this border (the share and goal of the March tab)" onClick={() => ui().march(rid, b.nb, !!treatyOf(g, me, b.foe) || undefined)}>Attack</button>}
+        <button className="btn sm" aria-pressed={open === 'send'} onClick={() => { click(); setOpen(open === 'send' ? '' : 'send'); }}>Send corps…</button>
+        <button className="btn sm" aria-pressed={open === 'fort'} onClick={() => { click(); setOpen(open === 'fort' ? '' : 'fort'); }}>Fortify…</button>
+        {b.nb >= 0 && <button className="btn sm" aria-pressed={open === 'scout'} onClick={() => { click(); setOpen(open === 'scout' ? '' : 'scout'); }}><Icon k="patrol" size={14} /> Scout…</button>}
+        {b.nb >= 0 && b.foe !== me && <button className="btn sm danger" disabled={groundUnits(r.units) < 2 || r.battle >= 0} title="Quick attack from this region over this border, with the share and goal set in the region's Overview" onClick={() => ui().march(rid, b.nb, !!treatyOf(g, me, b.foe) || undefined)}>Attack</button>}
       </div>
+      {open === 'fort' && <FortGrid region={r} id={rid} sector={sec} />}
+      {open === 'send' && <SendCorps g={g} me={me} rid={rid} sec={sec} />}
+      {open === 'scout' && b.nb >= 0 && <ScoutAcross g={g} me={me} rid={rid} nb={b.nb} />}
     </section>
+  );
+}
+
+/** The nearest corps of ours that could come to this border (idle, not already there), with how long they need. */
+function SendCorps({ g, me, rid, sec }: { g: GameState; me: number; rid: number; sec: number }) {
+  const W = buildWorld(), ui = useUi.getState;
+  const list: { r: number; id: number; n: number; btl: number; eta: number; army?: number }[] = [];
+  for (const r of g.regions) {
+    if (r.owner !== me || !r.cs) continue;
+    for (const c of r.cs) {
+      if ((c.ord ?? 0) >= 1 || (r.id === rid && c.p === sec)) continue;
+      if (r.id !== rid && groundUnits(c.u) >= groundUnits(r.units)) continue;
+      const eta = marchEta(g, me, r.id, c.p, rid, sec); if (eta === null) continue;
+      list.push({ r: r.id, id: c.id, n: c.n, btl: groundUnits(c.u), eta, army: c.army });
+    }
+  }
+  list.sort((a, z) => a.eta - z.eta);
+  if (!list.length) return <p className="note">No corps of ours can reach this border over land. Form one from a depot (Forces panel).</p>;
+  return (
+    <div className="bc-send">
+      {list.slice(0, 5).map(x => (
+        <div key={x.id} className="it nb">
+          <div className="tx"><b>{groupName(me, 1, x.n)} · {x.btl} btl</b><small>{W.regions[x.r].name} · {Math.round(x.eta)} s{x.army !== undefined ? ' · leaves its army\'s orders' : ''}</small></div>
+          <button className="buy plain" onClick={() => ui().order({ t: 'moveCorps', region: x.r, id: x.id, to: rid, toPost: sec })}>Send</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Patrol over this border, a flight from an airfield in reach, or a spy into the region across. */
+function ScoutAcross({ g, me, rid, nb }: { g: GameState; me: number; rid: number; nb: number }) {
+  const W = buildWorld(), ui = useUi.getState, sup = g.factions[me].supply;
+  const air = techOn(g, me, 'air') ? g.regions.find(r => r.owner === me && r.airfield && r.contested < 0 && hops(r.id, nb, AIR_RANGE) <= AIR_RANGE) : undefined;
+  const spies = g.spies.filter(s => s.f === me), here = spies.find(s => s.region === nb), cap = g.regions.find(r => r.capitalOf === me && r.owner === me);
+  const seen = g.regions[nb].seen;
+  return (
+    <div className="bc-send">
+      <p className="note">{(g.regions[nb].vis ?? 0) >= 3 ? 'We see it in full.' : seen !== undefined ? `Our last report is ${g.day - seen} days old.` : 'We have no report on it.'}</p>
+      <div className="it nb"><div className="tx"><b>Cavalry patrol</b><small>Troops across and the defences of this border · may be caught</small></div>
+        <button className="buy plain" disabled={sup < COST.patrol} onClick={() => ui().order({ t: 'patrol', from: rid, to: nb })}>{COST.patrol}</button></div>
+      {air && <div className="it nb"><div className="tx"><b>Reconnaissance flight</b><small>From {W.regions[air.id].name}: troops, buildings, every border · anti-air may shoot it down</small></div>
+        <button className="buy plain" disabled={sup < COST.recon} onClick={() => ui().order({ t: 'recon', from: air.id, to: nb })}>{COST.recon}</button></div>}
+      <div className="it nb"><div className="tx"><b>{here ? (activeSpies(g, me).some(s => s.region === nb) ? 'Our agent works there' : 'Our agent is on the way') : 'Spy from the capital'}</b><small>{here ? 'Reports everything until unmasked' : `${spies.length}/3 agents in the field`}</small></div>
+        {!here && <button className="buy plain" disabled={!cap || sup < COST.spy || spies.length >= 3} onClick={() => ui().order({ t: 'spy', to: nb })}>{COST.spy}</button>}</div>
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 // Deploy tab of the region drawer: the depot and reserve corps in the middle, one row per border with its corps (any number, at
-// most 20 battalions each), and the troops on the move. Moves send a share of a post (the share picker of the March tab) to another
+// most 20 battalions each), and the troops on the move. Moves send a share of a post (the share picker below) to another
 // post; a corps is selected by clicking it, and then takes its orders from the corps card and from right-clicks on the map.
-import { coastThreat, sectorName } from '@riskrts/shared';
+import { borderLabel, coastThreat, sectorName } from '@riskrts/shared';
 import {
   CORPS_CAP, FACTIONS, GROUND_TYPES, ORDERS, UT, buildWorld, corpsAtPost, depotOf, frontsOf, groundUnits, groupName, isMountain, legDist, mainOf, moveK, POST_SPEED, treatyOf,
   type Army, type Corps, type GameState, type Order, type RegionState, type Units,
@@ -33,7 +33,8 @@ function columnsOf(g: GameState, me: number, id: number): Army[] {
 
 function ColumnRow({ g, a, id }: { g: GameState; a: Army; id: number }) {
   const W = buildWorld();
-  const dest = a.inner ? (a.post! >= 0 ? `${W.regions[a.post!].name} border` : 'the centre') : a.to === id ? `here (${a.post! >= 0 ? W.regions[a.post!].name + ' border' : 'centre'})` : W.regions[a.path?.length ? a.path[a.path.length - 1] : a.to].name;
+  const post = (p: number) => p >= 0 ? borderLabel(W, p) : 'the centre';
+  const dest = a.inner ? post(a.post!) : a.to === id ? `here (${post(a.post!)})` : W.regions[a.path?.length ? a.path[a.path.length - 1] : a.to].name;
   const left = (a.wait ?? 0) + (1 - a.t) * a.dur;
   const what = a.wait ? `forming up · ${secs(a.wait)}, then marching` : `marching · ${secs(left)}`;
   const n = groundUnits(a.units);

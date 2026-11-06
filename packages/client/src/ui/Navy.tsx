@@ -29,7 +29,7 @@ function HpBar({ v, c }: { v: number; c?: string }) { return <span className="hp
 
 const shipIcon = (k: ShipKind) => k as 'trans' | 'land' | 'bb' | 'carrier';
 
-/** The Harbour tab of an own coastal region. */
+/** The harbour section of an own coastal region's Build tab. */
 export function NavyTab({ region, id }: { region: RegionState; id: number }) {
   const sim = useSim(); if (!sim) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState, supply = g.factions[me].supply;

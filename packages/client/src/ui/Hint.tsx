@@ -20,7 +20,7 @@ export function Hint() {
   else if (orderMode) text = <>Click a <b>bordering region</b> to march on it · <kbd>Esc</kbd> cancels</>;
   else if (tut < 1) text = <>{touch ? 'Tap' : 'Click'} one of your <b>{FACTIONS[me].short}</b> regions on the map to open it</>;
   else if (tut < 2) text = own ? <>Spend supply in the <b>Recruit</b> tab · keys <kbd>1</kbd>–<kbd>4</kbd></> : 'Select one of your own regions to recruit';
-  else if (tut < 3) text = own ? (touch ? <>Open the <b>March</b> tab to send troops to a neighbour</> : <>Now <b>right-click</b> a neighbouring region to march, or use the <b>March</b> tab</>) : (touch ? 'Select your region, then open its March tab' : 'Select your region, then right-click a neighbour to attack');
+  else if (tut < 3) text = own ? (touch ? <>Use <b>Pick a target on the map</b> in the Overview to send troops to a neighbour</> : <>Now <b>right-click</b> a neighbouring region to march, or select a corps and right-click</>) : (touch ? 'Select your region, then pick a target from its Overview' : 'Select your region, then right-click a neighbour to attack');
   else if (tut < 4) text = <>{touch ? 'Pinch' : 'Scroll'} in on a <b>red battle marker</b> to watch the fight</>;
   if (!text) return null;
   return (

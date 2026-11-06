@@ -197,15 +197,14 @@ class WorldRenderer implements WorldRendererApi {
     if (b) { this.flyToBattle(b.id, distance); return; }
     this.rig.flyTo(r.cx, r.cz, distance);
   }
-  /** In the Fortify tab, a tap near one of the selected region's borders picks that border instead of selecting a region. */
+  /** A click inside the selected own region, close to one of its borders or coasts, opens that border's card. */
   private pickSector(id: number): boolean {
     const ui = useUi.getState(), sel = ui.sel, g = this.session?.state;
-    if (!g || sel < 0 || ui.tab !== 'fort' || g.regions[sel]?.owner !== this.session!.me) return false;
-    if (id !== sel && id >= 0 && !this.world.regions[sel].adj.includes(id)) return false;
+    if (!g || sel < 0 || id !== sel || g.regions[sel]?.owner !== this.session!.me || ui.corps.length) return false;
     const x = this.tmpV.x, z = this.tmpV.z; let best = -2, bd = .7 * .7;
-    for (const s of [...this.world.regions[sel].sectors, -1]) { const p = sectorPoint(this.world, sel, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
-    if (best < -1) return false;
-    ui.setFortMarker([sel, best]); Sfx.click(); return true;
+    for (const s of this.world.regions[sel].sectors) { const p = sectorPoint(this.world, sel, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
+    if (best < 0) return false;
+    ui.selectBorder(sel, best); Sfx.click(); return true;
   }
 
   /** A click on the water picks the nearest fleet or naval battle under the pointer. */
@@ -261,7 +260,6 @@ class WorldRenderer implements WorldRendererApi {
       else if (ui.orderMode && ui.orderKind === 'cvair') c = 'c-air';
       else if (ui.orderMode && (ui.orderKind === 'ship' || ui.orderKind === 'landing')) c = !rs || !this.world.regions[hov].zones.length ? 'c-no' : ui.orderKind === 'ship' ? (rs.owner === me ? 'c-move' : 'c-no') : rs.owner !== me ? 'c-atk' : 'c-no';
       else if (ui.orderMode) c = ui.orderKind === 'air' ? 'c-air' : !rs ? 'c-no' : sel >= 0 && !this.world.regions[sel].adj.includes(hov) ? 'c-no' : rs.owner === me ? 'c-move' : 'c-atk';
-      else if (ui.tab === 'fort' && sel >= 0 && g?.regions[sel].owner === me) c = 'c-fort';
       else if (rs && rs.owner !== me && (rs.vis ?? 3) < 2) c = 'c-scout';
       if (c !== this.cursorCls) { if (this.cursorCls) this.canvas.classList.remove(this.cursorCls); if (c) this.canvas.classList.add(c); this.cursorCls = c; }
       if (ui.orderMode !== this.orderCursor) { this.orderCursor = ui.orderMode; this.canvas.classList.toggle('order', ui.orderMode); }

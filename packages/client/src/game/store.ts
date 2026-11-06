@@ -8,7 +8,8 @@ import { Neural, defaultVoiceMode, type VoiceMode } from '../audio/voice';
 import { DEFAULT_PIXEL_SCALE, type PixelScale } from '../render/api';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
-export type Tab = 'rec' | 'build' | 'fort' | 'deploy' | 'march' | 'navy';
+/** Tabs of the region card (design-command §5.3): Overview (posts, corps, operations from here), Recruit, Build. */
+export type Tab = 'over' | 'rec' | 'build';
 /** Map layer: 0 everything, 1 troops (markers and front lines first), 2 industry (buildings, rails, supply). */
 export type MapLayer = 0 | 1 | 2;
 /** Map mode (design-command §1): 0 political, 1 fronts, 2 forces, 3 supply, 4 intel. Forces and supply drive the old troops / industry layers. */
@@ -21,11 +22,11 @@ export const MAP_MODES = [
   { name: 'Intel', short: 'Intel', key: 'i', hint: 'What you know of each region and how old the report is' },
 ] as const;
 /** Left-hand panels (design-command §5.2). */
-export type Panel = null | 'situation' | 'forces' | 'staff';
+export type Panel = null | 'situation' | 'forces' | 'staff' | 'economy' | 'navy' | 'intel';
 const layerOf = (m: MapMode): MapLayer => m === 2 ? 1 : m === 3 ? 2 : 0;
 /** march / air strike, and the navy: ship troops to an own coast, assault an enemy coast, station warships in a zone, carrier strike. */
 export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair';
-export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy';
+export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy' | 'rules';
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 interface Ui {
@@ -139,31 +140,31 @@ export function loadVoiceMode(get: (k: string) => string | null = lsGet): VoiceM
 Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1 });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1 });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
   select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], armySel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
-  setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
+  setTab: (tab) => set({ tab }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
   setGoal: (goal) => set({ goal }),
   setLayer: (layer) => set({ layer, mode: layer === 1 ? 2 : layer === 2 ? 3 : 0, modeSet: true }),
   setMode: (mode, auto) => { if (auto && get().modeSet) return; set({ mode, layer: layerOf(mode), modeSet: get().modeSet || !auto }); },
   setPanel: (panel) => set({ panel }),
-  selectBorder: (region, sector) => set({ sel: region, border: [region, sector], orderMode: false, fleet: -1, seaSel: -1, corps: [] }),
+  selectBorder: (region, sector) => set({ sel: region, border: [region, sector], fortMarker: [region, sector], orderMode: false, fleet: -1, seaSel: -1, corps: [], armySel: -1 }),
   selectCorps: (ids, add, region) => {
     const cur = get().corps, next = !add ? ids : [...cur.filter(i => !ids.includes(i)), ...ids.filter(i => !cur.includes(i))];
     set({ corps: next, armySel: -1, orderMode: false, fleet: -1, seaSel: -1, border: null, ...(region !== undefined && region >= 0 ? { sel: region } : {}) }); Sfx.click();
   },
   selectArmy: (armySel) => { set({ armySel, corps: [], border: null }); Sfx.click(); },
-  closeBorder: () => set({ border: null }),
+  closeBorder: () => set({ border: null, fortMarker: null }),
   dismiss: (key, until) => set(st => ({ dismissed: { ...st.dismissed, [key]: until } })),
   beginOrder: (orderKind = 'march', orderArg = -1, orderSub = 'bb') => set({ orderMode: true, orderKind, orderArg, orderSub }),
   selectFleet: (fleet) => { set({ fleet, seaSel: -1, orderMode: false }); Sfx.click(); },

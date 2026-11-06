@@ -9,7 +9,7 @@ export const DEF_KINDS: DefKind[] = ['pill', 'fort', 'flak', 'bunk'];
 /** Field works on a border sector: they do not fight, they change how the battle on that border goes. */
 export type WorkKind = 'trench' | 'sand' | 'wire';
 export const WORK_KINDS: WorkKind[] = ['trench', 'sand', 'wire'];
-/** Everything the Fortify tab can place on a border. */
+/** Everything that can be placed on a border (border card) or in the interior (Build tab). */
 export type FortKind = DefKind | WorkKind;
 /** Everything that can fight on a battlefield. */
 export type AgentType = UnitType | DefKind;

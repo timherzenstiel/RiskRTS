@@ -96,7 +96,9 @@ export function TopBar() {
         {session.canControlTime ? (
           <div className="seg speed" role="group" aria-label="Game speed">
             <button aria-label="Pause" aria-pressed={speed === 0} onClick={() => { click(); ui().setSpeed(0); }}><PauseIcon /></button>
-            {SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)}
+            {session.canChangeSpeed
+              ? SPEEDS.map(s => <button key={s} aria-pressed={speed === s} onClick={() => { click(); ui().setSpeed(s); }}>{s}×</button>)
+              : <button aria-pressed={speed === 1} title="Against other players the war runs at 1×. 2× and 4× are only for games against computers." onClick={() => { click(); ui().setSpeed(1); }}>1×</button>}
           </div>
         ) : (
           <span className="speedro" title={session instanceof GuestSession && session.spectator ? 'Watching with full vision, a little delayed' : 'The host controls the game speed'}>{session instanceof GuestSession && session.spectator ? 'Spectating' : speed === 0 ? 'Paused' : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ranked' : ''}</span>

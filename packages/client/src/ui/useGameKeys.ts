@@ -25,7 +25,7 @@ export function useGameKeys() {
         if (t && t.closest('[role=dialog]') && t.tagName === 'BUTTON') return; // dialog buttons keep Space for activation
         e.preventDefault();
         if (!s.canControlTime || ui.overlay) return;
-        if (s.speed > 0) { lastSpeed = s.speed; ui.setSpeed(0); } else ui.setSpeed(lastSpeed || 1);
+        if (s.speed > 0) { lastSpeed = s.speed; ui.setSpeed(0); } else ui.setSpeed(s.canChangeSpeed ? lastSpeed || 1 : 1);
       } else if (e.key === 't' || e.key === 'T' || e.key === 'b' || e.key === 'B') {
         // map layers: T troops, B industry (buildings); the same key again shows everything
         const want = e.key === 't' || e.key === 'T' ? 1 : 2; ui.setLayer(ui.layer === want ? 0 : want);

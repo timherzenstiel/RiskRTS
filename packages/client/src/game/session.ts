@@ -14,7 +14,10 @@ export interface Session {
   readonly state: GameState;
   /** Game speed multiplier; only the local player or the host can change it. 0 = paused. */
   speed: number;
+  /** May pause and resume (single player or host). */
   readonly canControlTime: boolean;
+  /** May pick 2× or 4×: only when every other power is computer-controlled. Otherwise the war runs at 1×. */
+  readonly canChangeSpeed: boolean;
   /** Issue a command. Local/host: returns an error text or null immediately. Guest: returns null, errors arrive via onError. */
   send(cmd: Command): string | null;
   /** Battle ids whose per-unit detail this client wants (guests only need it for battles on screen). */
@@ -40,6 +43,8 @@ export class HostSession implements Session {
   get state() { return this.view; }
   speed = 1;
   readonly canControlTime = true;
+  /** Faster than 1× only against computers: a human rival (connected guest or seat kept for one) locks the speed. */
+  get canChangeSpeed() { return this.sim.factions.every(f => f.id === this.me || f.ai); }
   onError?: (m: string) => void;
   private acc = 0; private sinceSnap = 0;
   private evBuf: GameEvent[] = []; private fxBuf: Fx[] = [];
@@ -84,6 +89,7 @@ export class HostSession implements Session {
   setWatch(ids: number[]) { this.myWatch = new Set(ids); }
 
   update(dt: number) {
+    if (this.speed > 1 && !this.canChangeSpeed) this.speed = 1;
     if (this.sim.over || this.speed <= 0) { this.collect(); this.view = fogView(this.sim, this.me); return; }
     this.acc += Math.min(dt, .25) * this.speed;
     while (this.acc >= TICK_DT) { step(this.sim, TICK_DT); this.acc -= TICK_DT; this.collect(); }
@@ -118,6 +124,7 @@ export class GuestSession implements Session {
   readonly state: GameState = createMirror();
   speed = 1;
   readonly canControlTime = false;
+  readonly canChangeSpeed = false;
   onError?: (m: string) => void;
   latency = 0;
   private evBuf: GameEvent[] = []; private fxBuf: Fx[] = [];

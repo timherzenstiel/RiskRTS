@@ -16,7 +16,7 @@ import { F_BALL, F_DUST, F_FLAME, F_GLOW, F_HOT, F_THIN, FxSystem } from './fxSy
 import { Sprites } from './sprites';
 import { Input } from './input';
 import { Labels } from './labels';
-import { NetworkLayer } from './network';
+import { NetworkLayer, type SupplyPath } from './network';
 import { MapBattles } from './mapBattle';
 import { NavyDraw } from './navy';
 import { Models } from './models';
@@ -29,7 +29,7 @@ import { Terrain } from './terrain';
 import { Water } from './water';
 import { Shroud } from './shroud';
 import { GlobeBackdrop } from './globe';
-import { battleAnchor, corpsAtPost, sectorPoint } from '@riskrts/shared';
+import { battleAnchor, corpsAtPost, sectorPoint, OVER, capacity, cutBreak, load, supplyRoute } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
 /** Fronts mode: a region without hostile borders (its land is dimmed, no band). */
@@ -349,6 +349,31 @@ class WorldRenderer implements WorldRendererApi {
     return this.world.regions[sel].adj.includes(id) && g.regions[id].owner !== s.owner;
   }
 
+  private routeKey = ''; private route: SupplyPath | null = null;
+  /** Supply mode: the route of the own region under the cursor (else the selected one), recomputed at most once a second. */
+  private supplyPath(g: GameState): SupplyPath | null {
+    const ui = useUi.getState(), me = this.session?.me ?? -1;
+    if (ui.mode !== 3 || me < 0) return null;
+    const own = (i: number) => i >= 0 && g.regions[i]?.owner === me;
+    const id = own(ui.hover) ? ui.hover : own(ui.sel) ? ui.sel : -1; if (id < 0) return null;
+    const key = id + '|' + Math.floor(g.time) + '|' + g.day + '|' + (g.regions[id].cut ? 1 : 0);
+    if (key !== this.routeKey) { this.routeKey = key; const r = g.regions[id]; this.route = { from: id, legs: supplyRoute(g, r), brk: cutBreak(g, r) }; }
+    return this.route;
+  }
+
+  /** Supply mode: how full each own region is (0 ok, 1 near, 2 over, 3 far over or cut off), -1 for the land of others. */
+  private supplyLevels(g: GameState): Int8Array {
+    const me = this.session?.me ?? -1, out = new Int8Array(g.regions.length).fill(-1);
+    for (const r of g.regions) {
+      if (r.owner !== me || me < 0) continue;
+      if (r.cut) { out[r.id] = 3; continue; }
+      const l = load(g, r), c = capacity(g, r), x = c > 0 ? l / c : l > 0 ? 9 : 0;
+      out[r.id] = x > OVER.far ? 3 : x > 1 ? 2 : x > .8 ? 1 : 0;
+    }
+    return out;
+  }
+  private curSup = new Int8Array(0); private supT = -1;
+
   /** Repaint only regions whose owner / highlight state changed since the last frame. */
   private syncPaint(g: GameState | null, sel: number, hover: number) {
     const regs = this.world.regions, d = this.dirty; let any = false;
@@ -363,6 +388,13 @@ class WorldRenderer implements WorldRendererApi {
         if (key !== this.curFront[i]) { this.curFront[i] = key; d[i] = 1; any = true; }
       }
     } else for (let i = 0; i < regs.length; i++) if (this.curFront[i] !== '') { this.curFront[i] = ''; this.hot[i] = undefined; d[i] = 1; any = true; }
+    // Supply mode: own regions tinted by load against capacity (twice a second), the rest of the land dimmed
+    if (this.curSup.length !== regs.length) this.curSup = new Int8Array(regs.length).fill(-2);
+    const supply = !!g && useUi.getState().mode === 3;
+    if (supply && (this.now - this.supT > .5 || this.supT < 0)) {
+      this.supT = this.now; const lv = this.supplyLevels(g!);
+      for (let i = 0; i < regs.length; i++) if (lv[i] !== this.curSup[i]) { this.curSup[i] = lv[i]; d[i] = 1; any = true; }
+    } else if (!supply) { this.supT = -1; for (let i = 0; i < regs.length; i++) if (this.curSup[i] !== -2) { this.curSup[i] = -2; d[i] = 1; any = true; } }
     for (let i = 0; i < regs.length; i++) {
       const owner = g ? g.regions[i].owner : -1;
       if (owner !== this.curOwner[i]) { this.curOwner[i] = owner; d[i] = 1; for (const j of regs[i].adj) d[j] = 1; any = true; }
@@ -370,7 +402,7 @@ class WorldRenderer implements WorldRendererApi {
       if (hl !== this.curHl[i]) { this.curHl[i] = hl; d[i] = 1; any = true; }
     }
     if (!any) return;
-    for (let i = 0; i < regs.length; i++) if (d[i]) { d[i] = 0; this.terrain.paintRegion(i, this.curOwner, Math.max(0, this.curHl[i]) as 0 | 1 | 2 | 3, this.hot[i]); }
+    for (let i = 0; i < regs.length; i++) if (d[i]) { d[i] = 0; this.terrain.paintRegion(i, this.curOwner, Math.max(0, this.curHl[i]) as 0 | 1 | 2 | 3, this.hot[i], this.curSup[i] === -2 ? undefined : this.curSup[i]); }
     this.terrain.commitColors();
   }
 
@@ -504,7 +536,7 @@ class WorldRenderer implements WorldRendererApi {
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.dyn.fronts(g, T, rig.dist); this.war.draw(g, T, this.isClose, sprites);
       this.navy.me = this.dyn.me; this.navy.zoomK = this.dyn.zoomK; this.navy.fleet = useUi.getState().fleet; this.navy.draw(g, rig, T, this.lastDt);
-      this.net.draw(lines, g, this.session?.me ?? -1, rig);
+      this.net.draw(lines, g, this.session?.me ?? -1, rig, this.supplyPath(g));
       for (const b of g.battles) {
         const v = this.views.get(b.id); if (!v || !v.visible) continue;
         v.drawWorks(this.models, b); v.drawAgents(this.models, this.fx, b.agents, g.time, this.now);

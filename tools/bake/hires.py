@@ -5,7 +5,7 @@ tapered limb, ring or slab painted with vertex colours; COLOR_0 alpha marks hous
 and stripes, flags). models.py bakes ambient occlusion into the paint and exports everything into units.glb.
 """
 import math
-from models import Kit, C, srgb
+from models import Kit, C, srgb, register, DRESS
 
 P = dict(C)
 P.update({
@@ -14,7 +14,10 @@ P.update({
     'tar': srgb('#2a2622'), 'window': srgb('#2b3236'), 'lit': srgb('#c9b56a'), 'stone': srgb('#a39d8c'), 'grass': srgb('#56603a'),
     'white': srgb('#e6e2d6'), 'red': srgb('#b0302a'), 'blue': srgb('#2c4f9a'), 'black': srgb('#151515'), 'olive': srgb('#5b6146'),
     'mud': srgb('#4a3d2c'), 'bag': srgb('#a8956b'), 'bag2': srgb('#8f7d58'), 'cloth3': srgb('#7c7c70'),
+    # dress paint: mid greys the nation's dress colour is shaded by (value 1.0 at luma ~0.24, see meshPools.ts)
+    'plate': srgb('#8a887c'), 'plate2': srgb('#706e63'),
 })
+register(P)
 
 # ---------------------------------------------------------------- soldiers
 POSES = {
@@ -27,23 +30,25 @@ POSES = {
 
 def figure(name, pose, arms='ready', lie=None):
     k = Kit(name, jitter=.04); Q = POSES[pose]; d = Q['d']; hy = .095 + d
-    # legs: trousers (house colour) to the knee, puttees below, ammunition boots
+    # legs: trousers (nation dress) to the knee, puttees below, ammunition boots
     for i, sd in enumerate((-1, 1)):
         hip = (sd * .017, hy, 0); kn = Q['kn'][i]; an = Q['an'][i]
-        k.limb(hip, kn, .0125, .0105, P['cloth2'], True, seg=8)
-        k.ball(*kn, .0108, P['cloth2'], True, seg=8)
-        k.limb(kn, an, .0108, .0088, P['puttee'], seg=8)
+        k.limb(hip, kn, .0125, .0102, P['cloth2'], DRESS, seg=8)
+        k.ball(*kn, .0104, P['cloth2'], DRESS, seg=8)
+        k.limb(kn, an, .0104, .0086, P['puttee'], seg=8)
         for t in (.3, .55, .8):  # puttee wraps
-            p = tuple(kn[j] + (an[j] - kn[j]) * t for j in range(3)); k.limb((p[0], p[1] - .0015, p[2]), (p[0], p[1] + .0015, p[2]), .0101, .0101, P['tar'] if t == .8 else P['puttee'], seg=8, cap=False)
+            p = tuple(kn[j] + (an[j] - kn[j]) * t for j in range(3)); k.limb((p[0], p[1] - .0015, p[2]), (p[0], p[1] + .0015, p[2]), .0098, .0098, P['tar'] if t == .8 else P['puttee'], seg=8, cap=False)
         flat = pose == 'kneel' and i == 1
-        k.box(an[0], an[1] - .006, an[2] + (.0 if flat else .008), .022, .012, .034, P['boot'], bevel=.003, rx=(-1.2 if flat else 0))
-        if not flat: k.ball(an[0], an[1] - .007, an[2] + .024, .0105, P['boot'], sy=.7, seg=8)
-    # tunic: skirt, waist, chest (oval), shoulders
-    k.limb((0, hy - .022, 0), (0, hy + .006, 0), .032, .028, P['cloth2'], True, seg=10)
-    k.limb((0, hy + .004, 0), (0, hy + .05, 0), .027, .032, P['cloth'], True, seg=10)
-    k.ball(0, hy + .05, -.002, .031, P['cloth'], True, sy=.36, seg=10)
-    for sd in (-1, 1): k.ball(sd * .03, hy + .047, 0, .0105, P['cloth'], True, seg=8)  # shoulders
-    k.limb((0, hy + .058, .002), (0, hy + .064, .002), .016, .015, P['cloth2'], True, seg=8)  # collar
+        k.box(an[0], an[1] - .006, an[2] + (.0 if flat else .008), .021, .012, .034, P['boot'], bevel=.003, rx=(-1.2 if flat else 0))
+        if not flat: k.ball(an[0], an[1] - .007, an[2] + .024, .01, P['boot'], sy=.7, seg=8)
+    # tunic: one tailored shell from the skirt hem to the collar (squared shoulders, flat chest), breast pockets, collar
+    k.loft([(hy - .026, .031, .025, 0), (hy - .006, .029, .022, 0), (hy + .012, .029, .021, 0), (hy + .034, .032, .022, .001),
+            (hy + .047, .034, .019, .001), (hy + .055, .022, .015, .002), (hy + .06, .014, .012, .002)], P['cloth'], DRESS, n=14)
+    for sd in (-1, 1):
+        k.box(sd * .013, hy + .036, .0205, .013, .012, .003, P['cloth2'], DRESS, bevel=.0012)    # breast pocket
+        k.box(sd * .013, hy + .043, .0215, .014, .004, .003, P['cloth2'], DRESS, bevel=.001)     # pocket flap
+        k.box(sd * .0075, hy + .061, .011, .006, .006, .002, P['red'], True)                     # collar patch (team colour)
+    k.limb((0, hy + .058, .002), (0, hy + .065, .002), .0145, .0135, P['cloth2'], DRESS, seg=10)  # collar
     # webbing: belt, buckle, cross braces, pouches, bayonet frog
     k.limb((0, hy - .002, 0), (0, hy + .006, 0), .0345, .0345, P['leather'], seg=12, cap=False)
     k.box(0, hy + .002, .034, .01, .008, .003, P['brass'], bevel=.001)
@@ -61,7 +66,7 @@ def figure(name, pose, arms='ready', lie=None):
     # head: neck, head, nose, ears, eyes, moustache
     hz = hy + .078
     k.limb((0, hy + .06, .002), (0, hy + .07, .002), .0085, .009, P['skin'], seg=8)
-    k.ball(0, hz, .003, .0195, P['skin'], sy=1.12, seg=12)
+    k.ball(0, hz, .003, .0182, P['skin'], sy=1.14, seg=12)
     k.box(0, hz - .002, .023, .005, .008, .006, P['skin'], bevel=.0015)
     for sd in (-1, 1):
         k.ball(sd * .0195, hz, .001, .0045, P['skin'], sy=1.3, seg=6)
@@ -79,8 +84,12 @@ def figure(name, pose, arms='ready', lie=None):
     rE, rW, lE, lW, ry, up, zb = A
     rS, lS = (.031, sh, 0), (-.031, sh, .002)
     for S_, E_, W_ in ((rS, rE, rW), (lS, lE, lW)):
-        k.limb(S_, E_, .0092, .008, P['cloth'], True, seg=7); k.ball(*E_, .0081, P['cloth'], True, seg=7)
-        k.limb(E_, W_, .0078, .0064, P['cloth'], True, seg=7)
+        k.limb(S_, E_, .0092, .008, P['cloth'], DRESS, seg=8); k.ball(*E_, .0081, P['cloth'], DRESS, seg=8)
+        k.limb(E_, W_, .0078, .0064, P['cloth'], DRESS, seg=8)
+        k.ball(*S_, .0098, P['cloth'], DRESS, seg=8)                                              # shoulder
+        if S_ is lS:   # armband in the team colour on the left upper arm: reads from above
+            a0 = tuple(S_[j] + (E_[j] - S_[j]) * .3 for j in range(3)); a1 = tuple(S_[j] + (E_[j] - S_[j]) * .62 for j in range(3))
+            k.limb(a0, a1, .0098, .0092, P['red'], True, seg=8)
         k.ball(W_[0], W_[1], W_[2] + .004, .0068, P['skin'], sy=.8, seg=8)
     if arms == 'throw':
         k.ball(rW[0], rW[1] + .008, rW[2] - .004, .0075, P['steel'], seg=8)                       # grenade
@@ -115,23 +124,25 @@ def helmets_hi():
     out = []
     k = Kit('helm_brodie')
     k.ring(0, .003, 0, .031, .0035, P['helm'], axis='y', seg=20, seg2=4); k.cyl(0, .003, 0, .033, .033, .002, P['helm'], seg=20)
-    k.ball(0, .006, 0, .024, P['helm'], sy=.62, seg=14); k.box(0, -.014, .016, .036, .003, .003, P['leather']); out.append(k.done())
+    k.ball(0, .006, 0, .024, P['helm'], sy=.62, seg=14); k.box(0, -.014, .016, .036, .003, .003, P['leather'])
+    k.ring(0, .008, 0, .0225, .0022, P['red'], True, axis='y', seg=18, seg2=3); out.append(k.done())      # painted unit band
     k = Kit('helm_adrian')
     k.ball(0, .008, 0, .027, P['helm'], sy=.8, seg=14); k.cyl(0, .001, 0, .03, .03, .003, P['helm'], seg=16)
     k.box(0, .0, .03, .05, .003, .022, P['helm'], bevel=.002, rx=-.25); k.box(0, .002, -.029, .048, .003, .018, P['helm'], bevel=.002, rx=.3)
-    k.box(0, .03, 0, .006, .008, .05, P['helm'], bevel=.002); k.box(0, .014, .027, .009, .009, .002, P['brass'], bevel=.001); out.append(k.done())
+    k.box(0, .03, 0, .006, .008, .05, P['red'], True, bevel=.002); k.box(0, .014, .027, .009, .009, .002, P['brass'], bevel=.001); out.append(k.done())
     k = Kit('helm_cap')
-    k.cyl(0, .005, 0, .022, .022, .011, P['cloth2'], True, seg=14); k.cyl(0, .016, -.002, .026, .029, .011, P['cloth'], True, seg=14)
+    k.cyl(0, .005, 0, .022, .022, .011, P['red'], True, seg=14); k.cyl(0, .016, -.002, .026, .029, .011, P['cloth'], DRESS, seg=14)
     k.box(0, -.0, .028, .04, .003, .02, P['boot'], bevel=.002, rx=-.25); k.box(0, .008, .023, .007, .007, .002, P['brass'], bevel=.001); out.append(k.done())
     k = Kit('helm_stahl')
     k.cyl(0, -.002, -.004, .035, .03, .016, P['helm'], seg=16); k.ball(0, .013, 0, .0285, P['helm'], sy=.98, seg=14)
     k.ring(0, -.009, -.004, .034, .002, P['helm'], axis='y', seg=16, seg2=3)
+    k.ring(0, .019, 0, .0255, .0024, P['red'], True, axis='y', seg=16, seg2=3)                        # painted unit band
     for sd in (-1, 1): k.cyl(sd * .029, .011, 0, .0045, .0045, .006, P['steel'], axis='x', seg=8)
     k.box(0, .003, .031, .044, .004, .008, P['helm'], bevel=.002, rx=-.35); out.append(k.done())
     k = Kit('helm_kabalak')
     for i, r in enumerate((.031, .03, .028, .025)):
         k.cyl(0, .001 + i * .008, 0, r, r - .002, .009, P['khaki'] if i % 2 == 0 else P['canvas'], seg=14)
-        k.ring(0, .005 + i * .008, 0, r - .001, .0025, P['canvas'] if i % 2 == 0 else P['khaki'], axis='y', seg=12, seg2=3)
+        k.ring(0, .005 + i * .008, 0, r - .001, .0025, P['red'] if i == 2 else (P['canvas'] if i % 2 == 0 else P['khaki']), True if i == 2 else False, axis='y', seg=12, seg2=3)
     k.ball(0, .033, 0, .02, P['khaki'], sy=.45, seg=12); out.append(k.done())
     return out
 
@@ -149,9 +160,9 @@ def vickers():
     k.limb((0, .045, .05), (0, .036, .11), .002, .002, P['brass'], seg=5)  # steam pipe
     for sd in (-1, 1): k.limb((sd * .009, .05, -.03), (sd * .009, .05, -.045), .0035, .0035, P['wood'], seg=6)
     k.box(0, .062, -.012, .006, .01, .004, P['steel'])
-    k.box(.034, .018, .005, .022, .03, .04, P['olive'], bevel=.003); k.box(.034, .034, .005, .023, .003, .041, P['drab2'], bevel=.001)
+    k.box(.034, .018, .005, .022, .03, .04, P['plate'], DRESS, bevel=.003); k.box(.034, .034, .005, .023, .003, .041, P['drab2'], bevel=.001)
     for t in range(9): k.limb((.018 - t * .0005, .045 - t * .0025, .006 - t * .002), (.02, .045 - t * .0025, .006 - t * .002), .002, .002, P['brass'], seg=4)
-    k.box(0, .038, .05, .07, .045, .004, P['olive'], house=False, rx=-.12, bevel=.002); k.box(0, .055, .052, .016, .006, .005, P['black'])
+    k.box(0, .038, .05, .07, .045, .004, P['plate'], DRESS, rx=-.12, bevel=.002); k.box(0, .055, .052, .016, .006, .005, P['black'])
     return k.done()
 
 def wheel(k, x, y, z, R, w, spokes=12, house=False):
@@ -167,8 +178,8 @@ def field_gun75():
     for sd in (-1, 1): wheel(k, sd * .064, .056, 0, .056, .014)
     k.limb((-.07, .056, 0), (.07, .056, 0), .005, .005, P['steel'], seg=8)
     # shield with a sight hole and rivets, team band along the top
-    k.box(0, .088, .012, .12, .066, .005, P['olive'], rx=-.09, bevel=.002)
-    k.box(0, .118, .009, .12, .01, .006, P['olive'], house=True, rx=-.09, bevel=.002)
+    k.box(0, .088, .012, .12, .066, .005, P['plate'], DRESS, rx=-.09, bevel=.002)
+    k.box(0, .118, .009, .12, .01, .006, P['red'], True, rx=-.09, bevel=.002)
     k.box(-.024, .1, .016, .012, .01, .007, P['black'])
     for i in range(7):
         for yy in (.06, .114): k.ball(-.054 + i * .018, yy, .016, .0018, P['rivet'], seg=4)
@@ -179,7 +190,7 @@ def field_gun75():
     k.box(0, .074, -.03, .024, .024, .022, P['steel'], bevel=.003)                      # breech
     k.limb((.014, .082, -.03), (.03, .09, -.04), .002, .002, P['steel'], seg=4); k.ball(.03, .09, -.04, .004, P['gun'], seg=6)
     k.box(-.02, .09, -.005, .006, .016, .02, P['gun'], bevel=.001)                      # sight
-    k.box(0, .045, -.1, .032, .02, .17, P['olive'], rx=.16, bevel=.004)                 # trail
+    k.box(0, .045, -.1, .032, .02, .17, P['plate'], DRESS, rx=.16, bevel=.004)                 # trail
     k.box(0, .016, -.182, .05, .03, .01, P['steel'], bevel=.002); k.limb((0, .03, -.17), (.03, .05, -.2), .003, .003, P['wood'], seg=5)
     for sd in (-1, 1): k.box(sd * .045, .07, -.01, .022, .004, .02, P['leather'], bevel=.002)   # axle seats
     k.box(-.13, .014, -.09, .05, .028, .05, P['wood'], bevel=.003)                      # ammunition
@@ -212,10 +223,10 @@ def tank_mk4():
     prof = [(-L / 2 - .02, H * .45), (-L / 2 + .02, H), (L / 2 - .03, H), (L / 2 + .025, H * .55), (L / 2 - .05, .012), (-L / 2, .012)]
     for sd in (-1, 1):
         xo = sd * (W + .036); xi = sd * W
-        k.poly([(xo, y, z) for z, y in prof], P['drab'], thick=.034 * sd * (1 if sd > 0 else 1))
+        k.poly([(xo, y, z) for z, y in prof], P['plate'], DRESS, thick=.034 * sd * (1 if sd > 0 else 1))
         # raised inner plate, recognition stripes (team colour) on the front horns, rivets along every edge
         inner = [(z * .84, .02 + (y - .012) * .78) for z, y in prof]
-        k.poly([(xo + sd * .0025, y, z) for z, y in inner], P['drab2'], house=True, thick=.002)
+        k.poly([(xo + sd * .0025, y, z) for z, y in inner], P['plate2'], DRESS, thick=.002)
         for j, zz in enumerate((.135, .15, .165)):
             k.box(xo + sd * .003, .09, zz, .004, .07, .009, P['white'] if j != 1 else P['red'], house=(j == 1), rx=.55)
         for i in range(len(prof)):
@@ -223,18 +234,19 @@ def tank_mk4():
             rivet_row(k, xo + sd * .003, (a[0] * .93, a[1] * .96 + .004), (b[0] * .93, b[1] * .96 + .004), n)
         track_loop(k, sd, sd * (W + .018), [(z * 1.03, y * 1.03 - .004) for z, y in prof], 52)
         # sponson with a 6-pounder in a ball mantlet, team panel
-        k.box(sd * (W + .052), .066, .012, .032, .05, .085, P['drab'], house=True, bevel=.004)
-        k.poly([(sd * (W + .068), .042, .055), (sd * (W + .068), .09, .055), (sd * (W + .052), .09, .07), (sd * (W + .052), .042, .07)], P['drab'], house=True)
-        k.ball(sd * (W + .07), .07, .03, .012, P['drab2'], seg=10)
+        k.box(sd * (W + .052), .066, .012, .032, .05, .085, P['plate'], DRESS, bevel=.004)
+        k.poly([(sd * (W + .068), .042, .055), (sd * (W + .068), .09, .055), (sd * (W + .052), .09, .07), (sd * (W + .052), .042, .07)], P['plate'], DRESS)
+        k.ball(sd * (W + .07), .07, .03, .012, P['plate2'], DRESS, seg=10)
         k.limb((sd * (W + .074), .07, .03), (sd * (W + .085), .072, .1), .005, .0042, P['gun'], seg=8)
         k.box(sd * (W + .069), .086, -.01, .002, .006, .02, P['black'])
         rivet_row(k, sd * (W + .069), (-.028, .044), (.05, .044), 6); rivet_row(k, sd * (W + .069), (-.028, .088), (.05, .088), 6)
-    k.box(0, H * .6, -.01, W * 2, H * .55, L * .74, P['drab'], bevel=.004)              # hull between the frames
-    k.box(0, H + .02, .06, .075, .034, .06, P['drab'], house=True, bevel=.004)          # driver's cab
+    k.box(0, H * .6, -.01, W * 2, H * .55, L * .74, P['plate'], DRESS, bevel=.004)              # hull between the frames
+    k.box(0, H + .02, .06, .075, .034, .06, P['plate'], DRESS, bevel=.004)              # driver's cab
+    k.box(0, H + .0375, .06, .05, .002, .03, P['red'], True)                           # air recognition panel (team colour)
     for i in range(3): k.box(-.022 + i * .022, H + .025, .0905, .012, .004, .002, P['black'])
-    k.box(0, H + .039, .055, .03, .004, .028, P['drab2'], bevel=.002)                   # hatch
+    k.box(0, H + .039, .045, .03, .004, .012, P['plate2'], DRESS, bevel=.002)                   # hatch
     rivet_row(k, .038, (.032, H + .006), (.088, H + .006), 5); rivet_row(k, -.038, (.032, H + .006), (.088, H + .006), 5)
-    k.box(0, H + .006, -.04, .09, .012, .1, P['drab2'], bevel=.003)                     # engine roof
+    k.box(0, H + .006, -.04, .09, .012, .1, P['plate2'], DRESS, bevel=.003)                     # engine roof
     k.limb((-.02, H + .012, -.1), (.02, H + .012, -.1), .009, .009, P['rust'], seg=10)  # silencer
     for sd in (-1, 1): k.limb((sd * .02, H + .012, -.1), (sd * .02, H + .05, -.11), .004, .004, P['rust'], seg=6)
     for sd in (-1, 1): k.box(sd * (W + .02), H + .016, -.02, .006, .004, .26, P['steel'])  # beam rails
@@ -246,15 +258,16 @@ def tank_ft():
     k = Kit('tank_ft'); L, W = .22, .04
     prof = [(-L / 2, .02), (-L / 2 + .01, .06), (L / 2 - .01, .065), (L / 2 + .02, .035), (L / 2, .008), (-L / 2 + .02, .008)]
     for sd in (-1, 1):
-        k.poly([(sd * (W + .024), y, z) for z, y in prof], P['drab2'], thick=.022)
+        k.poly([(sd * (W + .024), y, z) for z, y in prof], P['plate2'], DRESS, thick=.022)
         track_loop(k, sd, sd * (W + .013), [(z * 1.04, y * 1.05 - .003) for z, y in prof], 40, w=.03)
-        k.cyl(sd * (W + .013), .04, L / 2 - .005, .028, .028, .026, P['drab2'], axis='x', seg=16, smooth=False)  # front idler
+        k.cyl(sd * (W + .013), .04, L / 2 - .005, .028, .028, .026, P['plate2'], DRESS, axis='x', seg=16, smooth=False)  # front idler
         rivet_row(k, sd * (W + .026), (-.09, .058), (.09, .062), 9)
-    k.box(0, .055, -.01, W * 2, .045, .17, P['drab'], house=True, bevel=.004)
-    k.poly([(-W, .078, .075), (W, .078, .075), (W, .045, .11), (-W, .045, .11)], P['drab'], house=True, thick=.004)
-    k.box(0, .07, .1, .035, .02, .004, P['drab2'], rx=-.8, bevel=.002)
-    k.cyl(0, .098, .01, .03, .026, .04, P['drab'], house=True, seg=8, smooth=False)    # turret
-    k.ball(0, .118, .01, .014, P['drab2'], sy=.7, seg=10)
+    k.box(0, .055, -.01, W * 2, .045, .17, P['plate'], DRESS, bevel=.004)
+    k.poly([(-W, .078, .075), (W, .078, .075), (W, .045, .11), (-W, .045, .11)], P['plate'], DRESS, thick=.004)
+    k.box(0, .07, .1, .035, .02, .004, P['plate2'], DRESS, rx=-.8, bevel=.002)
+    k.cyl(0, .098, .01, .03, .026, .04, P['plate'], DRESS, seg=8, smooth=False)        # turret
+    k.cyl(0, .108, .01, .0272, .0262, .007, P['red'], True, seg=8, smooth=False)        # turret band (team colour)
+    k.ball(0, .118, .01, .014, P['plate2'], DRESS, sy=.7, seg=10)
     k.limb((0, .1, .03), (0, .1, .085), .0055, .005, P['gun'], seg=8)
     k.box(0, .015, -.13, .03, .01, .05, P['steel'], rx=.4, bevel=.002)                 # tail skid
     return k.done()
@@ -263,17 +276,18 @@ def tank_a7v():
     k = Kit('tank_a7v'); L, W = .3, .07
     for sd in (-1, 1):
         track_loop(k, sd, sd * (W - .01), [(-L / 2 + .02, .03), (L / 2 - .02, .03), (L / 2 - .03, .006), (-L / 2 + .03, .006)], 36, w=.03)
-    k.poly([(-W, .03, -L / 2), (W, .03, -L / 2), (W, .03, L / 2), (-W, .03, L / 2)], P['drab'], thick=.004)
+    k.poly([(-W, .03, -L / 2), (W, .03, -L / 2), (W, .03, L / 2), (-W, .03, L / 2)], P['plate2'], DRESS, thick=.004)
     for sd in (-1, 1):  # sloped armour skirts
-        k.poly([(sd * W, .03, -L / 2), (sd * W, .03, L / 2), (sd * (W - .012), .1, L / 2 - .01), (sd * (W - .012), .1, -L / 2 + .01)], P['drab'], house=True, thick=.004 * sd)
+        k.poly([(sd * W, .03, -L / 2), (sd * W, .03, L / 2), (sd * (W - .012), .1, L / 2 - .01), (sd * (W - .012), .1, -L / 2 + .01)], P['plate'], DRESS, thick=.004 * sd)
         for i in range(3): k.box(sd * (W - .006), .07, -.08 + i * .08, .003, .012, .016, P['black'], ry=0)
         rivet_row(k, sd * (W - .002), (-L / 2 + .01, .036), (L / 2 - .01, .036), 14)
         rivet_row(k, sd * (W - .011), (-L / 2 + .02, .095), (L / 2 - .02, .095), 13)
-        k.box(sd * (W - .004), .066, 0, .003, .02, .1, P['drab'], house=True)              # team panel
-    k.box(0, .1, 0, (W - .012) * 2, .006, L - .02, P['drab2'], bevel=.002)
-    k.box(0, .095, L / 2 - .015, (W - .012) * 2, .07, .008, P['drab'], rx=.3, bevel=.002)
+        k.box(sd * (W - .004), .066, 0, .003, .02, .1, P['red'], True)                     # team panel
+    k.box(0, .1, 0, (W - .012) * 2, .006, L - .02, P['plate2'], DRESS, bevel=.002)
+    k.box(0, .1035, -.06, (W - .012) * 2 - .01, .002, .025, P['red'], True)           # air recognition stripe (team colour)
+    k.box(0, .095, L / 2 - .015, (W - .012) * 2, .07, .008, P['plate'], DRESS, rx=.3, bevel=.002)
     k.limb((0, .07, L / 2), (0, .072, L / 2 + .06), .007, .006, P['gun'], seg=8)         # 57 mm
-    k.box(0, .118, .07, .05, .03, .05, P['drab'], house=True, bevel=.003)                # commander's cupola
+    k.box(0, .118, .07, .05, .03, .05, P['plate'], DRESS, bevel=.003)                    # commander's cupola
     for i in range(4): k.box(-.015 + i * .01, .123, .096, .006, .004, .002, P['black'])
     rivet_row(k, 0, (-L / 2 + .02, .104), (L / 2 - .02, .104), 15)
     return k.done()
@@ -283,7 +297,7 @@ def biplane():
     k = Kit('plane')
     secs = [(.13, .028, .03), (.1, .032, .034), (.05, .03, .032), (-.02, .025, .026), (-.08, .018, .02), (-.13, .009, .011)]
     for (z0, w0, h0), (z1, w1, h1) in zip(secs, secs[1:]):
-        k.limb((0, 0, z0), (0, 0, z1), w0, w1, P['canvas'], house=True, seg=8)
+        k.limb((0, 0, z0), (0, 0, z1), w0, w1, P['canvas'], DRESS, seg=8)
     k.limb((0, 0, .13), (0, 0, .148), .031, .029, P['steel'], seg=14); k.ring(0, 0, .14, .03, .003, P['gun'], axis='z', seg=14)
     for wy, wz, span, ch in ((.062, .04, .4, .066), (-.022, .045, .36, .06)):
         k.box(0, wy, wz, span, .006, ch, P['wing'], bevel=.002)
@@ -301,7 +315,7 @@ def biplane():
     k.box(0, 0, -.135, .14, .005, .038, P['wing'], bevel=.002); k.box(0, .024, -.138, .005, .044, .03, P['canvas'], house=True, bevel=.001)
     k.box(0, .025, .0, .024, .01, .034, P['black'], bevel=.002); k.ball(0, .036, -.006, .009, P['leather'], seg=8)
     for sd in (-1, 1): k.limb((sd * .007, .03, .03), (sd * .007, .03, .09), .003, .003, P['gun'], seg=6)
-    k.box(0, .028, .045, .03, .01, .05, P['canvas'], house=True, bevel=.003)            # gun hump
+    k.box(0, .028, .045, .03, .01, .05, P['canvas'], DRESS, bevel=.003)                # gun hump
     for i in range(7):  # rotary cylinders peeking out of the cowling
         a = i / 7 * math.tau; k.limb((math.cos(a) * .018, math.sin(a) * .018, .142), (math.cos(a) * .027, math.sin(a) * .027, .142), .004, .004, P['steel'], seg=5)
     return k.done()

@@ -27,20 +27,39 @@ def faction_colours():
     tank = [lerp(c, lin('#6b6a52'), .3) for c in fac]          # palette.ts TANKC
     return fac, uni, tank
 
-def tint_material(name, rgb):
-    """Same rule as meshPools.ts: masked paint = tint * clamp(luma * 4.2, .55, 1.35)."""
+# nation dress (keep in sync with packages/client/src/render/palette.ts)
+DRESS_UNI = ['#8b7d55', '#7f93a8', '#8d8a66', '#727866', '#8a9697', '#9a8658', '#6e6a48']
+DRESS_VEH = ['#6e6247', '#7b7656', '#5f6448', '#717268', '#6c7066', '#8a7b55', '#5d5b40']
+DRESS_AIR = ['#6b6444', '#b9b49c', '#a8a68e', '#9a9a86', '#a09c86', '#a89a76', '#757052']
+ATLAS = os.path.join(ROOT, 'packages', 'client', 'public', 'art', 'units.webp')
+
+def tint_material(name, rgb, dress=None, img=None):
+    """Same rule as meshPools.ts. Mask (texture alpha with `img`, else vertex alpha): 1 team colour `rgb`, .5 nation `dress`,
+    0 own paint; tinted parts = colour * clamp(luma * 4.2, lo, hi)."""
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; N = nt.nodes; L = nt.links
     bsdf = N['Principled BSDF']; bsdf.inputs['Roughness'].default_value = .75
-    at = N.new('ShaderNodeVertexColor'); at.layer_name = 'Color'
-    bw = N.new('ShaderNodeRGBToBW'); L.new(at.outputs['Color'], bw.inputs[0])
+    if img is not None:
+        src = N.new('ShaderNodeTexImage'); src.image = img; img.alpha_mode = 'CHANNEL_PACKED'; lo, hi = .3, 1.6
+    else:
+        src = N.new('ShaderNodeVertexColor'); src.layer_name = 'Color'; lo, hi = .55, 1.35
+    col, alpha = src.outputs['Color'], src.outputs['Alpha']
+    bw = N.new('ShaderNodeRGBToBW'); L.new(col, bw.inputs[0])
     mul = N.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'; mul.inputs[1].default_value = 4.2; L.new(bw.outputs[0], mul.inputs[0])
-    cl = N.new('ShaderNodeClamp'); cl.inputs['Min'].default_value = .55; cl.inputs['Max'].default_value = 1.35; L.new(mul.outputs[0], cl.inputs['Value'])
-    tc = N.new('ShaderNodeMix'); tc.data_type = 'RGBA'; tc.blend_type = 'MULTIPLY'; tc.inputs['Factor'].default_value = 1
-    tc.inputs[6].default_value = (*rgb, 1); L.new(cl.outputs[0], tc.inputs[7])
-    mx = N.new('ShaderNodeMix'); mx.data_type = 'RGBA'
-    L.new(at.outputs['Alpha'], mx.inputs['Factor']); L.new(at.outputs['Color'], mx.inputs[6]); L.new(tc.outputs[2], mx.inputs[7])
-    L.new(mx.outputs[2], bsdf.inputs['Base Color'])
+    cl = N.new('ShaderNodeClamp'); cl.inputs['Min'].default_value = lo; cl.inputs['Max'].default_value = hi; L.new(mul.outputs[0], cl.inputs['Value'])
+    def shaded(c):
+        tc = N.new('ShaderNodeMix'); tc.data_type = 'RGBA'; tc.blend_type = 'MULTIPLY'; tc.inputs['Factor'].default_value = 1
+        tc.inputs[6].default_value = (*c, 1); L.new(cl.outputs[0], tc.inputs[7]); return tc.outputs[2]
+    def step(a, b):
+        mr = N.new('ShaderNodeMapRange'); mr.interpolation_type = 'SMOOTHSTEP'; mr.inputs['From Min'].default_value = a; mr.inputs['From Max'].default_value = b
+        L.new(alpha, mr.inputs['Value']); return mr.outputs['Result']
+    md = N.new('ShaderNodeMix'); md.data_type = 'RGBA'; L.new(step(.2, .4), md.inputs['Factor']); L.new(col, md.inputs[6]); L.new(shaded(dress or rgb), md.inputs[7])
+    mt = N.new('ShaderNodeMix'); mt.data_type = 'RGBA'; L.new(step(.7, .9), mt.inputs['Factor']); L.new(md.outputs[2], mt.inputs[6]); L.new(shaded(rgb), mt.inputs[7])
+    L.new(mt.outputs[2], bsdf.inputs['Base Color'])
     return m
+
+def atlas():
+    if not os.path.exists(ATLAS): return None
+    im = bpy.data.images.get('units_atlas') or bpy.data.images.load(ATLAS); im.name = 'units_atlas'; return im
 
 def ground():
     bpy.ops.mesh.primitive_plane_add(size=4)
@@ -53,9 +72,13 @@ def ground():
     g.data.materials.append(m)
 
 def place(src, x, z, face=0.0, s=1.0, mat=None):
-    """Copy a model at game coords (x right, z forward towards the camera), turned by `face`."""
+    """Copy a model at game coords (x right, z forward towards the camera), turned by `face`. `mat` is a material, or a
+    (name, team rgb, dress rgb) triple for the tint rule (textured when the model has UVs and the atlas exists)."""
     o = src.copy(); o.data = src.data.copy(); bpy.context.scene.collection.objects.link(o)
     o.location = (x, -z, 0); o.rotation_euler = (0, 0, face); o.scale = (s, s, s)
+    if isinstance(mat, tuple):
+        img = atlas() if o.data.uv_layers else None
+        key = mat[0] + ('t' if img else 'v'); mat = bpy.data.materials.get(key) or tint_material(key, mat[1], mat[2], img)
     if mat: o.data.materials.clear(); o.data.materials.append(mat)
     return o
 
@@ -97,7 +120,7 @@ def main():
         for o in made: bpy.data.objects.remove(o, do_unlink=True)
 
     for f in range(len(fac)):
-        U, T, F = tint_material(f'u{f}', uni[f]), tint_material(f't{f}', tank[f]), tint_material(f'f{f}', fac[f])
+        U, T, F = (f'u{f}', uni[f], lin(DRESS_UNI[f])), (f't{f}', tank[f], lin(DRESS_VEH[f])), (f'f{f}', fac[f], lin(DRESS_AIR[f]))
         def crew(spots):
             return [(lib['soldier_kneel'], x, z, a, 1, U) for x, z, a in spots] + [(lib[HELM_OF[f]], x, z, a, 1, U, .145) for x, z, a in spots]
         groups = {

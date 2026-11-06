@@ -1,6 +1,6 @@
 // Seeing the situation (design-command §1, §5): the left rail of panels, the Situation panel (our wars, borders in danger,
 // other wars), the border card opened from a balance chip, and the alerts queue.
-import { AIR_RANGE, COST, FACTIONS, TREATY_NAMES, activeSpies, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hops, hostileBorders, income, marchEta, techOn, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
+import { OVER, capacity, load, AIR_RANGE, COST, FACTIONS, TREATY_NAMES, activeSpies, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hops, hostileBorders, income, marchEta, techOn, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
 import { useSim, useUi, type Overlay, type Panel } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
@@ -11,6 +11,7 @@ import { rich, tn } from './LangPicker';
 import { rendererRef } from './refs';
 import { reqText, staffBadge } from './Staff';
 import { FortGrid } from './DrawerTabs';
+import { cutReason } from './Logistics';
 import { useState } from 'react';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
@@ -53,7 +54,7 @@ export function LeftRail() {
       {o('nation', 'Nation', <RailIcon d="M4 20V8l8-5 8 5v12M9 20v-6h6v6" />, 'Nation: manpower, conscription, national strengths and weaknesses')}
       {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
       {o('diplomacy', 'Diplo', <HandshakeIcon />, 'Diplomacy: treaties and messages')}
-      {o('rules', 'Rules', <RailIcon d="M5 4h11l3 3v13H5zM9 9h7M9 13h7M9 17h4" />, 'Rules: how fronts, corps, commanders, scouting and supply work, with the numbers')}
+      {o('rules', 'Rules', <RailIcon d="M5 4h11l3 3v13H5zM9 9h7M9 13h7M9 17h4" />, 'Rules: how fronts, corps, commanders, scouting, supply and men work, with the numbers')}
       {o('calendar', 'Calendar', <RailIcon d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4" />, 'War calendar: unlocks, rushes and doctrines')}
     </nav>
   );
@@ -243,13 +244,18 @@ function alertsOf(g: GameState, me: number): Alert[] {
     text: tn('ours {0} : theirs {1}', b.own.btl[0] + b.own.reserve[0], { raw: b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?' }), act: t('Open'), go: () => openBorder(b),
   });
   for (const r of g.regions) if (r.owner === me && r.cut) out.push({
-    key: 'cut' + r.id, level: 1, title: t('{0} is cut off', W.regions[r.id].name), text: t('No route home: no income or recruits, the garrison wears down'), act: t('Show'),
+    key: 'cut' + r.id, level: 1, title: `${W.regions[r.id].name} is cut off`, text: `${cutReason(g, r)[0].toUpperCase()}${cutReason(g, r).slice(1)}: no Production, recruits or replacements, the garrison wears down`, act: 'Show',
     go: () => { useUi.getState().select(r.id); useUi.getState().setMode(3); rendererRef.current?.flyTo(r.id, 30); },
   });
-  for (const q of (g.requests ?? []).filter(q => q.owner === me && q.urg === 2)) { const rt = reqText(g, me, q); out.push({ key: 'rq' + q.id, level: 2, title: tn('Staff: {0}', { raw: rt.title }), text: rt.why, act: t('Staff'), go: () => useUi.getState().setPanel('staff') }); }
-  if ((f.men ?? 0) < 300) out.push({ key: 'men', level: 1, title: t('Manpower nearly gone'), text: t('{0} men left in the pool', Math.floor(f.men ?? 0)), act: t('Nation'), go: () => useUi.getState().setOverlay('nation') });
+  // over supply capacity: only where it bites (troops would go hungry), worst first
+  for (const r of g.regions) if (r.owner === me && !r.cut) { const l = load(g, r), c = capacity(g, r); if (l > c) out.push({
+    key: 'cap' + r.id, level: l > c * OVER.far ? 1 : 0, title: `${W.regions[r.id].name} over its supply capacity`, text: `${l} / ${c} · ${l > c * OVER.far ? 'men fall sick and hungry' : 'no replacements, morale falls'}: move troops out or lay a railway`, act: 'Show',
+    go: () => { useUi.getState().select(r.id); useUi.getState().setMode(3); rendererRef.current?.flyTo(r.id, 30); },
+  }); }
+  for (const q of (g.requests ?? []).filter(q => q.owner === me && q.urg === 2)) { const t = reqText(g, me, q); out.push({ key: 'rq' + q.id, level: 2, title: `Staff: ${t.title}`, text: t.why, act: 'Staff', go: () => useUi.getState().setPanel('staff') }); }
+  if ((f.men ?? 0) < 300) out.push({ key: 'men', level: 1, title: 'Manpower nearly gone', text: `${Math.floor(f.men ?? 0)} men left in the pool: no recruits, no replacements`, act: 'Economy', go: () => useUi.getState().setPanel('economy') });
   const inc = income(g, me);
-  if (f.supply > Math.max(30, inc * 4)) out.push({ key: 'idle', level: 0, title: t('{0} supply unspent', f.supply), text: t('Recruit, fortify or build'), act: t('Capital'), go: () => { const c = g.regions.find(r => r.capitalOf === me && r.owner === me); if (c) { useUi.getState().select(c.id); useUi.getState().setTab('rec'); rendererRef.current?.flyTo(c.id, 30); } } });
+  if (f.supply > Math.max(30, inc * 4)) out.push({ key: 'idle', level: 0, title: `${f.supply} Production unspent`, text: 'Recruit, fortify or build', act: 'Capital', go: () => { const c = g.regions.find(r => r.capitalOf === me && r.owner === me); if (c) { useUi.getState().select(c.id); useUi.getState().setTab('rec'); rendererRef.current?.flyTo(c.id, 30); } } });
   return out.sort((a, b) => b.level - a.level);
 }
 

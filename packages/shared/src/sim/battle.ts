@@ -13,6 +13,7 @@ import { checkElim, checkMissions } from './missions';
 import { STANCE_DEALT, STANCE_TAKEN, SUPP_SILENCE, combinedMod, crossSpeed, dealtMod, depthBonus, shellMod, wwLossMod, fieldMod, fieldOf, holdMorale, splashMod, stanceIn, statsOf, suppMod, suppSlow, takenMod, wireSlow, type Field } from './rules';
 import { hasDoc, techOn } from './tech';
 import { flyToCarrier } from './carrier';
+import { OVER, overCap, woundedIn } from './supply';
 import { beachSupplied, bombarding, shipMax, sinkShip } from './navy';
 import { isCoast, zoneOfKey } from '../world/zones';
 import { nationOf } from '../data/nations';
@@ -24,8 +25,6 @@ export const paceOf = (g: GameState) => PACES[g.cfg?.pace ?? 1] ?? PACES[1];
 /** Seconds without fresh troops after which a front settles into trench warfare, and when the lull is deepest. */
 export const LULL_FROM = 60;
 const LULL_FULL = 180, LULL_ROF = .4;
-/** Share of the men lost in battle who are wounded and come back. */
-export const WOUNDED_SHARE = .3;
 /** Morale ceiling for a power at a given war weariness. */
 export const moraleCap = (g: GameState, f: number) => 100 + nationOf(f).morale - (g.factions[f]?.ww ?? 0) * .45;
 
@@ -325,9 +324,13 @@ function drawShells(g: GameState, b: Battle, f: number, n: number): boolean {
   b.used[f] = (b.used[f] ?? 0) + n; return true;
 }
 /** Shells one shot costs a side (defending guns fire from prepared stocks at half the rate). */
-export const shotCost = (b: Battle, f: number, g?: GameState) => SHELLS.shot * (f === b.def ? .5 : 1) * (g ? (supplyQOf(g, b, f) === 1 ? 1.5 : 1) * shellMod(g, f) : 1);
-/** Supply quality of the region a side draws its shells through (thin supply loses half again on the way). */
-const supplyQOf = (g: GameState, b: Battle, f: number) => (f === b.def ? g.regions[b.region] : isCoast(b.from) ? (b.src !== undefined ? { supplyQ: 1 } : undefined) : b.from >= 0 ? g.regions[b.from] : undefined)?.supplyQ ?? 2;
+export const shotCost = (b: Battle, f: number, g?: GameState) => SHELLS.shot * (f === b.def ? .5 : 1) * (g ? (strained(g, b, f) ? OVER.shells : 1) * shellMod(g, f) : 1);
+/** The region a side draws its shells through is over its supply capacity (or a landing is supplied over the beach): half again on the way. */
+const strained = (g: GameState, b: Battle, f: number) => {
+  if (f !== b.def && isCoast(b.from)) return b.src !== undefined;
+  const r = f === b.def ? g.regions[b.region] : b.from >= 0 ? g.regions[b.from] : undefined;
+  return !!r && r.owner === f && overCap(g, r);
+};
 
 /** The attackers leave their start line. */
 export function goOverTheTop(g: GameState, b: Battle, f: number) {
@@ -564,7 +567,7 @@ export function launch(g: GameState, f: number, from: number, to: number, u: Uni
 function tallyLosses(g: GameState, b: Battle) {
   for (const [fs, lost] of Object.entries(b.lost)) {
     const f = g.factions[+fs]; if (!f || lost <= 0) continue;
-    if (f.alive) f.wounded += lost * WOUNDED_SHARE;
+    if (f.alive) woundedIn(g, f, lost);
     f.ww = Math.min(100, f.ww + lost / 400 * wwLossMod(g, +fs));
   }
 }

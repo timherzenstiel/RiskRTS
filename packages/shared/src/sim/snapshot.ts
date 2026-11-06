@@ -1,6 +1,6 @@
 // Network snapshots. The host builds one per guest (secret missions stay secret) and guests fold it into a mirror GameState.
 import { FACTIONS } from '../data/factions';
-import { AGENT_TYPES, DEF_KINDS, type AgentType } from '../data/units';
+import { AGENT_TYPES, DEF_KINDS, UNIT_TYPES, type AgentType } from '../data/units';
 import { newRegion, world } from './core';
 import { fogView } from './fog';
 import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Hq, type Req } from './types';
@@ -52,6 +52,8 @@ export interface Snapshot {
   sh?: Ship[]; fl?: Fleet[]; sb?: SeaBattleSnap[];
   /** The recipient's armies and its commanders' requests. */
   hq?: Hq[]; rq?: Req[];
+  /** The recipient's own logistics: war economy lever, wounded coming back, last week's manpower ledger, recruits in training [region, unit index, seconds left, post (-1), army (-1)]. */
+  me?: { id: number; econ: number; wq: [number, number][]; led?: [number, number, number, number]; tr: number[][] };
 }
 /** A naval battle; agents as [kind index, faction, x, z, heading, hp share, flags(1 dead, 2 out, 4 burning, 8 breaking off), turret bearing, seconds since firing, ship id]. */
 export interface SeaBattleSnap { id: number; zone: number; x: number; z: number; ax: number; az: number; sides: number[][]; age: number; ended: boolean; night: number; hp0: number[]; hp: number[]; brk: boolean[]; sunk: Record<string, number>[]; winner?: number; fleets: number[]; ag: number[][]; tp: number[][] }
@@ -81,11 +83,15 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
       (r.factory ? 1 : 0) | (r.barracks ? 2 : 0) | (r.airfield ? 4 : 0) | (r.cut ? 8 : 0) | (r.spied ? 16 : 0) | (r.strike ? 32 : 0), r.battle, r.contested,
       r.vis ?? 3, r.seen ?? -1, r.est ? r.est[0] : -1, r.est ? r.est[1] : -1, Math.round(r.mor), r.men.inf, r.men.mg, r.men.art, r.men.tank, r.men.plane, r.home, r.stance ?? 0, r.supplyQ ?? -1, r.bombed ?? -1, r.fake && r.owner === recipient ? r.fake.until : -1, r.an ?? -1, r.deploy ?? 0, (r.port ? 1 : 0) + (r.portAt !== undefined && r.portAt > g.time ? 2 : 0), r.portAt !== undefined ? q2(Math.max(0, r.portAt - g.time)) : -1]),
     w: g.regions.flatMap(r => Object.entries(r.works).map(([s, x]) => [r.id, +s, x.tr, x.sand, x.wire])),
-    p: g.regions.flatMap(r => (r.cs ?? []).map(c => [r.id, c.p, c.u.inf, c.u.mg, c.u.art, c.u.tank, c.n, c.ord ?? -1, q2(Math.max(0, (c.ready ?? 0) - g.time)), c.est ? c.est[0] : -1, c.est ? c.est[1] : -1, c.st ?? -1, c.since === undefined ? -1 : q2(c.since), c.id, Math.round(c.mor), c.xp ?? 0, c.man ? 1 : 0, Math.round(c.m.inf), Math.round(c.m.mg), Math.round(c.m.art), Math.round(c.m.tank), c.army ?? -1])),
+    p: g.regions.flatMap(r => (r.cs ?? []).map(c => [r.id, c.p, c.u.inf, c.u.mg, c.u.art, c.u.tank, c.n, c.ord ?? -1, q2(Math.max(0, (c.ready ?? 0) - g.time)), c.est ? c.est[0] : -1, c.est ? c.est[1] : -1, c.st ?? -1, c.since === undefined ? -1 : q2(c.since), c.id, Math.round(c.mor), c.xp ?? 0, c.man ? 1 : 0, Math.round(c.m.inf), Math.round(c.m.mg), Math.round(c.m.art), Math.round(c.m.tank), c.army ?? -1, c.nr ? 1 : 0])),
     spies: g.spies,
     d: g.regions.flatMap(r => r.defs.map(d => [r.id, d.id, DEF_KINDS.indexOf(d.k), d.s, Math.round(d.hp), d.f])), cfg: g.cfg,
     a: g.armies, b, stats: g.stats, fx,
     hq: g.hq, rq: g.requests,
+    me: recipient >= 0 && g.factions[recipient] ? {
+      id: recipient, econ: g.factions[recipient].econ ?? 1, wq: (g.factions[recipient].wq ?? []).map(([m, d]) => [Math.round(m), d]), led: g.factions[recipient].led,
+      tr: g.regions.flatMap(r => r.owner === recipient ? (r.train ?? []).map(t => [r.id, UNIT_TYPES.indexOf(t.k), q2(Math.max(0, t.at - g.time)), t.p ?? -1, t.army ?? -1]) : []),
+    } : undefined,
     sh: g.ships, fl: (g.fleets ?? []).map(f => ({ ...f, path: f.path.map(q2) })),
     sb: (g.seaBattles ?? []).map(x => ({
       id: x.id, zone: x.zone, x: q2(x.x), z: q2(x.z), ax: q2(x.ax), az: q2(x.az), sides: x.sides, age: q2(x.age), ended: x.ended, night: q2(x.night), hp0: x.hp0.map(Math.round), brk: x.brk, sunk: x.sunk, winner: x.winner, fleets: x.fleets,
@@ -131,14 +137,20 @@ export function applySnapshot(m: GameState, s: Snapshot) {
     t.port = !!((r[26] ?? 0) & 1); t.portAt = r[27] !== undefined && r[27] >= 0 ? s.time + r[27] : undefined;
   });
   for (const [ri, sec, tr, sand, wire] of s.w ?? []) m.regions[ri].works[sec] = { tr, sand, wire };
-  for (const [ri, post, inf, mg, art, tank, n, ord, left, e0, e1, st, since, id, mor, xp, man, mi, mm, ma, mt, army] of s.p ?? []) {
+  for (const [ri, post, inf, mg, art, tank, n, ord, left, e0, e1, st, since, id, mor, xp, man, mi, mm, ma, mt, army, nr] of s.p ?? []) {
     const c: Corps = { id: id ?? -1 - post, n, p: post, u: { inf, mg, art, tank, plane: 0 }, m: { inf: mi ?? 0, mg: mm ?? 0, art: ma ?? 0, tank: mt ?? 0, plane: 0 }, mor: mor ?? 70 };
     if (ord >= 0) c.ord = ord as Order; if (left > 0) c.ready = m.time + left; if (e1 >= 0) c.est = [e0, e1]; if (st >= 0) c.st = st as Stance; if (since >= 0) c.since = since;
-    if (xp) c.xp = xp; if (man) c.man = true; if (army !== undefined && army >= 0) c.army = army;
+    if (xp) c.xp = xp; if (man) c.man = true; if (army !== undefined && army >= 0) c.army = army; if (nr) c.nr = true;
     (m.regions[ri].cs ??= []).push(c);
   }
   for (const [ri, id, k, sec, hp, f] of s.d ?? []) m.regions[ri].defs.push({ id, k: DEF_KINDS[k], s: sec, hp, f });
   m.spies = s.spies ?? []; m.viewer = undefined; m.hq = s.hq ?? []; m.requests = s.rq ?? [];
+  for (const r of m.regions) r.train = undefined;
+  if (s.me) {
+    const f = m.factions[s.me.id];
+    for (const [ri, k, left, p, army] of s.me.tr) { const r = m.regions[ri]; (r.train ??= []).push({ f: r.owner, k: UNIT_TYPES[k], at: s.time + left, p: p >= 0 ? p : undefined, army: army >= 0 ? army : undefined }); }
+    if (f) { f.econ = s.me.econ; f.wq = s.me.wq; f.led = s.me.led; }
+  }
   m.armies = s.a;
   const keep = new Set<number>();
   for (const bs of s.b) {

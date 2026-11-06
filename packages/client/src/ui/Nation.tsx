@@ -35,18 +35,18 @@ export function NationSheet() {
       <div className="kicker">{tx(FACTIONS[me].name)} · {t('Ministry of War')}</div><h2>{t('The nation')}</h2>
       <NationCard f={me} compact />
       <div className="nstats">
-        <div><small>{t('Manpower pool')}</small><b>{menStr(f.men ?? 0)}</b><span>{tn('+{0} per convoy', { raw: menStr(grow) })}</span></div>
-        <div><small>{t('War weariness')}</small><b className={f.ww >= N.unrest ? 'bad' : ''}>{Math.round(f.ww)}%</b><span>{t('unrest at {0}%', N.unrest)}</span></div>
-        <div><small>{t('Battalion')}</small><b>{FORMATION.inf.men}</b><span>{t('men from the pool')}</span></div>
+        <div><small>Manpower pool</small><b>{menStr(f.men ?? 0)}</b><span>+{menStr(grow)} per week</span></div>
+        <div><small>War weariness</small><b className={f.ww >= N.unrest ? 'bad' : ''}>{Math.round(f.ww)}%</b><span>unrest at {N.unrest}%</span></div>
+        <div><small>Battalion</small><b>{FORMATION.inf.men}</b><span>men from the pool</span></div>
       </div>
       <div className="lbl"><span>{t('Conscription')} · {t(MOB[mob])}</span></div>
       <div className="seg mob" role="group" aria-label={t('Conscription')}>
         {MOB.map((m, i) => <button key={m} aria-pressed={mob === i} onClick={() => { click(); ui().order({ t: 'mobilise', level: i }); }}>{t(['Peacetime', 'Extended', 'Total'][i])}</button>)}
       </div>
-      <p className="muted small">{t('Each level adds {0}% to the manpower growth and {1} war weariness per convoy; under total conscription the weariness no longer fades. Above {2}% for {3} convoys, remote home regions go on strike; {4} points higher they may rise.', Math.round(MANPOWER.mobGrowth * 100), MANPOWER.mobWW, N.unrest, MANPOWER.strikeAfter, MANPOWER.riseAbove)}</p>
-      {strikes.length > 0 && <p className="notice">{tn('On strike: {0}. No supply, shells or recruits from there until the weariness eases.', { raw: strikes.map(r => tx(W.regions[r.id].name)).join(', ') })}</p>}
-      {f.unrestT > 0 && !strikes.length && <p className="notice">{f.unrestT === 1 ? t('Unrest is brewing: 1 convoy above the threshold.') : t('Unrest is brewing: {0} convoys above the threshold.', f.unrestT)}</p>}
-      <div className="row"><button className="btn primary" onClick={close}>{t('Back to the map')}</button></div>
+      <p className="muted small">Each level adds {Math.round(MANPOWER.mobGrowth * 100)}% to the manpower growth and {MANPOWER.mobWW} war weariness per week; under total conscription the weariness no longer fades. Above {N.unrest}% for {MANPOWER.strikeAfter} weeks, remote home regions go on strike; {MANPOWER.riseAbove} points higher they may rise.</p>
+      {strikes.length > 0 && <p className="notice">On strike: {strikes.map(r => W.regions[r.id].name).join(', ')}. No Production, shells or recruits from there until the weariness eases.</p>}
+      {f.unrestT > 0 && !strikes.length && <p className="notice">Unrest is brewing: {f.unrestT} week{f.unrestT === 1 ? '' : 's'} above the threshold.</p>}
+      <div className="row"><button className="btn primary" onClick={close}>Back to the map</button></div>
     </Modal>
   );
 }

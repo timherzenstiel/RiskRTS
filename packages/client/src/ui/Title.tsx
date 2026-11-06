@@ -28,7 +28,7 @@ export function Title() {
       <div className="sheet plate">
         <div className="tgrid">
           <div className="tcol">
-        <p className="lede">{t('Six empires, one map. Supply convoys reach every power at the same instant, so everybody builds and marches at once. Claim regions, dig in, and finish your sealed orders before anyone else finishes theirs. Battles fight themselves. Zoom in and watch.')}</p>
+        <p className="lede">Six empires, one map. Each week reaches every power at the same instant, so everybody builds and marches at once. Claim regions, dig in, and finish your sealed orders before anyone else finishes theirs. Battles fight themselves. Zoom in and watch.</p>
           </div>
           <div className="tcol">
         <label className="field"><span className="lbl">{t('Your name')}</span>

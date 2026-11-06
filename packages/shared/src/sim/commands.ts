@@ -7,7 +7,8 @@ import {
 import { HW, wrapDx } from '../world/build';
 import { MARCH_MIN, MARCH_SPEED, addForce, approachSector, emit, frontsOf, hops, mkArmy, offensives, rnd, slotsMax, slotsUsed, takeForce, world, worksAt, worksFor } from './core';
 import { joinBattle, launch, startAssault, startBattle, transferAgents } from './battle';
-import { charge, mobilise, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
+import { charge, mobilise, produce, reinforce, setBarrage, setEcon, setStance, withdraw } from './levers';
+import { LEVY_COST, countRecruit, train } from './supply';
 import { buildCostOf, unitCost, unitName } from './rules';
 import { nationOf } from '../data/nations';
 import { mountainRegion } from '../data/terrain';
@@ -58,20 +59,30 @@ const cutMsg = (r: RegionState) => `${world().regions[r.id].name} is cut off fro
 /** "Tanks arrive in Sep 1916." */
 export const locked = (g: GameState, fid: number, k: TechKey, what: string) => `${what} are not available yet: they arrive in ${monthStr(techDayFor(fid, k, g.factions[fid]?.rushed))}. A rush brings them six months forward.`;
 
-export function recruit(g: GameState, fid: number, r: RegionState, type: UnitType): string | null {
-  const f = g.factions[fid], c = unitCost(g, fid, type), men = FORMATION[type].men;
+/** Is a region under attack (a battle on its soil it defends)? Only then may it raise emergency levies. */
+export const underAttack = (g: GameState, r: RegionState) => !!frontFor(g, r, r.owner) && frontsOf(g, r.id).some(b => b.def === r.owner && !b.ended);
+
+/**
+ * Recruit one battalion. It costs Production and men at once and trains for a week (to the next convoy with barracks); `now`
+ * raises it at once at double cost, only in a region under attack. `o.p`/`o.army`: a commander's recruits for one border.
+ */
+export function recruit(g: GameState, fid: number, r: RegionState, type: UnitType, now = false, o: { p?: number; army?: number } = {}): string | null {
+  const f = g.factions[fid], c = unitCost(g, fid, type) * (now ? LEVY_COST : 1), men = FORMATION[type].men;
   if (r.owner !== fid) return 'You can only recruit in your own regions.';
   if (r.contested >= 0) return contestedMsg(r);
   if (r.cut) return cutMsg(r);
   if (r.strike) return `The workers of ${world().regions[r.id].name} are on strike. No recruits until the unrest eases.`;
+  if (now && !underAttack(g, r)) return 'Emergency levies are raised only in a region under attack.';
   if ((f.men ?? 0) < men) return `The manpower pool is empty: a ${FORMATION[type].one} needs ${men} men and ${Math.floor(f.men ?? 0)} are left. Raise conscription, or wait for the next age class.`;
   if (type === 'tank' && !techOn(g, fid, 'tank')) return locked(g, fid, 'tank', 'Tanks');
   if (type === 'plane' && !techOn(g, fid, 'air')) return locked(g, fid, 'air', 'Aircraft');
   if (type === 'tank' && !r.factory) return 'Tanks need a factory in this region.';
   if (type === 'tank' && bombedNow(g, r)) return 'The factory here was bombed. No tanks until it is repaired.';
   if (type === 'plane' && !r.airfield) return 'Aircraft need an airfield in this region.';
-  if (f.supply < c) return `Not enough supply: a ${unitName(g, fid, type).toLowerCase()} costs ${c}.`;
-  f.supply -= c; f.men -= men; addUnits(g, r, type, 1); return null;
+  if (f.supply < c) return `Not enough Production: a ${unitName(g, fid, type).toLowerCase()} costs ${c}${now ? ' as an emergency levy' : ''}.`;
+  f.supply -= c; f.men -= men; countRecruit(f, men);
+  if (now) addUnits(g, r, type, 1); else train(g, r, type, o);
+  return null;
 }
 
 export function build(g: GameState, fid: number, r: RegionState, kind: BuildKind): string | null {
@@ -82,7 +93,7 @@ export function build(g: GameState, fid: number, r: RegionState, kind: BuildKind
   if (r[kind]) return 'Already built.';
   if (kind === 'airfield' && !techOn(g, fid, 'air')) return locked(g, fid, 'air', 'Airfields');
   const c = buildCostOf(fid, kind);
-  if (f.supply < c) return `Not enough supply: this costs ${c}.`;
+  if (f.supply < c) return `Not enough Production: this costs ${c}.`;
   f.supply -= c; r[kind] = true;
   return null;
 }
@@ -120,7 +131,7 @@ export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKin
     const use = SLOT_USE[kind], max = slotsMax(r.id, sector), now = slotsUsed(r, sector);
     if (now + use > max) return `No room: this ${sector < 0 ? 'interior' : 'border'} has ${max} building slots and ${now} are in use${use > 1 ? ' (a bunker needs two)' : ''}.`;
   }
-  if (f.supply < c) return `Not enough supply: this costs ${c}.`;
+  if (f.supply < c) return `Not enough Production: this costs ${c}.`;
   f.supply -= c;
   if (kind === 'trench') worksFor(r, sector).tr++;
   else if (kind === 'sand') worksFor(r, sector).sand++;
@@ -398,10 +409,11 @@ export function formCorps(g: GameState, fid: number, region: number, n: Partial<
 }
 
 /** Corps settings: stance, and whether the player commands it (`man` false hands it back to the region's Auto). */
-export function corpsSet(g: GameState, fid: number, region: number, id: number, st?: Stance, man?: boolean): string | null {
+export function corpsSet(g: GameState, fid: number, region: number, id: number, st?: Stance, man?: boolean, refill?: boolean): string | null {
   const o = ownCorps(g, fid, region, id); if (typeof o === 'string') return o;
   const { A, c } = o;
   if (st !== undefined) { if (![0, 1, 2, 3].includes(st)) return 'Invalid order.'; c.st = st; }
+  if (refill !== undefined) c.nr = refill ? undefined : true;
   if (man !== undefined) { c.man = man || undefined; if (!man) { fixPosts(g, A); if (A.deploy !== 1) autoDeploy(g, A); } }
   return null;
 }
@@ -439,7 +451,7 @@ export function patrol(g: GameState, fid: number, fromId: number, toId: number):
   if (A.owner !== fid) return 'Patrols ride out from your own regions.';
   if (B.owner === fid) return 'That region is already yours.';
   if (!W.regions[fromId].adj.includes(toId)) return `A patrol only reaches across one border. ${W.regions[toId].name} does not border ${W.regions[fromId].name}.`;
-  if (f.supply < COST.patrol) return `Not enough supply: a patrol costs ${COST.patrol}.`;
+  if (f.supply < COST.patrol) return `Not enough Production: a patrol costs ${COST.patrol}.`;
   f.supply -= COST.patrol;
   const a = mkArmy(g, fid, fromId, toId, 4.5, 1.5); a.scout = 'patrol'; a.dur *= weatherMarch(g, fid, toId); g.armies.push(a);
   return null;
@@ -454,7 +466,7 @@ export function recon(g: GameState, fid: number, fromId: number, toId: number): 
   if (!A.airfield) return `Reconnaissance flights need an airfield in ${W.regions[fromId].name}.`;
   if (B.owner === fid) return 'That region is already yours.';
   if (hops(fromId, toId, AIR_RANGE) > AIR_RANGE) return `${W.regions[toId].name} is out of range. Aircraft reach regions up to ${AIR_RANGE} borders away.`;
-  if (f.supply < COST.recon) return `Not enough supply: a reconnaissance flight costs ${COST.recon}.`;
+  if (f.supply < COST.recon) return `Not enough Production: a reconnaissance flight costs ${COST.recon}.`;
   f.supply -= COST.recon;
   const a = launch(g, fid, fromId, toId, emptyUnits(), false); a.scout = 'recon';
   return null;
@@ -469,7 +481,7 @@ export function spy(g: GameState, fid: number, toId: number): string | null {
   if (!cap || cap.owner !== fid) return 'Spies are trained in your capital, and it has fallen.';
   if (g.spies.filter(s => s.f === fid).length >= MAX_SPIES) return `You already have ${MAX_SPIES} spies in the field.`;
   if (g.spies.some(s => s.f === fid && s.region === toId)) return `A spy of yours already works in ${W.regions[toId].name}.`;
-  if (f.supply < COST.spy) return `Not enough supply: a spy costs ${COST.spy}.`;
+  if (f.supply < COST.spy) return `Not enough Production: a spy costs ${COST.spy}.`;
   f.supply -= COST.spy;
   const A = W.regions[cap.id], T = W.regions[toId], dist = Math.hypot(wrapDx(A.cx, T.cx), T.cz - A.cz);
   g.spies.push({ id: g.nextId++, f: fid, region: toId, eta: g.time + 6 + dist / 4 });
@@ -622,7 +634,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'recruit': {
       const r = g.regions[c.region]; if (!r || !Object.hasOwn(UT, c.unit)) return 'Invalid order.';
       const n = Math.max(1, Math.min(10, Math.floor(c.n ?? 1)));
-      for (let i = 0; i < n; i++) { const e = recruit(g, fid, r, c.unit); if (e) return i ? null : e; }
+      for (let i = 0; i < n; i++) { const e = recruit(g, fid, r, c.unit, c.now === true); if (e) return i ? null : e; }
       return null;
     }
     case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield', 'port'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
@@ -648,7 +660,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'detach': return detach(g, fid, c.region, c.id, c.u);
     case 'merge': return mergeCorps(g, fid, c.region, c.a, c.b);
     case 'form': return formCorps(g, fid, c.region, c.u);
-    case 'corpsSet': return corpsSet(g, fid, c.region, c.id, c.st, c.man);
+    case 'corpsSet': return corpsSet(g, fid, c.region, c.id, c.st, c.man, typeof c.refill === 'boolean' ? c.refill : undefined);
     case 'army': return formArmyHq(g, fid, c.corps);
     case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);
     case 'armySet': return setArmy(g, fid, c.army, c);
@@ -679,6 +691,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'withdraw': return withdraw(g, fid, c.battle);
     case 'produce': return produce(g, fid, c.kind, c.n);
     case 'mobilise': return mobilise(g, fid, c.level);
+    case 'econ': return setEcon(g, fid, c.level);
     default: return 'Unknown command.';
   }
 }

@@ -1,6 +1,6 @@
 // Top strip: sealed orders, radio dispatch ticker, phosphor counters (supply, shells, men, weariness), powers, date, speed, menu.
 import { useEffect, useRef, useState } from 'react';
-import { FACTIONS, NATIONS, TICK_SECONDS, WEATHER, convoyIn, income, incomeTerms, missionFrac, missionText, poolGrowth, poolTerms, shellIncome, shellTerms, weatherAt, type Term } from '@riskrts/shared';
+import { ECON, FACTIONS, NATIONS, TICK_SECONDS, WEATHER, barrageWeeks, convoyIn, econOf, REPL, WOUNDED, income, incomeTerms, missionFrac, missionText, poolGrowth, poolTerms, shellIncome, shellTerms, weatherAt, type Term } from '@riskrts/shared';
 
 /** A breakdown for a tooltip: one line per term, then the total. */
 const why = (terms: Term[], unit: string) => '\n\n' + [...terms.map(x => `${x.v >= 0 ? '+' : '−'}${t('{0}', Math.abs(Math.round(x.v * 10) / 10))}  ${tx(x.label)}${x.note ? ` (${tx(x.note)})` : ''}`), `= ${Math.round(terms.reduce((a, x) => a + x.v, 0))} ${unit}`].join('\n');
@@ -76,13 +76,16 @@ export function TopBar() {
       <Ticker />
 
       <div className="counters">
-        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title={t('Supply: the money of the war. Recruiting, building, fortifying and scouting all cost supply. +{0} arrives with every convoy (the ring counts down to it): more for more regions, factories and whole continents, less with high war weariness. Cut-off or contested regions pay nothing.', income(g, me)) + why(incomeTerms(g, me), t('per convoy'))}>
-          <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={t('Next convoy in {0} seconds', convoyIn(g))}><span>{Math.max(0, convoyIn(g))}</span></div>
-          <small>{t('Supply')}</small><span className="lcd-w"><b key={f.supply}>{f.supply}</b><i>+{income(g, me)}</i></span>
+        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title={`Production: what the war runs on. Recruiting, building, fortifying and scouting all cost Production. +${income(g, me)} comes in every week (the ring counts down to the next): more for more regions, factories and whole continents, less with high war weariness. Cut-off or contested regions pay nothing.` + why(incomeTerms(g, me), 'per week')}>
+          <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next week in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
+          <small>Production</small><span className="lcd-w"><b key={f.supply}>{f.supply}</b><i>+{income(g, me)}</i></span>
         </div>
-        <Lcd label={t('Shells')} value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls="sh" title={t('Shells: ammunition for artillery and gun emplacements. Every gun shot in a battle uses some; with none left the guns fall silent. Factories and the capital make more each convoy, and the Build tab turns supply into shells.') + why(shellTerms(g, me), t('shells per convoy'))} />
-        <Lcd label={t('Men')} value={men >= 10000 ? `${Math.round(men / 1000)}k` : menStr(Math.floor(men))} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
-          title={t('Men: the manpower pool. Every new formation takes men from it (an infantry battalion needs 100). +{0} come in each convoy, a new age class from every home region you still hold, so losing home regions or a long war makes recruits scarce. Raise conscription on the nation screen (click) for more, at the cost of war weariness.', poolGrowth(g, me)) + why(poolTerms(g, me), t('men per convoy'))} onClick={() => { click(); ui().setOverlay('nation'); }} />
+        {(() => { const wk = barrageWeeks(g, me), wks = isFinite(wk) ? `~${wk < 10 ? Math.round(wk * 10) / 10 : Math.round(wk)} wk` : ''; return (
+          <Lcd label={wks ? `Shells · ${wks}` : 'Shells'} value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls={'sh' + (isFinite(wk) && wk < 1.5 ? ' hi' : '')}
+            title={`Shells: ammunition for artillery and gun emplacements. Every gun shot in a battle uses some; with none left the guns fall silent. ${wks ? `The stock lasts ${wks.replace('~', 'about ').replace('wk', 'weeks')} of light barrage from every battery. ` : ''}The war economy lever (Economy panel, now ${ECON[econOf(f)].name}) decides how much of the factories' output goes to shells.` + why(shellTerms(g, me), 'shells per week')} />
+        ); })()}
+        <Lcd label="Men" value={men >= 10000 ? `${Math.round(men / 1000)}k` : Math.floor(men).toLocaleString('en-GB')} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
+          title={`Men: the manpower pool. New formations take men from it (an infantry battalion needs 100) and train for a week; replacements for under-strength corps (up to ${Math.round(REPL.share * 100)} % a week) come from it too, and ${Math.round(WOUNDED.share * 100)} % of the casualties return to it after ${WOUNDED.days / 7} weeks. +${poolGrowth(g, me)} come in each week, a new age class from every home region you still hold. Raise conscription in the Economy panel (click) for more, at the cost of war weariness.` + why(poolTerms(g, me), 'men per week')} onClick={() => { click(); ui().setPanel('economy'); }} />
         <Needle v={f.ww} unrest={NATIONS[me].unrest} />
         <div className="pills" role="group" aria-label={t('Powers')}>
           {FACTIONS.map((x, i) => (

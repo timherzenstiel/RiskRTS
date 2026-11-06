@@ -4,7 +4,7 @@ import { FACTIONS, FORMATION, UNIT_TYPES, GROUND_TYPES, SHIP, armyPos, battleCou
 import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
-import { battleAnchor, hostileBorders, type Balance } from '@riskrts/shared';
+import { battleAnchor, hostileBorders, OVER, capacity, load, type Balance } from '@riskrts/shared';
 import { getLang, langVersion, t, tx } from '../i18n';
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
@@ -150,7 +150,10 @@ export class Labels {
       if (!rs || rs.battle >= 0) { this.hide(l); return; }
       const color = FACTIONS[rs.owner]?.color ?? '#888';
       if (color !== l.color) { l.color = color; l.el.style.setProperty('--c', color); }
-      const s = this.mode === 4 ? intelLabel(rs) : garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.dataset.v = String(rs.vis ?? 3); }
+      // Supply mode: own regions show load / capacity, coloured by how full they are
+      const sup = this.mode === 3 && g && rs.owner === ctx.me && ctx.me >= 0 ? supplyLabel(g, rs) : null;
+      const s = sup ? sup[0] : this.mode === 4 ? intelLabel(rs) : garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.dataset.v = String(rs.vis ?? 3); }
+      const sl = sup ? sup[1] : ''; if (l.el.dataset.s !== sl) l.el.dataset.s = sl;
       const names = showNames || i === ctx.sel || i === ctx.hover; if (names !== l.names) { l.names = names; l.nm.style.display = names ? '' : 'none'; }
       const isSel = i === ctx.sel, tg = ctx.isTarget(i);
       if (isSel !== l.sel) { l.sel = isSel; l.el.classList.toggle('sel', isSel); }
@@ -383,6 +386,13 @@ function fleetText(g: GameState, fl: Fleet, own: boolean) {
   }
   if (fl.state === 'offshore') s += ' · ' + (fl.storm ? t('storm') : t('offshore'));
   return s;
+}
+
+/** Supply mode: "18/34" and how full the region is (ok, near, over, far, cut). */
+function supplyLabel(g: GameState, r: GameState['regions'][number]): [string, string] {
+  if (r.cut) return ['Cut', 'cut'];
+  const l = load(g, r), c = capacity(g, r), x = c > 0 ? l / c : l > 0 ? 9 : 0;
+  return [`${l}/${c}`, x > OVER.far ? 'far' : x > 1 ? 'over' : x > .8 ? 'near' : 'ok'];
 }
 
 /** Intel mode: what the viewer knows of a region: everything (its battalions), the date of the last report, an estimate, or nothing. */

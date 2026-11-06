@@ -667,6 +667,12 @@ button.ww:hover b{color:var(--accent)}
 #labels.ly2 .tl .bd .b{width:19px;height:19px}
 #labels.ly2 .tl .bd .b svg{width:13px;height:13px}
 #labels.ly2 .tl .n{opacity:.55}
+/* Supply mode: own regions show load / capacity, coloured by how full they are */
+#labels .tl[data-s="ok"] .n,#labels .tl[data-s="near"] .n,#labels .tl[data-s="over"] .n,#labels .tl[data-s="far"] .n,#labels .tl[data-s="cut"] .n{opacity:1}
+#labels .tl[data-s="ok"] .n{background:#5d8a4c;color:#f2f6ea}
+#labels .tl[data-s="near"] .n{background:#d0a83e;color:#1b1407}
+#labels .tl[data-s="over"] .n{background:#d9772e;color:#fff6e8}
+#labels .tl[data-s="far"] .n,#labels .tl[data-s="cut"] .n{background:#b3261e;color:#fff2ea}
 .layer-seg{display:flex}
 .layer-seg button{min-width:0;padding:0 9px}
 

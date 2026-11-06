@@ -99,7 +99,7 @@ export function groupMen(r: RegionState, u: Units): number {
 /** Ground battalions of a corps. */
 export const corpsSize = (c: { u: Units }) => groundUnits(c.u);
 /** What a corps keeps while it is away from its region. */
-export const tagOf = (c: Corps): CorpsTag => ({ id: c.id, n: c.n, p: c.p, xp: c.xp || undefined, man: c.man || undefined, st: c.st, army: c.army });
+export const tagOf = (c: Corps): CorpsTag => ({ id: c.id, n: c.n, p: c.p, xp: c.xp || undefined, man: c.man || undefined, st: c.st, army: c.army, nr: c.nr || undefined });
 
 /** Number of the region's army (the depot's name), raised on first use. */
 export function armyNo(g: GameState, r: RegionState): number {
@@ -113,7 +113,7 @@ export function raiseCorps(g: GameState, r: RegionState, post: number, tag?: Par
   if (id === undefined || id < 0 || corpsById(r, id)) id = g.nextId++;
   if (n === undefined || n < 1 || corpsIn(r).some(c => c.n === n)) n = nextCorpsNo(g, r.owner);
   const c: Corps = { id, n, p: post, u: emptyUnits(), m: emptyUnits(), mor: r.mor, since: g.time };
-  if (tag?.xp) c.xp = tag.xp; if (tag?.man) c.man = true; if (tag?.st !== undefined) c.st = tag.st; if (tag?.army !== undefined) c.army = tag.army;
+  if (tag?.xp) c.xp = tag.xp; if (tag?.man) c.man = true; if (tag?.st !== undefined) c.st = tag.st; if (tag?.army !== undefined) c.army = tag.army; if (tag?.nr) c.nr = true;
   (r.cs ??= []).push(c);
   return c;
 }

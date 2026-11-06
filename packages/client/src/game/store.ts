@@ -19,7 +19,7 @@ export const MAP_MODES = [
   { name: 'Political', short: 'Pol', key: 'p', hint: 'Owners, capitals and treaties' },
   { name: 'Fronts', short: 'Fronts', key: 'f', hint: 'Wars and battles, and how strong each of your borders is against the other side' },
   { name: 'Forces', short: 'Forces', key: 't', hint: 'Corps on the borders, front lines, columns on the move' },
-  { name: 'Supply', short: 'Supply', key: 'b', hint: 'Factories, barracks, airfields, rails and supply lines' },
+  { name: 'Supply', short: 'Supply', key: 'b', hint: 'Supply lines and load against capacity, factories, barracks, airfields, rails' },
   { name: 'Intel', short: 'Intel', key: 'i', hint: 'What you know of each region and how old the report is' },
 ] as const;
 /** Left-hand panels (design-command §5.2). */
@@ -106,7 +106,7 @@ interface Ui {
   setTips(on: boolean): void;
   advanceTut(n: number): void;
   /** Convenience actions that send a command and surface errors as toasts. */
-  recruit(region: number, unit: UnitType, n?: number): void;
+  recruit(region: number, unit: UnitType, n?: number, now?: boolean): void;
   build(region: number, kind: BuildKind): void;
   fortify(region: number, kind: FortKind, sector: number): void;
   /** Send any command; errors become toasts (translated by say()). */
@@ -184,8 +184,8 @@ export const useUi = create<Ui>((set, get) => ({
   setTips: (tips) => { lsSet('f14tips', tips ? '1' : '0'); set({ tips }); },
   advanceTut: (n) => { if (n > get().tut) set({ tut: n }); },
 
-  recruit: (region, unit, n = 1) => {
-    const s = get().session; if (!s) return; const err = s.send({ t: 'recruit', region, unit, n } as Command);
+  recruit: (region, unit, n = 1, now = false) => {
+    const s = get().session; if (!s) return; const err = s.send({ t: 'recruit', region, unit, n, now: now || undefined } as Command);
     if (err) { get().say(err); Sfx.deny(); } else { get().advanceTut(2); Sfx.click(); } get().bump();
   },
   build: (region, kind) => { const s = get().session; if (!s) return; const err = s.send({ t: 'build', region, kind }); if (err) { get().say(err); Sfx.deny(); } else Sfx.click(); get().bump(); },

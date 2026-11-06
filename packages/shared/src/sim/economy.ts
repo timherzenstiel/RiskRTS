@@ -1,10 +1,10 @@
 // Supply income, convoys, supply lines, reinforcement of battered formations and war weariness.
-import { corpsIn, deployOnConvoy, fixPosts, refill } from './posts';
+import { corpsIn, deployOnConvoy, fixPosts } from './posts';
+import { OVER, econSplit, loadRatio, replacements, train, woundedBack } from './supply';
 import { CONT, CONT_KEYS } from '../data/regions';
 import { nationOf } from '../data/nations';
 import { DT, FORMATION, SHELLS, TICK_SECONDS, UNIT_TYPES } from '../data/units';
 import { consolidate, controls, emit, rnd, updateContested, world } from './core';
-import { addUnits } from './commands';
 import { moraleCap } from './battle';
 import { spiesOnConvoy } from './fog';
 import { linkQuality, railsOnConvoy } from './rails';
@@ -37,22 +37,23 @@ export const bombedNow = (g: GameState, r: GameState['regions'][number]) => (r.b
 /** Regions that pay: held, not contested, supplied and not on strike. */
 const paying = (g: GameState, fid: number) => g.regions.filter(r => controls(r, fid) && !r.cut && !r.strike);
 
-/** Supply per convoy. Contested, cut-off and striking regions pay nothing; war weariness eats into the rest. */
+/** Production per week. Contested, cut-off and striking regions pay nothing; war weariness eats into the rest. */
 export function income(g: GameState, fid: number): number {
   const mine = paying(g, fid), W = world();
   let v = Math.max(3, landIncome(mine.length));
   for (const k of CONT_KEYS) if (ownsCont(g, fid, k)) v += CONT[k].bonus;
-  v += 2 * mine.filter(r => r.factory && !bombedNow(g, r)).length;
+  // factories: what the war economy lever does not send to the shell works
+  v += 2 * econSplit(g.factions[fid]).prod * mine.filter(r => r.factory && !bombedNow(g, r)).length;
   if (hasDoc(g, fid, 'total')) v *= 1.3;
   if (nationOf(fid).flags.empire) v += mine.filter(r => W.regions[r.id].cont !== 'EU').length;
   const ww = g.factions[fid]?.ww ?? 0;
   return Math.max(1, Math.round(v * (1 - WW_INCOME * ww / 100)));
 }
 
-/** Shells per convoy: a base output plus every supplied factory and the capital. */
+/** Shells per week: a base output, the share of every supplied factory the war economy lever gives them, and the capital. */
 export function shellIncome(g: GameState, fid: number): number {
-  const N = nationOf(fid); let v = SHELLS.base;
-  for (const r of paying(g, fid)) { if (r.factory && !bombedNow(g, r)) v += N.factoryShells; if (r.capitalOf === fid) v += SHELLS.capital; }
+  const N = nationOf(fid), k = econSplit(g.factions[fid]).shells; let v = SHELLS.base;
+  for (const r of paying(g, fid)) { if (r.factory && !bombedNow(g, r)) v += N.factoryShells * k; if (r.capitalOf === fid) v += SHELLS.capital; }
   const m = N.shells * (N.shellsUntil && g.day < N.shellsUntil[0] ? N.shellsUntil[1] : 1);
   return Math.max(1, Math.round(v * m));
 }
@@ -158,13 +159,16 @@ export function supplyTick(g: GameState) {
   diploConvoy(g);
   updateSupplyLines(g, true);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
+  const age: number[] = [], back: number[] = [];
   for (const f of g.factions) {
     if (!f.alive) continue; const inc = income(g, f.id); f.supply += f.ai ? Math.round(inc * d.inc) : inc; f.shells = (f.shells ?? 0) + shellIncome(g, f.id);
-    f.men = (f.men ?? 0) + poolGrowth(g, f.id); f.ww = Math.min(100, f.ww + MANPOWER.mobWW * (f.mob ?? 0) + (hasDoc(g, f.id, 'total') ? 1 : 0));
+    age[f.id] = poolGrowth(g, f.id); f.men = (f.men ?? 0) + age[f.id]; back[f.id] = woundedBack(g, f);
+    f.ww = Math.min(100, f.ww + MANPOWER.mobWW * (f.mob ?? 0) + (hasDoc(g, f.id, 'total') ? 1 : 0));
   }
+  // barracks volunteers: one battalion a week, through training like any recruit
   for (const r of g.regions) {
     const f = g.factions[r.owner];
-    if (r.barracks && r.contested < 0 && !r.cut && !r.strike && f.alive && f.ww < WW_NO_VOLUNTEERS && f.men >= FORMATION.inf.men) { f.men -= FORMATION.inf.men; addUnits(g, r, 'inf', 1); }
+    if (r.barracks && r.contested < 0 && !r.cut && !r.strike && f.alive && f.ww < WW_NO_VOLUNTEERS && f.men >= FORMATION.inf.men) { f.men -= FORMATION.inf.men; f.wk = f.wk ?? [0, 0, 0, 0]; f.wk[2] += FORMATION.inf.men; train(g, r, 'inf'); }
   }
   for (const f of g.factions) if (f.alive) unrest(g, f.id);
   for (const r of g.regions) {
@@ -177,12 +181,25 @@ export function supplyTick(g: GameState) {
       consolidate(r.units, r.men);
       r.mor = Math.max(0, r.mor - CUT_MORALE);
     } else {
-      r.mor = Math.min(moraleCap(g, r.owner), r.mor + 6);
-      for (const c of corpsIn(r)) c.mor = Math.min(moraleCap(g, r.owner), c.mor + 6);
+      // over its supply capacity a region's troops go short: morale falls; far over, men fall sick and hungry
+      const lr = loadRatio(g, r), over = lr > 1, cap = moraleCap(g, r.owner);
+      const dm = (m: number) => over ? Math.max(0, m - OVER.morale) : Math.min(cap, m + 6);
+      r.mor = dm(r.mor);
+      for (const c of corpsIn(r)) c.mor = dm(c.mor);
+      if (lr > OVER.far) {
+        for (const k of UNIT_TYPES) r.men[k] = Math.floor(r.men[k] * (1 - OVER.farWear));
+        for (const c of corpsIn(r)) for (const k of UNIT_TYPES) c.m[k] = Math.floor(c.m[k] * (1 - OVER.farWear));
+        consolidate(r.units, r.men);
+      }
     }
     fixPosts(g, r);
   }
-  reinforce(g);
+  // replacements from the pool, and the ledger of the week
+  for (const f of g.factions) {
+    if (!f.alive) continue;
+    const repl = replacements(g, f), wk = f.wk ?? [0, 0, 0, 0];
+    f.led = [age[f.id] ?? 0, back[f.id] ?? 0, wk[2], repl]; f.wk = [0, 0, 0, 0];
+  }
   // war weariness fades in quiet times, but not while the nation stays mobilised
   for (const f of g.factions) f.ww = Math.max(0, f.ww - WW_FADE * (1 - (f.mob ?? 0) / 2));
   // cut-off holdouts run short of ammunition and food: they wear down over about five minutes
@@ -199,20 +216,4 @@ export function supplyTick(g: GameState) {
   checkMissions(g);
 }
 
-/** Wounded men return: each convoy the pool tops up under-strength formations in supplied regions; some never come back. */
-function reinforce(g: GameState) {
-  for (const f of g.factions) {
-    if (!f.alive || f.wounded < 1) { f.wounded = 0; continue; }
-    const gaps: [number, keyof typeof FORMATION, number][] = []; let need = 0;
-    for (const r of g.regions) {
-      if (r.owner !== f.id || r.cut || r.battle >= 0) continue;
-      // thin supply brings back half as many of the wounded
-      const share = r.supplyQ === 1 ? .5 : 1;
-      for (const k of UNIT_TYPES) { const gap = r.units[k] * FORMATION[k].men - r.men[k]; if (gap > 0) { gaps.push([r.id, k, gap * share]); need += gap * share; } }
-    }
-    const give = Math.min(f.wounded * .5, need);
-    if (give > 0) for (const [i, k, gap] of gaps) refill(g.regions[i], k, Math.floor(gap / need * give));
-    f.wounded = Math.max(0, (f.wounded - give) * .85);
-  }
-}
 export const convoyIn = (g: GameState) => Math.ceil(TICK_SECONDS - g.supplyT);

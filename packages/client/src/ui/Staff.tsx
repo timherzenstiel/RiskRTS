@@ -33,11 +33,11 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
   const sup = g.factions[me]?.supply ?? 0, names = (q.corps ?? []).map(id => { for (const r of g.regions) { const c = r.cs?.find(x => x.id === id); if (c) return groupName(me, 1, c.n); } return null; }).filter(Boolean).join(', ');
   switch (q.kind) {
     case 'men': {
-      const k = n ?? q.n ?? 1, cost = (q.cost ?? 0) * k, tc = transferCandidate(g, me, q);
-      return { title: tn('{0} battalions for {1}', q.n, where), why: tn('The line is short: {0}.', bal), opts: [
-        { label: t('Recruit {0} · {1}', k, cost), opt: 'recruit', n: k, off: sup < cost, title: t('{0} infantry battalions, raised at once in {1} and put on that border', k, R(q.region)) },
-        { label: tc ? tn('Send {0}', { raw: groupName(me, 1, tc.c.n) }) : t('No corps free'), opt: 'transfer', off: !tc, title: tc ? tn('{0} ({1} btl) from {2} joins the army', { raw: groupName(me, 1, tc.c.n) }, groundUnits(tc.c.u), R(tc.r.id)) : t('Form a corps from a depot first') },
-        { label: t('Deny'), opt: 'deny' },
+      const k = n ?? q.n ?? 1, cost = (q.cost ?? 0) * k, t = transferCandidate(g, me, q);
+      return { title: `${q.n} battalions for ${where}`, why: `The line is short: ${bal}.`, opts: [
+        { label: `Recruit ${k} · ${cost}`, opt: 'recruit', n: k, off: sup < cost, title: `${k} infantry battalions, raised in ${R(q.region)}: they train for a week, then take up that border` },
+        { label: t ? `Send ${groupName(me, 1, t.c.n)}` : 'No corps free', opt: 'transfer', off: !t, title: t ? `${groupName(me, 1, t.c.n)} (${groundUnits(t.c.u)} btl) from ${R(t.r.id)} joins the army` : 'Form a corps from a depot first' },
+        { label: 'Deny', opt: 'deny' },
       ] };
     }
     case 'fort': return { title: tn(q.fort === 'wire' ? 'Barbed wire on {0}' : 'Trench on {0}', where), why: tn('The border is not safe: {0}.', bal), opts: [{ label: t('Dig · {0}', q.cost), opt: 'yes', off: sup < (q.cost ?? 0) }, { label: t('Deny'), opt: 'deny' }] };

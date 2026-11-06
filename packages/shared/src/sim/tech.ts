@@ -18,7 +18,7 @@ export function rush(g: GameState, fid: number, k: TechKey): string | null {
   if (techOn(g, fid, k)) return 'You already have that.';
   if (f.rushed?.includes(k)) return 'That has already been rushed.';
   const y = dateOf(g.day).y; if (f.rushY === y) return `You already rushed one development in ${y}. Next year you can rush another.`;
-  if (f.supply < RUSH.cost) return `Not enough supply: a rush costs ${RUSH.cost}.`;
+  if (f.supply < RUSH.cost) return `Not enough Production: a rush costs ${RUSH.cost}.`;
   f.supply -= RUSH.cost; (f.rushed ??= []).push(k); f.rushY = y;
   if (techOn(g, fid, k)) emit(g, { k: 'tech', faction: fid, tech: k });
   return null;

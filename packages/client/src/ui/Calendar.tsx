@@ -13,9 +13,9 @@ export function CalendarSheet() {
   const close = () => { click(); ui().setOverlay(null); };
   const canRush = f.rushY !== y && f.supply >= RUSH.cost;
   return (
-    <Modal label={t('War calendar')} onClose={close}>
-      <div className="kicker">{tx(FACTIONS[me].name)} · {t('General Staff')}</div><h2>{t('War calendar')}</h2>
-      <p className="muted small">{f.rushY === y ? t('New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {0} supply (used this year).', RUSH.cost) : t('New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {0} supply.', RUSH.cost)}</p>
+    <Modal label="War calendar" onClose={close}>
+      <div className="kicker">{FACTIONS[me].name} · General Staff</div><h2>War calendar</h2>
+      <p className="muted small">New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {RUSH.cost} Production{f.rushY === y ? ' (used this year)' : ''}.</p>
       <div className="cal">
         {TECH.map(tk => {
           const d = techDayFor(me, tk.key, f.rushed), on = techOn(g, me, tk.key);
@@ -23,7 +23,7 @@ export function CalendarSheet() {
             <div key={tk.key} className={'cr' + (on ? ' on' : '')}>
               <span className="cd">{on ? t('In service') : monthStr(d)}</span>
               <span className="ct"><b>{tx(tk.name)}{f.rushed?.includes(tk.key) ? ` · ${t('rushed')}` : ''}</b><small>{tx(tk.desc)}</small></span>
-              {!on && !f.rushed?.includes(tk.key) && <button className="buy plain" disabled={!canRush} title={canRush ? t('Bring forward by six months') : f.rushY === y ? t('One rush per war year') : t('Not enough supply')} onClick={() => { click(); ui().order({ t: 'rush', tech: tk.key }); }}>{t('Rush')} <SupplyIcon />{RUSH.cost}</button>}
+              {!on && !f.rushed?.includes(tk.key) && <button className="buy plain" disabled={!canRush} title={canRush ? t('Bring forward by six months') : f.rushY === y ? t('One rush per war year') : t('Not enough Production')} onClick={() => { click(); ui().order({ t: 'rush', tech: tk.key }); }}>{t('Rush')} <SupplyIcon />{RUSH.cost}</button>}
             </div>
           );
         })}

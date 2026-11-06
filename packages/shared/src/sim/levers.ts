@@ -99,8 +99,14 @@ function pullOut(g: GameState, b: Battle, fid: number): string | null {
 export function produce(g: GameState, fid: number, kind: 'shells', n: number): string | null {
   if (kind !== 'shells') return 'Invalid order.';
   const f = g.factions[fid]; n = Math.max(1, Math.min(50, Math.floor(n || 0)));
-  if (f.supply < n) return `Not enough supply: ${n * SHELLS.perSupply} shells cost ${n}.`;
+  if (f.supply < n) return `Not enough Production: ${n * SHELLS.perSupply} shells cost ${n}.`;
   f.supply -= n; f.shells += n * SHELLS.perSupply; return null;
+}
+
+/** War economy lever: 0 Civil, 1 Balanced, 2 Munitions first. */
+export function setEcon(g: GameState, fid: number, level: number): string | null {
+  if (level !== 0 && level !== 1 && level !== 2) return 'Invalid order.';
+  g.factions[fid].econ = level; return null;
 }
 
 /** Mobilisation level: 0 peacetime classes, 1 partial, 2 general mobilisation. */
@@ -118,7 +124,7 @@ export function decoy(g: GameState, fid: number, from: number, to: number): stri
   if (!A || !B) return 'Unknown region.';
   if (A.owner !== fid) return 'Decoys march out of your own regions.';
   if (!W.regions[from].adj.includes(to)) return `${W.regions[to].name} does not border ${W.regions[from].name}.`;
-  if (f.supply < COST.decoy) return `Not enough supply: a decoy costs ${COST.decoy}.`;
+  if (f.supply < COST.decoy) return `Not enough Production: a decoy costs ${COST.decoy}.`;
   f.supply -= COST.decoy;
   const a = mkArmy(g, fid, from, to, MARCH_SPEED, MARCH_MIN); a.dur = legDist(from, -1, to, -1) / POST_SPEED * moveK(g); a.decoy = true; a.fake = DECOY.min + Math.floor(rnd(g) * DECOY.spread);
   // look like a real march: the garrison's morale and stance, a first leg

@@ -1,6 +1,6 @@
 # RiskRTS – Design: Command Overhaul (forces, supply, manpower, situation map, menus)
 
-Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26 · phase 3 in PR #28 · phase 4 in PR #30** · Mockups: design canvas "RiskRTS – Command overhaul"
+Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phases 1–4 merged (PRs #24, #26, #28, #30) · phase 5 in its own PR** · Mockups: design canvas "RiskRTS – Command overhaul"
 
 ## Problem
 
@@ -491,3 +491,17 @@ Each phase with tests, typecheck, a screenshot pass through `dev/harness.ts` and
 - Fixed on the way: the column list of the Deploy section crashed for columns heading to a coast.
 - Not yet: right-click-and-hold route lines on the map, battle and fleet cards (the existing bottom battle bar and fleet card stay), the top-strip "Staff" counter.
 
+
+## Implementation notes – phase 5 (branch `command/5-supply`, on `main` after phases 1–4)
+
+- **Names**: the money is **Production** and a convoy is a **week** everywhere on screen (top strip, cards, tooltips, help, rules, error texts). Naval convoys (troop transports at sea) keep their name. The data field is still `FactionState.supply`.
+- **Supply capacity** (`sim/supply.ts`): Rail 24 / Road 10 / cut off 0, +12 per depot (capital, factory, harbour), +4 per own rail link from the second, mud −20 %, winter −30 % (Siberians −15 %), heat −15 %. Load = 1 per battalion, 2 per battery or tank, including those fighting in the region's battles and attacking out of it. Over capacity: morale −2 a week instead of +6, no replacements, shells ×1.5 for a side drawing through it; over 150 %: 3 % of the men lost a week. This replaces *thin supply*. Capacity and load are computed on demand (not stored), so fog views and mirrors get them for free.
+- **Why cut off**: `cutBreak` names the hostile region next to the cut-off pocket that most likely broke the route (one that was someone's home before the war, then one with a battle). The design's `via` route line on hover is not drawn yet.
+- **Training**: recruits cost Production and men at once and arrive after a week (`RegionState.train`); with barracks at the next week. Barracks volunteers train too. A region lost meanwhile loses its recruits. **Emergency levies** (`recruit.now`): at once and at double cost, only in a region under attack. A commander's recruits go to the border that asked once trained and count as on their way meanwhile.
+- **Replacements**: every week, corps with *Refill* on (`Corps.nr` off; the toggle is on the corps card) in supplied regions under capacity and out of battle take men from the pool, at most 15 % of their full strength – front-line corps first, then reserves, then depots. **Wounded**: 35 % of casualties go into `FactionState.wq` and rejoin the pool two weeks later. The old direct wounded refill is gone. Ledger: `FactionState.led` (last week: age class, wounded back, raised into training, replacements) and `ledger()` in `sim/terms.ts` (next week estimated).
+- **War economy** (`econ` command, `FactionState.econ`): Civil / Balanced / Munitions first sends 25 / 50 / 75 % of factory output to shells; Balanced equals the old numbers. The *Buy shells* buttons are gone (the `produce` command stays for old replays). The top strip shows shells with weeks of light barrage left.
+- **Client**: region card gets a supply bar (route, load / capacity, the breakdown on hover) and *In training* rows; the Recruit tab gets the levy switch. Economy panel: Production and shell ledgers, the war economy lever, the manpower ledger last week / next week, conscription, regions cut off (with the reason) and over or near capacity. Supply map mode labels own regions with load / capacity, green / yellow / orange / red. Alerts for regions over capacity, and the cut-off alert names where the route broke. Rules page *Supply & men* rewritten.
+- **AI**: sets the war economy lever by its shell stock (below 30 + 10 per gun → Munitions first, above twice that → Civil), raises conscription when the pool lasts less than five weeks of replacements, counts recruits in training, raises emergency levies when attacked, recruits nothing into a region over 120 % of capacity and never moves reserves into one beyond it.
+- **Saves and protocol**: protocol 9. New fields are optional; an old save's wounded become one entry of the queue. Snapshots carry the recipient's recruits in training, wounded queue, ledger and lever (`Snapshot.me`) and the corps' refill flag.
+- **Balance check** (3 seeds, all-computer, 12.5 minutes): 0–5 of 54 regions over capacity at any time, at most 2 far over; regions changing hands 12–17 (main: 13–18); pools drain at about the same rate as before.
+- Not yet: computer powers still play without armies and commanders (a war minister answering their requests); the `via` route line on the Supply map; regions are labelled, not filled, by load in Supply mode.

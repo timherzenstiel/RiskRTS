@@ -11,7 +11,9 @@ import { decoy, raid } from './levers';
 import { rush, techOn } from './tech';
 import { TECH, techDayFor, type TechKey } from '../data/tech';
 import { dateOf } from '../data/calendar';
-import { charge, mobilise, produce, reinforce, setBarrage, setStance, withdraw } from './levers';
+import { charge, mobilise, reinforce, setBarrage, setEcon, setStance, withdraw } from './levers';
+import { capacity, drawOf, inTraining, load, loadRatio, replWanted } from './supply';
+import { underAttack } from './commands';
 import { nationOf } from '../data/nations';
 import { unitCost } from './rules';
 import { paceOf } from './battle';
@@ -24,7 +26,7 @@ import type { Battle, FactionState, GameState, RegionState } from './types';
 type R = RegionState & { _th?: number };
 const pw = (k: keyof typeof UT) => UT[k].power;
 /** Our own garrison, weighted by strength and morale. */
-const ownPower = (t: RegionState) => forcePower(t.units, t.men, pw) * (.6 + .4 * t.mor / 100);
+const ownPower = (t: RegionState) => forcePower(t.units, t.men, pw) * (.6 + .4 * t.mor / 100) + unitPower(inTraining(t)) * .8;
 const enemyNb = (V: GameState, t: RegionState, fid: number) => world().regions[t.id].adj.map(i => V.regions[i]).filter(n => n.owner !== fid);
 const defPow = (t: RegionState, from = -2) => t.defs.reduce((s, d) => s + (d.f === t.owner && (from === -2 || d.s === from || d.s < 0) ? DT[d.k].power : 0), 0);
 /** What an attack over `from` should expect in a region (as far as the view tells). */
@@ -85,18 +87,20 @@ export function aiThink(g: GameState, f: FactionState) {
     if (rnd(g) < .06 && f.supply >= COST.flak && !tgt.defs.some(d => d.k === 'flak') && V.regions.some(r => r.owner !== f.id && r.airfield && hops(r.id, tgt!.id) <= 2)) { if (!fortify(g, f.id, tgt, 'flak', -1)) continue; }
     const air = mine.find(t => t.airfield && t.contested < 0 && !t.cut && t.units.plane < 4);
     if (air && f.supply >= COST.plane + 1 && rnd(g) < .18) { if (!recruit(g, f.id, air, 'plane')) continue; }
+    // a region far over its supply capacity gets no more men: they would only go hungry; one under attack raises levies at once
+    const full = loadRatio(g, tgt) > 1.2, levy = tgt.battle >= 0 && underAttack(g, tgt) && f.supply >= unitCost(g, f.id, 'inf') * 2 + 2;
+    if (full && !levy) { tgt._th! -= 2; continue; }
     // the mix of new units follows the national character: guns for France and Germany, masses of infantry for Russia
     const wt = { tank: tgt.factory && f.supply >= unitCost(g, f.id, 'tank') ? .22 : 0, art: f.supply >= 3 ? .23 * P.guns : 0, mg: f.supply >= 2 ? .2 : 0, inf: .35 * P.mass };
     let r = rnd(g) * (wt.tank + wt.art + wt.mg + wt.inf), type: UnitType = 'inf';
     for (const k of ['tank', 'art', 'mg'] as const) { if (r < wt[k]) { type = k; break; } r -= wt[k]; }
-    if (recruit(g, f.id, tgt, type)) {
-      // out of men or supply for that type: try one that needs fewer men; with the pool empty, the supply goes into works and shells
-      const alt = (['tank', 'art', 'mg'] as UnitType[]).find(k => k !== type && !recruit(g, f.id, tgt!, k));
+    if (recruit(g, f.id, tgt, type, levy)) {
+      // out of men or Production for that type: try one that needs fewer men; with the pool empty, the Production goes into works
+      const alt = (['tank', 'art', 'mg'] as UnitType[]).find(k => k !== type && !recruit(g, f.id, tgt!, k, levy));
       if (alt) { tgt._th! -= UT[alt].power; continue; }
       if ((f.men ?? 0) >= 100 || f.supply < 3) break;
       const worst = enemyNb(V, tgt, f.id).sort((a, b) => theirPower(b) - theirPower(a))[0];
       if (worst && (['trench', 'wire', 'sand', 'pill', 'bunk', 'fort'] as FortKind[]).some(k => !fortify(g, f.id, tgt!, k, worst.id))) { tgt._th! -= 1; continue; }
-      if (f.supply >= 8) produce(g, f.id, 'shells', Math.floor(f.supply / 2));
       break;
     }
     tgt._th! -= UT[type].power;
@@ -159,7 +163,8 @@ export function aiThink(g: GameState, f: FactionState) {
   for (let h = 0; h < q.length; h++) { const t = q[h]; for (const j of world().regions[t.id].land) { const n = g.regions[j] as R; if (n.owner === f.id && dist[j] === undefined) { dist[j] = dist[t.id] + 1; q.push(n); } } }
   for (const t of mine) {
     if (t.battle >= 0 || !dist[t.id] || groundUnits(t.units) < 2) continue;
-    const n = world().regions[t.id].land.map(j => g.regions[j]).filter(n => n.owner === f.id && dist[n.id] < dist[t.id])[0];
+    // never mass beyond what the front region can feed (capacity × 1.2)
+    const n = world().regions[t.id].land.map(j => g.regions[j]).filter(n => n.owner === f.id && dist[n.id] < dist[t.id] && load(g, n) + drawOf(t.units) <= capacity(g, n) * 1.2)[0];
     if (n) sendArmy(g, f.id, t.id, n.id, 1);
   }
   navyAi(g, f, mine, V, () => attacks, cap);
@@ -185,7 +190,9 @@ export const shellTarget = (g: GameState, fid: number) => {
 /** Battle levers: shells, barrage, when to go over the top, reinforcing, withdrawing, stance of the capital. */
 function levers(g: GameState, f: FactionState, mine: RegionState[]) {
   const fid = f.id, target = shellTarget(g, fid), P = paceOf(g);
-  if (f.shells < target && f.supply >= 6 && rnd(g) < .5) produce(g, fid, 'shells', Math.min(Math.ceil((target - f.shells) / SHELLS.perSupply), Math.floor(f.supply / 3)));
+  // the war economy follows the shell stock: munitions first below the target, civil when there is plenty
+  const econ = f.shells < target ? 2 : f.shells > target * 2 ? 0 : 1;
+  if (econ !== (f.econ ?? 1) && !f.away) setEcon(g, fid, econ);
   const capital = mine.find(r => r.capitalOf === fid);
   if (capital && capital.stance !== 3 && !f.away) setStance(g, fid, capital.id, 3);
   for (const b of g.battles) {
@@ -223,12 +230,13 @@ function offensivesStep(g: GameState, f: FactionState, mine: RegionState[]) {
   }
 }
 
-/** Mobilise when the manpower pool runs low, stand down when it is full or the nation is close to unrest. */
+/** Mobilise when the manpower pool runs low (or lasts less than five weeks of replacements), stand down when it is full or the nation is close to unrest. */
 function manpower(g: GameState, f: FactionState) {
   const thr = nationOf(f.id).unrest, pool = f.men ?? 0; let want = f.mob ?? 0;
   if (f.ww > thr - 12) want = 0;
   else if (pool < 400 && f.ww < thr - 35) want = 2;
   else if (pool < 1200 && f.ww < thr - 25) want = Math.max(want, 1);
+  else if (pool < 5 * replWanted(g, f.id) && f.ww < thr - 25) want = Math.max(want, 1);
   else if (pool > 4000) want = Math.max(0, want - 1);
   if (want !== (f.mob ?? 0)) mobilise(g, f.id, want);
 }

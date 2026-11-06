@@ -65,43 +65,43 @@ export function RulesSheet() {
         </>}
         {page === 3 && <>
           <table className="ledger"><tbody>
-            <tr><td>Cavalry patrol · one border</td><td>{COST.patrol} Production</td></tr>
-            <tr><td>Reconnaissance flight · up to {AIR_RANGE} borders, needs an airfield</td><td>{COST.recon} Production</td></tr>
-            <tr><td>Spy · anywhere, reports every week until caught (max {MAX_SPIES})</td><td>{COST.spy} Production</td></tr>
-            <tr><td>Decoy march</td><td>{COST.decoy} Production</td></tr>
+            <tr><td>{t('Cavalry patrol · one border')}</td><td>{t('{0} Production', COST.patrol)}</td></tr>
+            <tr><td>{t('Reconnaissance flight · up to {0} borders, needs an airfield', AIR_RANGE)}</td><td>{t('{0} Production', COST.recon)}</td></tr>
+            <tr><td>{t('Spy · anywhere, reports every week until caught (max {0})', MAX_SPIES)}</td><td>{t('{0} Production', COST.spy)}</td></tr>
+            <tr><td>{t('Decoy march')}</td><td>{t('{0} Production', COST.decoy)}</td></tr>
           </tbody></table>
           <p>{t('Patrols are caught more often by MG nests, bunkers and wire on the border they cross; flights by anti-air guns. Commanders ask for a look when a border is not safe and the report is older than {0} days.', REPORT_OLD)}</p>
         </>}
         {page === 4 && <>
-          <h3>The week</h3>
-          <p>Every {TICK_SECONDS} s is a week: Production, shells and new men arrive. Regions pay only with a route home – own land (or a sea lane between own regions) to the capital, a factory or home territory. Rail all the way is a <b>Rail</b> route, otherwise <b>Road</b>; none is <b>Cut off</b>.</p>
-          <h3>Supply capacity</h3>
-          <p>Each region can feed only so many battalions a week. Load is what its battalions draw, those fighting in its battles included.</p>
+          <h3>{t('The week')}</h3>
+          <p>{rich(t('Every {0} s is a week: Production, shells and new men arrive. Regions pay only with a route home – own land (or a sea lane between own regions) to the capital, a factory or home territory. Rail all the way is a <b>Rail</b> route, otherwise <b>Road</b>; none is <b>Cut off</b>.', TICK_SECONDS))}</p>
+          <h3>{t('Supply capacity')}</h3>
+          <p>{t('Each region can feed only so many battalions a week. Load is what its battalions draw, those fighting in its battles included.')}</p>
           <table className="ledger"><tbody>
-            <tr><td>Draw · infantry, MG, squadron</td><td>{DRAW.inf}</td></tr>
-            <tr><td>Draw · battery, tank</td><td>{DRAW.art}</td></tr>
-            <tr><td>Capacity · Rail route / Road route / cut off</td><td>{CAP.rail} / {CAP.road} / 0</td></tr>
-            <tr><td>Each depot in the region (capital, factory, harbour)</td><td>+{CAP.depot}</td></tr>
-            <tr><td>Each own rail link into the region, from the 2nd</td><td>+{CAP.link}</td></tr>
-            <tr><td>Mud / winter (Siberians) / heat</td><td>−20 % / −30 % (−15 %) / −15 %</td></tr>
-            <tr><td>Over capacity · morale a week</td><td>−{OVER.morale}, no replacements, shells ×{OVER.shells}</td></tr>
-            <tr><td>Over {pct(OVER.far)} · men lost a week</td><td>{pct(OVER.farWear)}</td></tr>
-            <tr><td>Cut off · strength / morale lost a week</td><td>{pct(CUT_WEAR)} / {CUT_MORALE}</td></tr>
+            <tr><td>{t('Draw · infantry, MG, squadron')}</td><td>{DRAW.inf}</td></tr>
+            <tr><td>{t('Draw · battery, tank')}</td><td>{DRAW.art}</td></tr>
+            <tr><td>{t('Capacity · Rail route / Road route / cut off')}</td><td>{CAP.rail} / {CAP.road} / 0</td></tr>
+            <tr><td>{t('Each depot in the region (capital, factory, harbour)')}</td><td>+{CAP.depot}</td></tr>
+            <tr><td>{t('Each own rail link into the region, from the 2nd')}</td><td>+{CAP.link}</td></tr>
+            <tr><td>{t('Mud / winter (Siberians) / heat')}</td><td>−20 % / −30 % (−15 %) / −15 %</td></tr>
+            <tr><td>{t('Over capacity · morale a week')}</td><td>{t('−{0}, no replacements, shells ×{1}', OVER.morale, OVER.shells)}</td></tr>
+            <tr><td>{t('Over {0} · men lost a week', pct(OVER.far))}</td><td>{pct(OVER.farWear)}</td></tr>
+            <tr><td>{t('Cut off · strength / morale lost a week')}</td><td>{pct(CUT_WEAR)} / {CUT_MORALE}</td></tr>
           </tbody></table>
-          <h3>Men</h3>
-          <p>The manpower pool → training → corps. Casualties partly come back to the pool; under-strength corps are refilled from it.</p>
+          <h3>{t('rules|Men')}</h3>
+          <p>{t('The manpower pool → training → corps. Casualties partly come back to the pool; under-strength corps are refilled from it.')}</p>
           <table className="ledger"><tbody>
-            <tr><td>Age class per home region</td><td>{MANPOWER.growth} men a week</td></tr>
-            <tr><td>Each conscription level</td><td>+{pct(MANPOWER.mobGrowth)} men, +{MANPOWER.mobWW} weariness</td></tr>
-            <tr><td>Training</td><td>1 week (barracks: to the next week)</td></tr>
-            <tr><td>Emergency levies · only in a region under attack</td><td>at once, {LEVY_COST}× the cost</td></tr>
-            <tr><td>Replacements · a week, per corps, front line first</td><td>up to {pct(REPL.share)} of full strength</td></tr>
-            <tr><td>Casualties back to the pool</td><td>{pct(WOUNDED.share)} after {WOUNDED.days / 7} weeks</td></tr>
+            <tr><td>{t('Age class per home region')}</td><td>{t('{0} men a week', MANPOWER.growth)}</td></tr>
+            <tr><td>{t('Each conscription level')}</td><td>{t('+{0} men, +{1} weariness', pct(MANPOWER.mobGrowth), MANPOWER.mobWW)}</td></tr>
+            <tr><td>{t('Training')}</td><td>{t('1 week (barracks: to the next week)')}</td></tr>
+            <tr><td>{t('Emergency levies · only in a region under attack')}</td><td>{t('at once, {0}× the cost', LEVY_COST)}</td></tr>
+            <tr><td>{t('Replacements · a week, per corps, front line first')}</td><td>{t('up to {0} of full strength', pct(REPL.share))}</td></tr>
+            <tr><td>{t('Casualties back to the pool')}</td><td>{t('{0} after {1} weeks', pct(WOUNDED.share), WOUNDED.days / 7)}</td></tr>
           </tbody></table>
-          <h3>Production and shells</h3>
+          <h3>{t('Production and shells')}</h3>
           <table className="ledger"><tbody>
-            {ECON.map(e => <tr key={e.name}><td>War economy · {e.name}</td><td>{pct(e.shells)} of factory output to shells</td></tr>)}
-            <tr><td>War weariness: Production lost per point</td><td>{pct(WW_INCOME / 100)}</td></tr>
+            {ECON.map(e => <tr key={e.name}><td>{t('War economy · {0}', e.name)}</td><td>{t('{0} of factory output to shells', pct(e.shells))}</td></tr>)}
+            <tr><td>{t('War weariness: Production lost per point')}</td><td>{pct(WW_INCOME / 100)}</td></tr>
           </tbody></table>
           <p>{t('The Economy panel shows each of these numbers as a ledger for your nation.')}</p>
         </>}

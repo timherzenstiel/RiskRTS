@@ -226,10 +226,10 @@ function OneCorps({ g, me, r, c }: { g: GameState; me: number; r: RegionState; c
         </div>
       )}
       <div className="cc-acts">
-        <button className="btn sm" aria-expanded={det} disabled={groundUnits(c.u) < 2} onClick={() => { click(); setDet(!det); }}>Detach…</button>
-        {mates.map(m => <button key={m.id} className="btn sm" disabled={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP} title={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP ? `Together more than ${CORPS_CAP} battalions` : `Merge ${groupName(me, 1, m.n)} into this corps`} onClick={() => { click(); ui().order({ t: 'merge', region: r.id, a: c.id, b: m.id }); }}>Merge {groupName(me, 1, m.n).split(' ')[0]}</button>)}
-        <button className="btn sm" title={c.man ? 'Hand the corps back to the region: Auto may move it or fold it into the depot' : 'Keep the corps under your orders: Auto leaves it alone'} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, man: !c.man }); }}>{c.man ? 'Hand to Auto' : 'Take command'}</button>
-        <button className="btn sm" aria-pressed={!c.nr} title={c.nr ? 'Refill off: this corps takes no replacements from the manpower pool' : 'Refill on: each week this corps takes men from the pool to make good its losses (front-line corps first)'} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, refill: !!c.nr }); }}>{c.nr ? 'Refill off' : 'Refill on'}</button>
+        <button className="btn sm" aria-expanded={det} disabled={groundUnits(c.u) < 2} onClick={() => { click(); setDet(!det); }}>{t('Detach…')}</button>
+        {mates.map(m => <button key={m.id} className="btn sm" disabled={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP} title={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP ? t('Together more than {0} battalions', CORPS_CAP) : tn('Merge {0} into this corps', { raw: groupName(me, 1, m.n) })} onClick={() => { click(); ui().order({ t: 'merge', region: r.id, a: c.id, b: m.id }); }}>{tn('Merge {0}', { raw: groupName(me, 1, m.n).split(' ')[0] })}</button>)}
+        <button className="btn sm" title={c.man ? t('Hand the corps back to the region: Auto may move it or fold it into the depot') : t('Keep the corps under your orders: Auto leaves it alone')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, man: !c.man }); }}>{c.man ? t('Hand to Auto') : t('Take command')}</button>
+        <button className="btn sm" aria-pressed={!c.nr} title={c.nr ? t('Refill off: this corps takes no replacements from the manpower pool') : t('Refill on: each week this corps takes men from the pool to make good its losses (front-line corps first)')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, refill: !!c.nr }); }}>{c.nr ? t('Refill off') : t('Refill on')}</button>
       </div>
       {det && <Detach r={r} c={c} done={() => setDet(false)} />}
       <p className="note">{t(W.regions[r.id].land.length

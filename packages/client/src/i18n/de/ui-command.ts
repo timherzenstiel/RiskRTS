@@ -97,6 +97,14 @@ export const UI_COMMAND: Record<string, string> = {
   '{0} supply unspent': '{0} Nachschub ungenutzt',
   'Recruit, fortify or build': 'Ausheben, befestigen oder bauen',
 
+  '{0}: no Production, recruits or replacements, the garrison wears down': '{0}: keine Produktion, keine Rekruten, kein Ersatz, die Besatzung reibt sich auf',
+  '{0} over its supply capacity': '{0} über ihrer Versorgungskapazität',
+  '{0} / {1} · men fall sick and hungry: move troops out or lay a railway': '{0} / {1} · die Männer hungern und erkranken: zieh Truppen ab oder bau eine Eisenbahn',
+  '{0} / {1} · no replacements, morale falls: move troops out or lay a railway': '{0} / {1} · kein Ersatz, die Moral sinkt: zieh Truppen ab oder bau eine Eisenbahn',
+  '{0} men left in the pool: no recruits, no replacements': 'Noch {0} Wehrpflichtige übrig: keine Rekruten, kein Ersatz',
+  '{0} Production unspent': '{0} Produktion ungenutzt',
+  'Rules: how fronts, corps, commanders, scouting, supply and men work, with the numbers': 'Regeln: wie Fronten, Korps, Befehlshaber, Aufklärung, Nachschub und Männer funktionieren, mit allen Zahlen',
+
   // ---- staff panel and requests ----
   'Reinforcements': 'Verstärkung',
   'Field works': 'Feldbefestigung',
@@ -159,6 +167,8 @@ export const UI_COMMAND: Record<string, string> = {
   'not needed': 'nicht gebraucht',
   'Commanders never attack or send troops back without your answer. Standing approvals and a front budget (army card) let them carry out the small things themselves.':
     'Befehlshaber greifen nie an und schicken nie Truppen zurück, ohne dass du antwortest. Dauergenehmigungen und ein Frontbudget (Armeekarte) lassen sie die kleinen Dinge selbst erledigen.',
+
+  '{0} infantry battalions, raised in {1}: they train for a week, then take up that border': '{0} Infanteriebataillone, in {1} ausgehoben: Sie werden eine Woche ausgebildet und beziehen dann diese Grenze',
 
   // ---- army card ----
   'Army': 'Armee',
@@ -303,6 +313,50 @@ export const UI_COMMAND: Record<string, string> = {
   '{0} formations seen': '{0} Verbände gesichtet',
   'corps on {0}': 'Korps an {0}',
 
+  // phase 5: Production, the week, supply capacity, the war economy, the men ledger
+  'Per week': 'Pro Woche',
+  'Production · {0} in hand': 'Produktion · {0} vorrätig',
+  '~{0} weeks of light barrage': '~{0} Wochen leichtes Sperrfeuer',
+  'no batteries': 'keine Batterien',
+  'War economy': 'Kriegswirtschaft',
+  '{0}: {1} % of factory output goes to shells': '{0}: {1} % der Fabrikleistung gehen in Granaten',
+  '{0} % of what the factories make goes to the shell works; the rest is Production. The capital and the base output make shells either way.':
+    '{0} % dessen, was die Fabriken herstellen, geht an die Granatenwerke; der Rest ist Produktion. Die Hauptstadt und die Grundleistung stellen in jedem Fall Granaten her.',
+  'Men · {0} in the pool': 'Wehrpflichtige · {0} verfügbar',
+  '{0} field · {1} training · {2} wounded': '{0} im Feld · {1} in Ausbildung · {2} verwundet',
+  'last week': 'letzte Woche',
+  'next week': 'nächste Woche',
+  'ledger|Change': 'Saldo',
+  'Recruits train for a week. Each week under-strength corps in supplied regions under their capacity take up to {0} % of their full strength from the pool – the front line first. {1} % of the casualties come back to the pool after {2} weeks.':
+    'Rekruten werden eine Woche lang ausgebildet. Jede Woche holen sich geschwächte Korps in versorgten Regionen unter ihrer Kapazität bis zu {0} % ihrer Sollstärke aus den Wehrpflichtigen – die Frontlinie zuerst. {1} % der Verluste kehren nach {2} Wochen zu den Wehrpflichtigen zurück.',
+  'Each level: +{0} % age class and +{1} war weariness per week': 'Jede Stufe: +{0} % Jahrgang und +{1} Kriegsmüdigkeit pro Woche',
+  '+{0} % age class, +{1} war weariness a week.': '+{0} % Jahrgang, +{1} Kriegsmüdigkeit pro Woche.',
+  'War weariness {0} %.': 'Kriegsmüdigkeit {0} %.',
+  '{0} by rail · {1} by road · {2} cut off': '{0} per Bahn · {1} per Straße · {2} abgeschnitten',
+  'Cut off: {0}': 'Abgeschnitten: {0}',
+  'Far over capacity: men fall sick': 'Weit über Kapazität: Männer erkranken',
+  'Over capacity: no replacements, morale falls': 'Über Kapazität: kein Ersatz, die Moral sinkt',
+  'Near capacity': 'Nahe an der Kapazität',
+  'Every region is supplied and under its capacity.': 'Jede Region ist versorgt und unter ihrer Kapazität.',
+  'A railway, a factory, a harbour or the capital raise what a region can feed; mud, winter and heat lower it.':
+    'Eine Eisenbahn, eine Fabrik, ein Hafen oder die Hauptstadt erhöhen, wie viele Truppen eine Region versorgen kann; Schlamm, Winter und Hitze senken es.',
+  'No agents in the field. Send one from a foreign region\'s file or a border card ({0} Production).': 'Keine Agenten im Einsatz. Schick einen aus der Akte einer fremden Region oder von einer Grenzkarte ({0} Produktion).',
+  'Cavalry patrol over this border · {0} Production': 'Kavalleriepatrouille über diese Grenze · {0} Produktion',
+  // Logistics: supply route, capacity tooltip, why a region is cut off
+  'route|Rail': 'Bahn',
+  'route|Road': 'Straße',
+  'the route home broke at {0}': 'die Verbindung nach Hause ist bei {0} unterbrochen',
+  'no route home': 'keine Verbindung nach Hause',
+  'Rail route': 'Bahnweg',
+  'Road route (no rail all the way)': 'Straßenweg (keine durchgehende Bahn)',
+  'Depot (capital, factory, harbour) · {0}': 'Depot (Hauptstadt, Fabrik, Hafen) · {0}',
+  'Depots (capital, factory, harbour) · {0}': 'Depots (Hauptstadt, Fabrik, Hafen) · {0}',
+  'Rail links · {0}, from the 2nd': 'Bahnanschlüsse · {0}, ab dem 2.',
+  'Supply capacity {0} · load {1}': 'Versorgungskapazität {0} · Last {1}',
+  'Each battalion draws 1, a battery or tank 2. Over capacity: no replacements, shells cost half again, morale −{0} a week; over {1} %: {2} % of the men lost a week.':
+    'Jedes Bataillon hat Bedarf 1, eine Batterie oder ein Panzer 2. Über Kapazität: kein Ersatz, Granaten kosten die Hälfte mehr, Moral −{0} pro Woche; über {1} %: {2} % der Männer gehen pro Woche verloren.',
+
+
   // ---- rules sheet ----
   'Rules pages': 'Regelseiten',
   'Field service regulations': 'Felddienstordnung',
@@ -364,4 +418,44 @@ export const UI_COMMAND: Record<string, string> = {
   '+{0} men, +{1} weariness': '+{0} Mann, +{1} Kriegsmüdigkeit',
   'Casualties who come back wounded': 'Verluste, die verwundet zurückkehren',
   'The Economy panel shows each of these numbers as a ledger for your nation.': 'Das Wirtschaftsfenster zeigt jede dieser Zahlen als Aufstellung für deine Nation.',
+
+  // ---- phase 5: corps refill ----
+  'Refill off: this corps takes no replacements from the manpower pool': 'Auffüllen aus: dieses Korps erhält keinen Ersatz aus den Wehrpflichtigen',
+  'Refill on: each week this corps takes men from the pool to make good its losses (front-line corps first)': 'Auffüllen an: jede Woche holt sich dieses Korps Männer aus dem Vorrat, um seine Verluste auszugleichen (Frontkorps zuerst)',
+  'Refill off': 'Auffüllen aus',
+  'Refill on': 'Auffüllen an',
+  // phase 5 rules: the week, supply capacity, men, Production and shells
+  '{0} Production': '{0} Produktion',
+  'The week': 'Die Woche',
+  'Every {0} s is a week: Production, shells and new men arrive. Regions pay only with a route home – own land (or a sea lane between own regions) to the capital, a factory or home territory. Rail all the way is a <b>Rail</b> route, otherwise <b>Road</b>; none is <b>Cut off</b>.':
+    'Alle {0} s ist eine Woche um: Produktion, Granaten und neue Männer treffen ein. Regionen zahlen nur mit einer Verbindung nach Hause – eigenes Land (oder ein Seeweg zwischen eigenen Regionen) zur Hauptstadt, einer Fabrik oder zum Kernland. Durchgehend Eisenbahn ist ein <b>Bahnweg</b>, sonst ein <b>Straßenweg</b>; ohne Verbindung ist die Region <b>abgeschnitten</b>.',
+  'Supply capacity': 'Versorgungskapazität',
+  'Each region can feed only so many battalions a week. Load is what its battalions draw, those fighting in its battles included.':
+    'Jede Region kann pro Woche nur eine bestimmte Zahl Bataillone versorgen. Die Last ist der Bedarf ihrer Bataillone, die in ihren Gefechten kämpfenden eingeschlossen.',
+  'Draw · infantry, MG, squadron': 'Bedarf · Infanterie, MG, Staffel',
+  'Draw · battery, tank': 'Bedarf · Batterie, Panzer',
+  'Capacity · Rail route / Road route / cut off': 'Kapazität · Bahnweg / Straßenweg / abgeschnitten',
+  'Each depot in the region (capital, factory, harbour)': 'Jedes Depot in der Region (Hauptstadt, Fabrik, Hafen)',
+  'Each own rail link into the region, from the 2nd': 'Jeder eigene Bahnanschluss in die Region, ab dem 2.',
+  'Mud / winter (Siberians) / heat': 'Schlamm / Winter (Sibirier) / Hitze',
+  'Over capacity · morale a week': 'Über Kapazität · Moral pro Woche',
+  '−{0}, no replacements, shells ×{1}': '−{0}, kein Ersatz, Granaten ×{1}',
+  'Over {0} · men lost a week': 'Über {0} · Männerverlust pro Woche',
+  'Cut off · strength / morale lost a week': 'Abgeschnitten · Stärke- / Moralverlust pro Woche',
+  'rules|Men': 'Männer',
+  'The manpower pool → training → corps. Casualties partly come back to the pool; under-strength corps are refilled from it.':
+    'Wehrpflichtige → Ausbildung → Korps. Ein Teil der Verluste kehrt zu den Wehrpflichtigen zurück; geschwächte Korps werden daraus aufgefüllt.',
+  '{0} men a week': '{0} Mann pro Woche',
+  'Training': 'Ausbildung',
+  '1 week (barracks: to the next week)': '1 Woche (Kaserne: bis zur nächsten Woche)',
+  'Emergency levies · only in a region under attack': 'Notaushebung · nur in einer angegriffenen Region',
+  'at once, {0}× the cost': 'sofort, {0}-fache Kosten',
+  'Replacements · a week, per corps, front line first': 'Ersatz · pro Woche und Korps, Frontlinie zuerst',
+  'up to {0} of full strength': 'bis zu {0} der Sollstärke',
+  'Casualties back to the pool': 'Verluste zurück zu den Wehrpflichtigen',
+  '{0} after {1} weeks': '{0} nach {1} Wochen',
+  'Production and shells': 'Produktion und Granaten',
+  'War economy · {0}': 'Kriegswirtschaft · {0}',
+  '{0} of factory output to shells': '{0} der Fabrikleistung in Granaten',
+  'War weariness: Production lost per point': 'Kriegsmüdigkeit: Produktionsverlust pro Punkt',
 };

@@ -50,11 +50,11 @@ export function NavyTab({ region, id }: { region: RegionState; id: number }) {
     <>
       <div className="lbl"><span>{t('Port')}</span></div>
       {region.port ? (
-        <p className="note">{ready ? <>Port of {W.regions[id].name} · ships load in {Math.round(15)} s here, guns and tanks need a quay · damaged ships repair here each week.</> : <>The port is being built · ready in {Math.ceil((region.portAt ?? g.time) - g.time)} s.</>}</p>
+        <p className="note">{ready ? t('Port of {0} · ships load in {1} s here, guns and tanks need a quay · damaged ships repair here each week.', W.regions[id].name, Math.round(15)) : t('The port is being built · ready in {0} s.', Math.ceil((region.portAt ?? g.time) - g.time))}</p>
       ) : (
         <div className="it">
           <span className="ic"><Icon k="port" /></span>
-          <div className="tx"><b>Build a port</b><small>Ships are built and repaired in ports; troops embark in 15 s instead of 40, and guns and tanks only at a quay · ready in {PORT.convoys} weeks</small></div>
+          <div className="tx"><b>{t('Build a port')}</b><small>{t('Ships are built and repaired in ports; troops embark in 15 s instead of 40, and guns and tanks only at a quay · ready in {0} weeks', PORT.convoys)}</small></div>
           <button className="buy" disabled={supply < PORT.cost} onClick={() => ui().build(id, 'port')}><SupplyIcon />{PORT.cost}</button>
         </div>
       )}
@@ -81,7 +81,7 @@ export function NavyTab({ region, id }: { region: RegionState; id: number }) {
             return (
               <div className="it" key={k}>
                 <span className="ic"><Icon k={shipIcon(k)} /></span>
-                <div className="tx"><b>{SHIP[k].name}</b><small>{lock ? lock + ' · ' : ''}{SHIP[k].desc} · {SHIP[k].convoys} week{SHIP[k].convoys === 1 ? '' : 's'}</small></div>
+                <div className="tx"><b>{tx(SHIP[k].name)}</b><small>{lock ? lock + ' · ' : ''}{tx(SHIP[k].desc)} · {SHIP[k].convoys === 1 ? t('{0} week', 1) : t('{0} weeks', SHIP[k].convoys)}</small></div>
                 <button className="buy" disabled={!!lock || supply < c || region.cut} onClick={() => ui().order({ t: 'buildShip', region: id, kind: k })}><SupplyIcon />{c}</button>
               </div>
             );

@@ -47,7 +47,9 @@ describe('German coverage', () => {
       const seeds = REPORT ? [1, 2, 3, 4, 5, 6] : [1];
       for (const s of seeds) { try { play(s, REPORT ? 1500 : 120, seen); } catch (e) { console.warn(`seed ${s}: simulation error`, e); } }
       const errs = errorTemplates().filter(k => !(k in DE));
-      const miss = [...missing];
+      // army, corps and commander names stay in each nation's own language on purpose
+      const NAME = /Paşa$|Bey$|^(Gén|Gen|GdI)\.? |\b(Korps|Korpus|Corps|Kol\.|CA|AK|Army|Armee|Armée|Armiya|Ordu)\b/;
+      const miss = [...missing].filter(s => !NAME.test(s));
       if (REPORT) {
         console.log(`\n${seen.size} distinct lines seen, ${miss.length} untranslated:\n` + miss.sort().map(s => '  ' + s).join('\n'));
         console.log(`\n${errs.length} error templates not in the dictionary (check by hand, some are built from parts):\n` + errs.map(s => '  ' + s).join('\n'));

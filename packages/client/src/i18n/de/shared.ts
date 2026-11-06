@@ -737,6 +737,34 @@ const S: Record<string, string> = {
   'Those corps are on the move or in battle. Try again once they stand at a post.': 'Diese Korps sind unterwegs oder im Gefecht. Versuche es erneut, sobald sie an einem Posten stehen.',
   'An army needs at least one region of ours to hold.': 'Eine Armee braucht mindestens eine eigene Region, die sie hält.',
   "{0} does not border the army's front.": '{0} grenzt nicht an den Frontabschnitt der Armee.',
+
+  // ---------------------------------------------------------------- Production (the currency, formerly "supply"; sim/*.ts)
+  'Not enough Production: this costs {0}.': 'Nicht genug Produktion: Das kostet {0}.',
+  'Not enough Production: a {0} costs {1}.': 'Nicht genug Produktion: {0} kostet {1}.',
+  'Not enough Production: a {0} costs {1} as an emergency levy.': 'Nicht genug Produktion: {0} kostet als Notaushebung {1}.',
+  // the source template as the coverage test reads it (`${c}${now ? ' as an emergency levy' : ''}`); the levy key above is longer and wins,
+  // so here {1}{2} only ever splits a plain number, which the German puts back together
+  'Not enough Production: a {0} costs {1}{2}.': 'Nicht genug Produktion: {0} kostet {1}{2}.',
+  'Not enough Production: a patrol costs {0}.': 'Nicht genug Produktion: Eine Patrouille kostet {0}.',
+  'Not enough Production: a reconnaissance flight costs {0}.': 'Nicht genug Produktion: Ein Aufklärungsflug kostet {0}.',
+  'Not enough Production: a spy costs {0}.': 'Nicht genug Produktion: Ein Spion kostet {0}.',
+  'Not enough Production: a railway costs {0}.': 'Nicht genug Produktion: Eine Bahnlinie kostet {0}.',
+  'Not enough Production: {0} shells cost {1}.': 'Nicht genug Produktion: {0} Granaten kosten {1}.',
+  'Not enough Production: a decoy costs {0}.': 'Nicht genug Produktion: Eine Scheinarmee kostet {0}.',
+  'Not enough Production: a port costs {0}.': 'Nicht genug Produktion: Ein Hafen kostet {0}.',
+  'Not enough Production: a rush costs {0}.': 'Nicht genug Produktion: Das Forcieren kostet {0}.',
+  'Emergency levies are raised only in a region under attack.': 'Eine Notaushebung gibt es nur in einer Region, die angegriffen wird.',
+
+  // ---------------------------------------------------------------- war economy, supply capacity, manpower ledger (sim/supply.ts, sim/terms.ts)
+  'Civil': 'Zivil',
+  'Munitions first': 'Munition zuerst',
+  'Factories · {0} · {1}': 'Fabriken · {0} · {1}',
+  'Factories · {0} × {1} · {2}': 'Fabriken · {0} × {1} · {2}',
+  'Age class': 'Jahrgang',
+  'Wounded back': 'Genesene Verwundete',
+  'Raised into training': 'In Ausbildung ausgehoben',
+  'Replacements': 'Ersatz',
+  'what you recruit': 'was du aushebst',
 };
 
 // ---------------------------------------------------------------- generated variants
@@ -770,6 +798,8 @@ for (const [en, de, g] of UNITS) {
   // A national unit name that already holds an adjective ("Sibirisches …") takes "ein" without the adjective ending change.
   const art = en === 'Siberian rifle battalion' ? 'ein sibirisches Schützenbataillon' : `${ein[g]} ${de}`;
   S[`Not enough supply: a ${en.toLowerCase()} costs {0}.`] = `Nicht genug Nachschub: ${art[0].toUpperCase() + art.slice(1)} kostet {0}.`;
+  S[`Not enough Production: a ${en.toLowerCase()} costs {0}.`] = `Nicht genug Produktion: ${art[0].toUpperCase() + art.slice(1)} kostet {0}.`;
+  S[`Not enough Production: a ${en.toLowerCase()} costs {0} as an emergency levy.`] = `Nicht genug Produktion: ${art[0].toUpperCase() + art.slice(1)} kostet als Notaushebung {0}.`;
 }
 const FORMS: [string, string, G][] = [['battalion', 'Bataillon', 'n'], ['MG company', 'MG-Kompanie', 'f'], ['battery', 'Batterie', 'f'], ['tank platoon', 'Panzer-Zug', 'm'], ['squadron', 'Staffel', 'f']];
 for (const [en, de, g] of FORMS) {
@@ -784,6 +814,7 @@ for (const [en, de, g, neu] of SHIPS) {
   const Ein = ein[g][0].toUpperCase() + ein[g].slice(1);
   S[`A new ${en} is ready in {0}.`] = `${Ein} ${neu} ${de} liegt in {0} bereit.`;
   S[`Not enough supply: a ${en} costs {0}.`] = `Nicht genug Nachschub: ${Ein} ${de} kostet {0}.`;
+  S[`Not enough Production: a ${en} costs {0}.`] = `Nicht genug Produktion: ${Ein} ${de} kostet {0}.`;
   S[`A ${en} needs a shipyard: a factory in the port region.`] = `${Ein} ${de} braucht eine Werft: eine Fabrik in der Hafenregion.`;
 }
 

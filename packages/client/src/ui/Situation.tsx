@@ -244,18 +244,18 @@ function alertsOf(g: GameState, me: number): Alert[] {
     text: tn('ours {0} : theirs {1}', b.own.btl[0] + b.own.reserve[0], { raw: b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?' }), act: t('Open'), go: () => openBorder(b),
   });
   for (const r of g.regions) if (r.owner === me && r.cut) out.push({
-    key: 'cut' + r.id, level: 1, title: `${W.regions[r.id].name} is cut off`, text: `${cutReason(g, r)[0].toUpperCase()}${cutReason(g, r).slice(1)}: no Production, recruits or replacements, the garrison wears down`, act: 'Show',
+    key: 'cut' + r.id, level: 1, title: t('{0} is cut off', W.regions[r.id].name), text: tn('{0}: no Production, recruits or replacements, the garrison wears down', { raw: cutReason(g, r)[0].toUpperCase() + cutReason(g, r).slice(1) }), act: t('Show'),
     go: () => { useUi.getState().select(r.id); useUi.getState().setMode(3); rendererRef.current?.flyTo(r.id, 30); },
   });
   // over supply capacity: only where it bites (troops would go hungry), worst first
   for (const r of g.regions) if (r.owner === me && !r.cut) { const l = load(g, r), c = capacity(g, r); if (l > c) out.push({
-    key: 'cap' + r.id, level: l > c * OVER.far ? 1 : 0, title: `${W.regions[r.id].name} over its supply capacity`, text: `${l} / ${c} · ${l > c * OVER.far ? 'men fall sick and hungry' : 'no replacements, morale falls'}: move troops out or lay a railway`, act: 'Show',
+    key: 'cap' + r.id, level: l > c * OVER.far ? 1 : 0, title: t('{0} over its supply capacity', W.regions[r.id].name), text: t(l > c * OVER.far ? '{0} / {1} · men fall sick and hungry: move troops out or lay a railway' : '{0} / {1} · no replacements, morale falls: move troops out or lay a railway', l, c), act: t('Show'),
     go: () => { useUi.getState().select(r.id); useUi.getState().setMode(3); rendererRef.current?.flyTo(r.id, 30); },
   }); }
-  for (const q of (g.requests ?? []).filter(q => q.owner === me && q.urg === 2)) { const t = reqText(g, me, q); out.push({ key: 'rq' + q.id, level: 2, title: `Staff: ${t.title}`, text: t.why, act: 'Staff', go: () => useUi.getState().setPanel('staff') }); }
-  if ((f.men ?? 0) < 300) out.push({ key: 'men', level: 1, title: 'Manpower nearly gone', text: `${Math.floor(f.men ?? 0)} men left in the pool: no recruits, no replacements`, act: 'Economy', go: () => useUi.getState().setPanel('economy') });
+  for (const q of (g.requests ?? []).filter(q => q.owner === me && q.urg === 2)) { const rt = reqText(g, me, q); out.push({ key: 'rq' + q.id, level: 2, title: tn('Staff: {0}', { raw: rt.title }), text: rt.why, act: t('Staff'), go: () => useUi.getState().setPanel('staff') }); }
+  if ((f.men ?? 0) < 300) out.push({ key: 'men', level: 1, title: t('Manpower nearly gone'), text: t('{0} men left in the pool: no recruits, no replacements', Math.floor(f.men ?? 0)), act: t('Economy'), go: () => useUi.getState().setPanel('economy') });
   const inc = income(g, me);
-  if (f.supply > Math.max(30, inc * 4)) out.push({ key: 'idle', level: 0, title: `${f.supply} Production unspent`, text: 'Recruit, fortify or build', act: 'Capital', go: () => { const c = g.regions.find(r => r.capitalOf === me && r.owner === me); if (c) { useUi.getState().select(c.id); useUi.getState().setTab('rec'); rendererRef.current?.flyTo(c.id, 30); } } });
+  if (f.supply > Math.max(30, inc * 4)) out.push({ key: 'idle', level: 0, title: t('{0} Production unspent', f.supply), text: t('Recruit, fortify or build'), act: t('Capital'), go: () => { const c = g.regions.find(r => r.capitalOf === me && r.owner === me); if (c) { useUi.getState().select(c.id); useUi.getState().setTab('rec'); rendererRef.current?.flyTo(c.id, 30); } } });
   return out.sort((a, b) => b.level - a.level);
 }
 

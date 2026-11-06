@@ -13,9 +13,9 @@ export function CalendarSheet() {
   const close = () => { click(); ui().setOverlay(null); };
   const canRush = f.rushY !== y && f.supply >= RUSH.cost;
   return (
-    <Modal label="War calendar" onClose={close}>
-      <div className="kicker">{FACTIONS[me].name} · General Staff</div><h2>War calendar</h2>
-      <p className="muted small">New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {RUSH.cost} Production{f.rushY === y ? ' (used this year)' : ''}.</p>
+    <Modal label={t('War calendar')} onClose={close}>
+      <div className="kicker">{tx(FACTIONS[me].name)} · {t('General Staff')}</div><h2>{t('War calendar')}</h2>
+      <p className="muted small">{f.rushY === y ? t('New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {0} Production (used this year).', RUSH.cost) : t('New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {0} Production.', RUSH.cost)}</p>
       <div className="cal">
         {TECH.map(tk => {
           const d = techDayFor(me, tk.key, f.rushed), on = techOn(g, me, tk.key);

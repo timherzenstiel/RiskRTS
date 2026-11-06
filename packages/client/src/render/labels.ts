@@ -1,6 +1,6 @@
 // DOM map labels (region markers, city names, army counts, battle buttons). The React stylesheet styles these class names.
 import * as THREE from 'three';
-import { FACTIONS, FORMATION, UNIT_TYPES, GROUND_TYPES, armyPos, battleCounts, groundUnits, groupName, mainOf, sectorPoint, totalUnits, type Army, type Battle, type Corps, type GameState, type Units, type World } from '@riskrts/shared';
+import { FACTIONS, FORMATION, UNIT_TYPES, GROUND_TYPES, SHIP, armyPos, battleCounts, fleetPos, groundUnits, groupName, mainOf, seaControl, sectorPoint, totalUnits, type Army, type Battle, type Corps, type Fleet, type GameState, type SeaBattle, type Units, type World } from '@riskrts/shared';
 import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
@@ -32,9 +32,14 @@ const BADGE: Record<string, string> = {
   cap: '<i class="b cap" title="Capital"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .8l1.5 3.3 3.6.4-2.7 2.4.8 3.6L6 8.7 2.8 10.5l.8-3.6L.9 4.5l3.6-.4z" fill="currentColor"/></svg></i>',
   fac: '<i class="b fac" title="Factory"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 11V5l3 2V5l3 2V2h2v9z" fill="currentColor"/></svg></i>',
   bar: '<i class="b bar" title="Barracks"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6l5-4 5 4v5H1z M4 11V8h4v3" fill="currentColor"/></svg></i>',
+  port: '<i class="b port" title="Port"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6zM5.4 3.8h1.2v5.6c1.4-.2 2.5-1 3-2.2l-1-.4 2-1.4.4 2.4-.9-.4C9.4 9.4 7.9 10.8 6 10.8S2.6 9.4 1.9 7.4l-.9.4.4-2.4 2 1.4-1 .4c.5 1.2 1.6 2 3 2.2z" fill="currentColor"/></svg></i>',
   air: '<i class="b air" title="Airfield"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v4L1 7v1.3l5-1.3v2.5L4.5 10.5V11.5L6 11l1.5.5v-1L6 9.5V7l5 1.3V7L6 5z" fill="currentColor"/></svg></i>',
 };
 interface CityLabel { el: HTMLDivElement; shown: boolean; tf: string }
+interface ZoneLabel { el: HTMLDivElement; shown: boolean; tf: string; c: string }
+interface FleetLabel { el: HTMLDivElement; n: HTMLSpanElement; text: string; shown: boolean; tf: string; seen: number }
+/** A ship symbol for fleet markers. */
+const SHIP_SYM = '<svg viewBox="0 0 16 10" aria-hidden="true"><path d="M1 6h14l-2 3H3z M5 3h6v3H5z M7 1h1.6v2H7z" fill="currentColor"/></svg>';
 interface ArmyLabel { el: HTMLDivElement; n: HTMLSpanElement; count: string; shown: boolean; tf: string; seen: number }
 interface BattleLabel { el: HTMLButtonElement; text: HTMLSpanElement; label: string; shown: boolean; tf: string; seen: number; nextText: number }
 
@@ -53,6 +58,9 @@ export class Labels {
   private readonly armies = new Map<number, ArmyLabel>();
   private readonly battles = new Map<number, BattleLabel>();
   private readonly corps = new Map<string, CorpsLabel>();
+  private readonly zones: ZoneLabel[];
+  private readonly fleets = new Map<number, FleetLabel>();
+  private readonly seas = new Map<number, BattleLabel>();
   private layer = 0;
   private readonly brackets: HTMLDivElement[] = [];
   private band = -1;
@@ -63,7 +71,9 @@ export class Labels {
 
   constructor(private readonly root: HTMLElement, private readonly world: World, private readonly cities: CityInfo[], private readonly cityH: (c: CityInfo) => number,
     private readonly onBattleClick: (regionId: number, battleId: number) => void,
-    private readonly onCorpsClick: (regionId: number, post: number) => void = () => {}) {
+    private readonly onCorpsClick: (regionId: number, post: number) => void = () => {},
+    private readonly onFleetClick: (fleet: number) => void = () => {}, private readonly onSeaClick: (id: number) => void = () => {}) {
+    this.zones = world.zones.map(z => { const el = document.createElement('div'); el.className = 'zl'; el.textContent = z.short.toUpperCase(); root.appendChild(el); return { el, shown: true, tf: '', c: '' }; });
     this.regions = world.regions.map((r) => {
       const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="pp"></span><span class="bd"></span><span class="nm"></span>';
       const n = el.children[0] as HTMLSpanElement, pp = el.children[1] as HTMLSpanElement, bd = el.children[2] as HTMLSpanElement, nm = el.children[3] as HTMLSpanElement; nm.textContent = r.name; root.appendChild(el);
@@ -99,7 +109,7 @@ export class Labels {
       if (sm !== l.sm) { l.sm = sm; l.el.classList.toggle('sm', sm); }
       const st = !!rs.strike; if (st !== !!l.st) { l.st = st; l.el.classList.toggle('st', st); }
       const known = (rs.vis ?? 3) >= 2;
-      const badges = (rs.capitalOf >= 0 ? BADGE.cap : '') + (known && rs.factory ? BADGE.fac : '') + (known && rs.barracks ? BADGE.bar : '') + (known && rs.airfield ? BADGE.air : '');
+      const badges = (rs.capitalOf >= 0 ? BADGE.cap : '') + (known && rs.factory ? BADGE.fac : '') + (known && rs.barracks ? BADGE.bar : '') + (known && rs.airfield ? BADGE.air : '') + (rs.port ? BADGE.port : '');
       if (badges !== l.badges) { l.badges = badges; l.bd.innerHTML = badges; }
       // strength and morale pips on your own garrisons when zoomed in (design 3.4): green -> amber -> red
       let pips = '';
@@ -116,7 +126,48 @@ export class Labels {
       if (dist > lim || Math.hypot(c.x - cam.tx, c.z - cam.tz) > dist * 1.4) { this.hide(l); return; }
       this.place(l, ctx, c.x, this.cityH(c) + .36, c.z);
     });
+    // sea zones: names on the water in the colour of the power that holds them
+    if (g) {
+      const ctrl = seaControl(g).ctrl;
+      this.zones.forEach((l, z) => {
+        if (dist < 22 || dist > 160) { this.hide(l); return; }
+        const Z = this.world.zones[z], c = ctrl[z] >= 0 ? FACTIONS[ctrl[z]].color : '';
+        if (c !== l.c) { l.c = c; l.el.style.setProperty('--c', c || 'rgba(220,230,235,.55)'); l.el.classList.toggle('held', !!c); }
+        this.place(l, ctx, Z.x, .2, Z.z);
+      });
+    }
     if (!g) return;
+
+    // fleets at sea: a ship marker with its ships, and for own fleets where they are bound and when they arrive
+    if (dist < 140) for (const fl of g.fleets) {
+      if (fl.sea !== undefined || !fl.path.length) continue;
+      let l = this.fleets.get(fl.id);
+      if (!l) {
+        const el = document.createElement('div'); el.className = 'tl fm'; el.style.setProperty('--c', FACTIONS[fl.owner]?.color ?? '#888'); el.innerHTML = '<span class="n"></span>';
+        const id = fl.id; el.style.pointerEvents = 'auto'; el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.onFleetClick(id); });
+        this.root.appendChild(el); l = { el, n: el.firstChild as HTMLSpanElement, text: '', shown: true, tf: '', seen: 0 }; this.fleets.set(fl.id, l);
+      }
+      l.seen = ctx.frame;
+      const t = fleetText(g, fl, fl.owner === ctx.me);
+      if (t !== l.text) { l.text = t; l.n.innerHTML = SHIP_SYM + t; l.el.classList.toggle('off', fl.state === 'offshore'); l.el.classList.toggle('stn', fl.state === 'stationed'); }
+      const p = fleetPos(fl); this.place(l, ctx, p.x, .7, p.z);
+    }
+    for (const [id, l] of this.fleets) if (l.seen !== ctx.frame) { l.el.remove(); this.fleets.delete(id); }
+    // naval battles: a button like the land battles'
+    for (const b of g.seaBattles ?? []) {
+      if (b.ended) continue;
+      let l = this.seas.get(b.id);
+      if (!l) l = this.makeSea(b);
+      l.seen = ctx.frame;
+      if (dist < 12) { this.hide(l); continue; }
+      if (ctx.now >= l.nextText) {
+        l.nextText = ctx.now + .25;
+        const n = [0, 1].map(s => b.agents.filter(a => !a.dead && !a.out && a.kind !== 'pl' && b.sides[s].includes(a.f)).length);
+        const t = `${this.world.zones[b.zone].short} · ${n[0]} v ${n[1]}`; if (t !== l.label) { l.label = t; l.text.textContent = t; }
+      }
+      this.place(l, ctx, b.x, 1.1, b.z);
+    }
+    for (const [id, l] of this.seas) if (l.seen !== ctx.frame) { l.el.remove(); this.seas.delete(id); }
 
     // armies on the march
     for (const a of g.armies) {
@@ -205,6 +256,15 @@ export class Labels {
     l.nm.textContent = name; l.nm.style.display = name ? '' : 'none';
   }
 
+  private makeSea(b: SeaBattle): BattleLabel {
+    const el = document.createElement('button'); el.className = 'bm sea'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', `Watch the naval battle in the ${this.world.zones[b.zone].name}`);
+    el.innerHTML = SHIP_SYM + '<span></span>';
+    el.addEventListener('click', () => this.onSeaClick(b.id));
+    this.root.appendChild(el);
+    const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0 };
+    this.seas.set(b.id, l); return l;
+  }
+
   private makeBattle(b: Battle, rname: string): BattleLabel {
     const el = document.createElement('button'); el.className = 'bm'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', `Watch the battle of ${rname}`);
     el.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 1h2v1h1v1h1v1h1v1h1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1zM13 1h-2v1h-1v1h-1v1h-1v1h-1v1h1v1h1v-1h1v-1h1v-1h1v-1h1zM2 10h2v2h-2zM10 10h2v2h-2zM4 9h1v1h-1zM9 9h1v1h-1z" fill="currentColor"/></svg><span></span>';
@@ -220,6 +280,24 @@ export class Labels {
     for (const l of this.armies.values()) l.el.remove();
     for (const l of this.battles.values()) l.el.remove();
     for (const l of this.corps.values()) l.el.remove();
-    this.armies.clear(); this.battles.clear(); this.corps.clear();
+    for (const l of this.zones) l.el.remove();
+    for (const l of this.fleets.values()) l.el.remove();
+    for (const l of this.seas.values()) l.el.remove();
+    this.armies.clear(); this.battles.clear(); this.corps.clear(); this.fleets.clear(); this.seas.clear();
   }
+}
+
+/** "2 BB" for warships, "3 TRN · 6 btl → 24s" for an own convoy, "~10 btl" offshore. */
+function fleetText(g: GameState, fl: Fleet, own: boolean) {
+  const ships = fl.ships.map(id => g.ships.find(s => s.id === id)).filter(Boolean) as { kind: keyof typeof SHIP }[];
+  const n = (k: keyof typeof SHIP) => ships.filter(s => s.kind === k).length;
+  const parts = (['bb', 'carrier', 'land', 'trans'] as const).map(k => n(k) ? `${n(k)} ${SHIP[k].short}` : '').filter(Boolean);
+  const cargo = groundUnits(fl.cargo);
+  let t = parts.join(' ') + (cargo ? ` · ${own ? '' : '~'}${cargo} btl` : '');
+  if (own) {
+    const left = fl.state === 'sail' ? (fl.len - fl.d) / Math.max(.01, fl.v) : fl.state === 'stationed' ? 0 : fl.t;
+    if (left > 1) t += ` · ${Math.ceil(left)}s`;
+  }
+  if (fl.state === 'offshore') t += fl.storm ? ' · storm' : ' · offshore';
+  return t;
 }

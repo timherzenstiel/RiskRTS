@@ -1,7 +1,7 @@
 // Front command bar: docked along the bottom of the map when the camera is on a fight. Both sides with crests and
 // strength bars, then the levers (suppression, wire, shells, barrage lever, over the top, stance, reinforce, withdraw).
 import { useEffect } from 'react';
-import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
+import { FACTIONS, battleCounts, borderLabel, buildWorld } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { rendererRef } from './refs';
 import { FrontControls } from './FrontCard';
@@ -20,7 +20,7 @@ export function BattleCard() {
     <div id="bcard" className="plate cmdbar" aria-live="polite">
       <div className="cb-sides">
         <div className="bt"><b>Battle of {W.regions[b.region].name}</b><small className="lcd-t">{b.ended ? 'Over' : `${Math.floor(b.age)} s${quiet ? ' · trench warfare' : ''}`}</small></div>
-        <div className="bf"><small>{b.from >= 0 ? `${W.regions[b.from].name} border` : 'Inside the region'}{works ? ` · ${works}` : ''}</small></div>
+        <div className="bf"><small>{borderLabel(W, b.from)}{b.amph !== undefined && (b.stage ?? 0) === 0 ? ' · landing' : ''}{works ? ` · ${works}` : ''}</small></div>
         {counts.map(([f, [alive, all]]) => (
           <div className="side" key={f} style={{ '--c': FACTIONS[f].color } as React.CSSProperties}>
             <span className="nm"><span className="crest sm">{FACTIONS[f].key}</span>{FACTIONS[f].short}{f === owner ? ' · def.' : ''}</span>

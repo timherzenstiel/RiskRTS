@@ -13,6 +13,10 @@ export function Hint() {
   if (g.over) text = null;
   else if (session.speed === 0) text = 'Paused';
   else if (orderMode && orderKind === 'air') text = <>Click a region up to <b>two borders away</b> for the air strike · <kbd>Esc</kbd> cancels</>;
+  else if (orderMode && orderKind === 'ship') text = <>Click one of <b>your coastal regions</b> to ship troops there · <kbd>Esc</kbd> cancels</>;
+  else if (orderMode && orderKind === 'landing') text = <>Click an <b>enemy coast</b> to land on · <kbd>Esc</kbd> cancels</>;
+  else if (orderMode && orderKind === 'station') text = <>Click a <b>sea zone</b> to station the fleet in · <kbd>Esc</kbd> cancels</>;
+  else if (orderMode && orderKind === 'cvair') text = <>Click a region on the coasts of the carrier's zone, or next to them · <kbd>Esc</kbd> cancels</>;
   else if (orderMode) text = <>Click a <b>bordering region</b> to march on it · <kbd>Esc</kbd> cancels</>;
   else if (tut < 1) text = <>{touch ? 'Tap' : 'Click'} one of your <b>{FACTIONS[me].short}</b> regions on the map to open it</>;
   else if (tut < 2) text = own ? <>Spend supply in the <b>Recruit</b> tab · keys <kbd>1</kbd>–<kbd>4</kbd></> : 'Select one of your own regions to recruit';

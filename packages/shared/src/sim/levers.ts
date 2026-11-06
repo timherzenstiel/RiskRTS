@@ -1,5 +1,7 @@
 // Battle levers: the handful of decisions a commander makes per front while the battle fights itself.
 // Barrage level, over the top, stance, reinforcing a front from a neighbouring region, and withdrawing.
+import { isCoast } from '../world/zones';
+import { reembark } from './navy';
 import { COST, FORMATION, SHELLS, groundUnits, isDef } from '../data/units';
 import { recordIntel } from './fog';
 import { setStopAttack, treatyCheck } from './diplomacy';
@@ -52,7 +54,7 @@ export function reinforce(g: GameState, fid: number, from: number, bid: number, 
   const own = g.regions[b.region].owner === fid;
   if (!own && !b.sides.includes(fid)) return NOT_HERE;
   if (!own) { const t = treatyCheck(g, fid, b.region); if (t) return t; }
-  const a = formArmy(g, fid, from, b.region, frac, own ? (world().regions[b.region].adj.includes(from) ? from : -1) : from); if (typeof a === 'string') return a;
+  const a = formArmy(g, fid, from, b.region, frac, own ? (world().regions[b.region].land.includes(from) ? from : -1) : from); if (typeof a === 'string') return a;
   a.front = b.id;
   emit(g, { k: 'march', faction: fid, from, to: b.region, units: groundUnits(a.units) });
   return null;
@@ -76,7 +78,13 @@ function pullOut(g: GameState, b: Battle, fid: number): string | null {
     emit(g, { k: 'withdraw', faction: fid, region: b.region, to: b.region });
     return null;
   }
-  const W = world(), adj = W.regions[b.region].adj.filter(j => g.regions[j].owner === fid && j !== b.region);
+  // off a beach: back into the boats, if they are still there
+  if (fid !== b.def && isCoast(b.from)) {
+    if (!reembark(g, b, fid, f.u, f.m, mor)) return 'The boats have gone. The troops on the beach fight on or surrender.';
+    out(); emit(g, { k: 'withdraw', faction: fid, region: b.region, to: b.src ?? b.region });
+    return null;
+  }
+  const W = world(), adj = W.regions[b.region].land.filter(j => g.regions[j].owner === fid && j !== b.region);
   if (!adj.length) return 'There is no region of yours next to this front to fall back to.';
   const score = (j: number) => (j === b.from ? 4 : 0) + (g.regions[j].cut ? 0 : 2) + (g.regions[j].battle < 0 ? 1 : 0);
   const dest = adj.sort((x, y) => score(y) - score(x))[0];

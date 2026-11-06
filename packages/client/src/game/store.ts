@@ -7,10 +7,11 @@ import { Radio } from '../audio/radio';
 import { DEFAULT_PIXEL_SCALE, type PixelScale } from '../render/api';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
-export type Tab = 'rec' | 'build' | 'fort' | 'deploy' | 'march';
+export type Tab = 'rec' | 'build' | 'fort' | 'deploy' | 'march' | 'navy';
 /** Map layer: 0 everything, 1 troops (markers and front lines first), 2 industry (buildings, rails, supply). */
 export type MapLayer = 0 | 1 | 2;
-export type OrderKind = 'march' | 'air';
+/** march / air strike, and the navy: ship troops to an own coast, assault an enemy coast, station warships in a zone, carrier strike. */
+export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair';
 export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy';
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
@@ -20,6 +21,10 @@ interface Ui {
   /** Bumped ~5×/s and after every command so components re-read session.state. */
   rev: number;
   sel: number; hover: number; tab: Tab; sendFrac: number; orderMode: boolean; orderKind: OrderKind;
+  /** Navy orders: the fleet or carrier they are for (-1: the warships docked in the selected port), and the kind of warship. */
+  orderArg: number; orderSub: 'bb' | 'carrier';
+  /** Selected fleet at sea and naval battle (-1 none). */
+  fleet: number; seaSel: number;
   /** Goal of new attacks: 1 take the first line, 2 invade. */
   goal: 1 | 2; layer: MapLayer;
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
@@ -46,7 +51,9 @@ interface Ui {
   setSendFrac(f: number): void;
   setGoal(g: 1 | 2): void;
   setLayer(l: MapLayer): void;
-  beginOrder(kind?: OrderKind): void;
+  beginOrder(kind?: OrderKind, arg?: number, sub?: 'bb' | 'carrier'): void;
+  selectFleet(id: number): void;
+  selectSea(id: number): void;
   setFortMarker(m: [number, number] | null): void;
   cancelOrder(): void;
   setOverlay(o: Overlay): void;
@@ -91,23 +98,25 @@ export function loadPixelScale(get: (k: string) => string | null = lsGet): Pixel
 Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, orderMode: false, orderKind: 'march', fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
-  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
+  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1 }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
   setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
   setGoal: (goal) => set({ goal }),
   setLayer: (layer) => set({ layer }),
-  beginOrder: (orderKind = 'march') => set({ orderMode: true, orderKind }),
+  beginOrder: (orderKind = 'march', orderArg = -1, orderSub = 'bb') => set({ orderMode: true, orderKind, orderArg, orderSub }),
+  selectFleet: (fleet) => { set({ fleet, seaSel: -1, orderMode: false }); Sfx.click(); },
+  selectSea: (seaSel) => { set({ seaSel, fleet: -1 }); Sfx.click(); },
   setFortMarker: (fortMarker) => set({ fortMarker }),
   cancelOrder: () => set({ orderMode: false }),
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
@@ -131,7 +140,7 @@ export const useUi = create<Ui>((set, get) => ({
     const s = get().session; if (!s) return; const err = s.send({ t: 'air', from, to, frac: get().sendFrac });
     if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); set({ orderMode: false, orderKind: 'march' }); get().bump();
   },
-  order: (cmd) => { const s = get().session; if (!s) return false; const err = s.send(cmd); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); return !err; },
+  order: (cmd) => { const s = get().session; if (!s) return false; const err = s.send(cmd); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); if (get().orderMode && get().orderKind !== 'march' && get().orderKind !== 'air') set({ orderMode: false, orderKind: 'march' }); get().bump(); return !err; },
   assault: (region) => { const s = get().session; if (!s) return; const err = s.send({ t: 'assault', region }); if (err) { get().say(err); Sfx.deny(); } else Sfx.order(); get().bump(); },
   march: (from, to, brk) => {
     const s = get().session; if (!s) return; const err = s.send({ t: 'march', from, to, frac: get().sendFrac, brk, goal: get().goal });

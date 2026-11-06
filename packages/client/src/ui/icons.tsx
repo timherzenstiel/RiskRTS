@@ -6,7 +6,7 @@ const Svg = ({ children, size, className }: { children: ReactNode; size?: number
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" width={size} height={size} className={className}>{children}</svg>
 );
 
-export type IconKey = UnitType | 'trench' | 'factory' | 'barracks' | 'airfield' | 'pill' | 'fort' | 'flak' | 'bunk' | 'sand' | 'wire' | 'patrol' | 'recon' | 'spy';
+export type IconKey = UnitType | 'trench' | 'factory' | 'barracks' | 'airfield' | 'pill' | 'fort' | 'flak' | 'bunk' | 'sand' | 'wire' | 'patrol' | 'recon' | 'spy' | 'trans' | 'land' | 'bb' | 'carrier' | 'port';
 
 export function Icon({ k, size, className }: { k: IconKey; size?: number; className?: string }) {
   let p: ReactNode;
@@ -28,6 +28,11 @@ export function Icon({ k, size, className }: { k: IconKey; size?: number; classN
     case 'patrol': p = <><path d="M4 13c1-3 4-4 7-4h4l3-3 1 1-1.5 3c1.5 1 2.5 2 2.5 4v1h-2l-1-2-1 2v4h-2v-4h-5l-1 4H6l.5-4.5L4 15z" /><circle cx="11" cy="5" r="2" /></>; break;
     case 'recon': p = <><path d="M2 10.5h20v2.2H2z" /><path d="M10 6h3v11h-3z" /><circle cx="11.5" cy="19.5" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.6" /></>; break;
     case 'spy': p = <><path d="M5 9h14l-1.5-4.5h-11z" /><path d="M3 9.5h18v1.8H3z" /><circle cx="8" cy="15" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.8" /><circle cx="16" cy="15" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M10.5 14.6h3v1.2h-3z" /><path d="M8 20c2 1.5 6 1.5 8 0" fill="none" stroke="currentColor" strokeWidth="1.6" /></>; break;
+    case 'trans': p = <><path d="M1 15h22l-3 5H4z" /><path d="M5 11h13v4H5z" /><path d="M8 6h2.4v5H8zM12.6 6H15v5h-2.4z" /></>; break;
+    case 'land': p = <><path d="M2 16h11l3-4h3v4l-2 4H4z" /><path d="M5 13h5v3H5z" /></>; break;
+    case 'bb': p = <><path d="M1 15h22l-2.5 4.5h-17z" /><path d="M7 11h9v4H7z" /><path d="M10 7h2v4h-2zM13.5 8h1.6v3h-1.6z" /><path d="M2 13.2h5v1H2zM16 13.2h6v1h-6z" /></>; break;
+    case 'carrier': p = <><path d="M1 13h22v2H1z" /><path d="M2 15h20l-2 4H4z" /><path d="M14 9h3v4h-3z" /><path d="M5 11.2h6v.9H5z" /></>; break;
+    case 'port': p = <><circle cx="12" cy="4.5" r="2.3" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M11 6.8h2V20h-2z" /><path d="M7 10h10v1.8H7z" /><path d="M4 14c.5 4 4 6.5 8 6.5s7.5-2.5 8-6.5l-2.2.8C17 17.6 14.8 19 12 19s-5-1.4-5.8-4.2z" /></>; break;
     case 'flak': p = <><path d="M4 20h16v-2H4z" /><path d="M8 18l2-5h4l2 5z" /><path d="M11 13L17.5 3l1.7 1-6.3 10z" /></>; break;
   }
   return <Svg size={size} className={className}>{p}</Svg>;

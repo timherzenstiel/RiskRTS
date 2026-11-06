@@ -22,12 +22,30 @@ export function Stage() {
     try {
       renderer = createWorldRenderer(canvas, labels, {
         onSelect: (id) => ui().select(id < 0 ? -1 : id),
-        onOrder: (id) => {
-          const { sel, session: s, orderMode, orderKind } = ui();
-          if (!s || id < 0) { ui().say('Pick a region to march on.'); return; }
+        onOrder: (id, zone) => {
+          const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal } = ui();
+          if (!s) return;
+          const W = buildWorld(), me = s.me, g = s.state;
+          // the navy: station warships in the zone clicked (or off the region clicked), carrier strikes, shipping, landings
+          if (orderMode && orderKind === 'station') {
+            const z = zone !== undefined && zone >= 0 ? zone : id >= 0 ? W.regions[id].zones[0] : -1;
+            if (z === undefined || z < 0) { ui().say('Click a sea zone to station the fleet in.'); return; }
+            ui().order(orderArg >= 0 ? { t: 'station', fleet: orderArg, zone: z } : { t: 'station', region: sel, zone: z, kind: orderSub }); return;
+          }
+          if (id < 0) { ui().say(orderMode ? 'Pick a region on the map.' : 'Pick a region to march on.'); return; }
+          if (orderMode && orderKind === 'cvair') { ui().order({ t: 'carrierAir', ship: orderArg, to: id }); return; }
           if (orderMode && orderKind === 'air' && sel >= 0) { if (id === sel) { ui().say('Pick a different region as the target.'); return; } ui().air(sel, id); return; }
-          if (sel < 0 || s.state.regions[sel].owner !== s.me) { ui().say('Select one of your own regions first, then right-click a neighbour.'); ui().cancelOrder(); return; }
-          if (!buildWorld().regions[sel].adj.includes(id)) { ui().say(id === sel ? 'Pick a different region as the target.' : `${buildWorld().regions[id].name} does not border ${buildWorld().regions[sel].name}. Infantry and tanks need a direct border; aircraft reach two borders.`); return; }
+          if (sel < 0 || g.regions[sel].owner !== me) { ui().say('Select one of your own regions first, then right-click a neighbour.'); ui().cancelOrder(); return; }
+          if (id === sel) { ui().say('Pick a different region as the target.'); return; }
+          if (orderMode && orderKind === 'ship') { ui().order({ t: 'ship', region: sel, post: -1, to: id, toPost: -1, frac: sendFrac }); return; }
+          if (orderMode && orderKind === 'landing') { ui().order({ t: 'landing', from: sel, to: id, frac: sendFrac, goal }); return; }
+          if (!W.regions[sel].adj.includes(id)) {
+            // over the sea: a far own coast by transport, an enemy coast by assault
+            const coastal = W.regions[sel].zones.length > 0 && W.regions[id].zones.length > 0;
+            if (coastal && g.regions[id].owner === me) { ui().order({ t: 'ship', region: sel, post: -1, to: id, toPost: -1, frac: sendFrac }); return; }
+            if (coastal && g.regions[id].owner !== me) { ui().order({ t: 'landing', from: sel, to: id, frac: sendFrac, goal }); return; }
+            ui().say(`${W.regions[id].name} does not border ${W.regions[sel].name}. Infantry and tanks need a direct border; aircraft reach two borders.`); return;
+          }
           ui().march(sel, id);
         },
         onHover: (id) => ui().setHover(id),

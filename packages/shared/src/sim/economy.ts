@@ -12,6 +12,7 @@ import { calendarTick, hasDoc } from './tech';
 import { allied, diploConvoy } from './diplomacy';
 import { weatherAt } from '../data/terrain';
 import { ownsCont, checkElim, checkMissions } from './missions';
+import { navyConvoy, seaLinks } from './navy';
 import type { GameState } from './types';
 
 export const DIFFICULTIES = [
@@ -119,9 +120,13 @@ export function updateSupplyLines(g: GameState, announce = false) {
   const reach = (o: number, min: number, out: Uint8Array) => {
     const seen = new Uint8Array(N), q: number[] = [];
     for (const r of g.regions) if (r.owner === o && isSrc(r)) { seen[r.id] = 1; q.push(r.id); }
+    // between the power's ports, over the sea (thin, full when it holds every zone on the way)
+    const sea = new Map<number, [number, number][]>();
+    for (const [a, b, ql] of seaLinks(g, o)) { (sea.get(a) ?? sea.set(a, []).get(a)!).push([b, ql]); (sea.get(b) ?? sea.set(b, []).get(b)!).push([a, ql]); }
     for (let h = 0; h < q.length; h++) {
       const i = q[h];
       for (const j of W.regions[i].adj) { const oj = g.regions[j].owner; if (!seen[j] && (oj === o || allied(g, o, oj)) && linkQuality(g, o, i, j) >= min) { seen[j] = 1; q.push(j); } }
+      for (const [j, ql] of sea.get(i) ?? []) if (!seen[j] && ql >= min) { seen[j] = 1; q.push(j); }
     }
     for (let i = 0; i < N; i++) if (seen[i] && g.regions[i].owner === o) out[i] = 1;
   };
@@ -183,6 +188,7 @@ export function supplyTick(g: GameState) {
     if (r.contested < 0) emit(g, { k: 'cleared', region: r.id, faction: r.owner });
   }
   spiesOnConvoy(g);
+  navyConvoy(g);
   deployOnConvoy(g);
   emit(g, { k: 'supply' });
   checkMissions(g);

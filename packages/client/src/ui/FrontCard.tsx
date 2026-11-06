@@ -1,5 +1,5 @@
 // Battle levers for one front: suppression, wire, shells, barrage level, over the top, stance, reinforcements and retreat.
-import { BARRAGES, SHELLS, STANCES, buildWorld, groundUnits, autoGoIn, moveK, shellsFor, type Barrage, type Battle, type GameState, type Stance } from '@riskrts/shared';
+import { BARRAGES, SHELLS, STANCES, buildWorld, groundUnits, autoGoIn, moveK, shellsFor, sideSupplied, type Barrage, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
@@ -23,7 +23,7 @@ function Supp({ label, v, mine }: { label: string; v: number; mine: boolean }) {
 
 /** Own regions next to a front that can send reinforcements. */
 export function reinforcers(g: GameState, b: Battle, me: number) {
-  return buildWorld().regions[b.region].adj.map(i => g.regions[i]).filter(r => r.owner === me && r.battle < 0 && groundUnits(r.units) >= 2);
+  return buildWorld().regions[b.region].land.map(i => g.regions[i]).filter(r => r.owner === me && r.battle < 0 && groundUnits(r.units) >= 2);
 }
 
 const STAGES = ['First line', 'Consolidating', 'Depth', 'Foothold'];
@@ -41,7 +41,7 @@ function StageRow({ g, me, b, att }: { g: GameState; me: number; b: Battle; att:
       <ol className="stages" aria-label="Stages of the offensive">
         {(b.goal === 1 && st !== 1 && st !== 2 ? [0, 3] : [0, 1, 2]).map(k => <li key={k} className={k === st ? 'on' : (k < st && st !== 3) || (k === 0 && st === 3) ? 'done' : ''}>{STAGES[k]}{k === 1 && st === 1 ? ` · ${left}s` : ''}</li>)}
       </ol>
-      {att && st === 3 && b.from >= 0 && g.regions[b.from]?.owner === me && <button className="btn sm primary" title="Carry the attack on into the depth of the region" onClick={() => { click(); useUi.getState().order({ t: 'order', region: b.from, post: b.region, k: 2 }); }}>Invade {W.regions[b.region].name}</button>}
+      {att && st === 3 && b.from >= 0 && b.from < 1000 && g.regions[b.from]?.owner === me && <button className="btn sm primary" title="Carry the attack on into the depth of the region" onClick={() => { click(); useUi.getState().order({ t: 'order', region: b.from, post: b.region, k: 2 }); }}>Invade {W.regions[b.region].name}</button>}
     </div>
   );
 }
@@ -54,7 +54,7 @@ export function FrontControls({ g, me, b, compact }: { g: GameState; me: number;
   const wire = b.wire0 > 0 ? Math.round(b.wire / b.wire0 * 100) : 0;
   if (!fights) return null;
   const shells = Math.floor(shellsFor(g, b, me)), lvl = (b.bar?.[me] ?? 1) as Barrage, st = (b.st?.[me] ?? 0) as Stance;
-  const local = !(b.def === me ? !g.regions[b.region].cut && g.regions[b.region].owner === me : b.from >= 0 && g.regions[b.from].owner === me && !g.regions[b.from].cut);
+  const local = !sideSupplied(g, b, me);
   const send = (cmd: Parameters<ReturnType<typeof useUi.getState>['order']>[0]) => { click(); ui().order(cmd); };
   const helpers = reinforcers(g, b, me);
   const goIn = Math.ceil(autoGoIn(g, b));

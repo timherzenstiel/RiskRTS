@@ -17,6 +17,8 @@ import { unitCost } from './rules';
 import { paceOf } from './battle';
 import { fogView, guessedUnits } from './fog';
 import { missionWants } from './missions';
+import { navyAi, navySave } from './ainavy';
+import { enemySea } from './navy';
 import type { Battle, FactionState, GameState, RegionState } from './types';
 
 type R = RegionState & { _th?: number };
@@ -59,7 +61,9 @@ export function aiThink(g: GameState, f: FactionState) {
   const P = nationOf(f.id).ai, W = world();
   const cap = g.cfg?.attackCap ?? 0;
   let guard = 50;
-  while (f.supply >= 1 && guard-- > 0 && border.length) {
+  // sea powers keep back the price of the next capital ship
+  const save = navySave(g, f, mine);
+  while (f.supply >= 1 + save && guard-- > 0 && border.length) {
     const facs = mine.filter(t => t.factory).length, bars = mine.filter(t => t.barracks).length, airs = mine.filter(t => t.airfield).length;
     const ok = mine.filter(t => t.contested < 0);
     if (f.supply >= COST.factory + 2 && facs < 1 + Math.floor(mine.length / 5) && rnd(g) < .4) { const c = ok.filter(t => !t.factory).sort((a, b) => a._th! - b._th!)[0]; if (c && !build(g, f.id, c, 'factory')) continue; }
@@ -112,14 +116,18 @@ export function aiThink(g: GameState, f: FactionState) {
   }
   let attacks = offensives(g, f.id).size;
   const room = () => !cap || attacks < cap;
+  const landers = (g.ships ?? []).some(s => s.owner === f.id && s.kind === 'land' && s.fleet < 0 && (s.ready ?? 0) <= g.time);
   for (const t of mine.filter(t => t.battle < 0).sort((a, b) => ownPower(b) - ownPower(a))) {
     if (attacks >= 2 + (cap ? 0 : 1) || !room()) break; if (groundUnits(t.units) < 3) continue;
     const avail = forcePower({ ...t.units, plane: 0 }, t.men, pw) * (.6 + .4 * t.mor / 100) * .85; let best: RegionState | null = null, bs = -1e9;
     for (const n of enemyNb(V, t, f.id)) {
       if (g.armies.some(a => a.owner === f.id && a.to === n.id && !a.decoy) || columnsAgainst(g, f.id, n.id).length || (t.fr?.[n.id]?.ord ?? 0) >= 1) continue;
       if (atPeace(g, f.id, n.owner)) continue;
-      const dp = defPower(n, t.id), margin = avail - dp * 1.3 * P.aggr - 1.5; if (margin <= 0) continue;
-      const sea = W.seaLane.has(t.id + '|' + n.id) || W.regions[n.id].seaAdj.length > 0;
+      // over a sea lane: only with landing craft, and not into an enemy-held sea
+      const lane = !W.regions[t.id].land.includes(n.id);
+      if (lane && (!landers || enemySea(g, f.id, W.laneZone.get(t.id + '|' + n.id) ?? -1))) continue;
+      const dp = defPower(n, t.id) * (lane ? 1.5 : 1), margin = avail - dp * 1.3 * P.aggr - 1.5; if (margin <= 0) continue;
+      const sea = lane || W.regions[n.id].seaAdj.length > 0;
       const s = margin + (missionWants(g, f, n.id) ? 6 : 0) + (n.capitalOf >= 0 ? 3 : 0) - dp * .2 + rnd(g) * 2 + (sea ? 2 * (P.navy - 1) : 0);
       if (s > bs) { bs = s; best = n; }
     }
@@ -148,12 +156,13 @@ export function aiThink(g: GameState, f: FactionState) {
   // shift reserves from the interior towards the front
   const dist: Record<number, number> = {}; const q: R[] = [];
   for (const t of mine) if (t.contested >= 0 || border.includes(t)) { dist[t.id] = 0; q.push(t); }
-  for (let h = 0; h < q.length; h++) { const t = q[h]; for (const j of world().regions[t.id].adj) { const n = g.regions[j] as R; if (n.owner === f.id && dist[j] === undefined) { dist[j] = dist[t.id] + 1; q.push(n); } } }
+  for (let h = 0; h < q.length; h++) { const t = q[h]; for (const j of world().regions[t.id].land) { const n = g.regions[j] as R; if (n.owner === f.id && dist[j] === undefined) { dist[j] = dist[t.id] + 1; q.push(n); } } }
   for (const t of mine) {
     if (t.battle >= 0 || !dist[t.id] || groundUnits(t.units) < 2) continue;
-    const n = world().regions[t.id].adj.map(j => g.regions[j]).filter(n => n.owner === f.id && dist[n.id] < dist[t.id])[0];
+    const n = world().regions[t.id].land.map(j => g.regions[j]).filter(n => n.owner === f.id && dist[n.id] < dist[t.id])[0];
     if (n) sendArmy(g, f.id, t.id, n.id, 1);
   }
+  navyAi(g, f, mine, V, () => attacks, cap);
 }
 
 /** Strength of each side on a front: [ours, theirs] in unit power, weighted by the hit points left. */

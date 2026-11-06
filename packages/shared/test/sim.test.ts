@@ -52,7 +52,7 @@ describe('commands', () => {
     const noFac = g.regions.find(r => r.owner === 0 && !r.factory)!;
     expect(applyCommand(g, 0, { t: 'recruit', region: noFac.id, unit: 'tank' })).toMatch(/factory/);
     g.factions[0].supply = 0;
-    expect(applyCommand(g, 0, { t: 'fortify', region: mine.id, kind: 'trench', sector: buildWorld().regions[mine.id].adj[0] })).toMatch(/Not enough/);
+    expect(applyCommand(g, 0, { t: 'fortify', region: mine.id, kind: 'trench', sector: buildWorld().regions[mine.id].sectors[0] })).toMatch(/Not enough/);
   });
   it('rejects marching into non-neighbours', () => {
     const far = g.regions.find(r => !buildWorld().regions[mine.id].adj.includes(r.id) && r.id !== mine.id)!;
@@ -103,10 +103,10 @@ describe('rules: income and attack cap', () => {
   });
   it('caps simultaneous attacks but not reinforcement', () => {
     const { g, W, B } = duel();
-    const mine = W.regions[B].adj.filter(i => i !== W.byName['Poland'].id).slice(0, 4);
+    const mine = W.regions[B].land.filter(i => i !== W.byName['Poland'].id).slice(0, 4);
     for (const i of mine) { g.regions[i].owner = 0; g.regions[i].units.inf = 6; }
     g.regions[B].units.inf = 40;
-    const targets = W.regions[B].adj.filter(i => g.regions[i].owner === 0);
+    const targets = W.regions[B].land.filter(i => g.regions[i].owner === 0);
     // attack three foreign regions from Germany: third is refused at cap 2
     fill(g);
     const errs = targets.slice(0, 3).map(t => applyCommand(g, 1, { t: 'march', from: B, to: t, frac: .2 }));
@@ -120,7 +120,7 @@ describe('rules: income and attack cap', () => {
 describe('rules: defences by sector', () => {
   it('only the attacked border and interior defences fight; others hold out and contest the region', () => {
     const { g, A, B, W } = duel();
-    const other = W.regions[B].adj.find(i => i !== A)!;
+    const other = W.regions[B].land.find(i => i !== A)!;
     g.factions[1].supply = 50;
     expect(fortify(g, 1, g.regions[B], 'pill', A)).toBeNull();
     expect(fortify(g, 1, g.regions[B], 'pill', other)).toBeNull();

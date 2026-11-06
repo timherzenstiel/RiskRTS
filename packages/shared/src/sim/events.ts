@@ -1,13 +1,15 @@
 // Turns structured game events into text for a given viewer, so server and clients phrase them identically.
 import { FACTIONS, cap } from '../data/factions';
 import { world } from './core';
+import { SHIP } from '../data/sea';
+import { sectorName } from '../world/zones';
 import { techDef, doctrineDef } from '../data/tech';
 import { PHRASES, TREATY_NAMES, type GameEvent, type GameState } from './types';
 
 export interface Described { text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number; offer?: number }
 
 export function describeEvent(g: GameState, e: GameEvent, me: number): Described | null {
-  const R = (i: number) => world().regions[i].name, F = (i: number) => FACTIONS[i];
+  const R = (i: number) => world().regions[i].name, F = (i: number) => FACTIONS[i], Z = (z: number) => world().zones[z]?.name ?? 'the open sea', S = (k: number) => sectorName(world(), k);
   switch (e.k) {
     case 'start': return { text: 'War is declared. Sealed orders received.', cls: 'me' };
     case 'march': return e.faction === me && g.regions[e.to].owner !== me ? { text: `${e.units} formation${e.units === 1 ? '' : 's'} march from ${R(e.from)} on ${R(e.to)}.`, cls: 'me' } : null;
@@ -28,7 +30,7 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       return null;
     case 'breakthrough':
       if (e.faction === me) return { text: `Breakthrough at ${R(e.region)}! Our troops fall on the defenders of the other front from behind.`, cls: 'good', region: e.region };
-      if (g.regions[e.region].owner === me) return { text: `The ${e.from >= 0 ? R(e.from) + ' ' : ''}front of ${R(e.region)} has broken. The enemy is behind our lines.`, cls: 'bad', region: e.region };
+      if (g.regions[e.region].owner === me) return { text: `The ${e.from >= 0 ? S(e.from) + ' ' : ''}front of ${R(e.region)} has broken. The enemy is behind our lines.`, cls: 'bad', region: e.region };
       return null;
     case 'overTop':
       if (e.faction === me) return { text: `Whistles blow at ${R(e.region)}: our men go over the top.`, cls: 'me', region: e.region };
@@ -65,7 +67,7 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       return null;
     case 'firstLine':
       if (e.faction === me) return { text: e.hold ? `We hold the enemy's first line at ${R(e.region)}. The troops dig in there; order the invasion when ready.` : `The first line at ${R(e.region)} is ours. The troops consolidate before pushing into the depth.`, cls: 'good', region: e.region };
-      if (e.def === me) return { text: `The enemy has taken our first line at ${R(e.region)} on the border with ${R(e.from)}.`, cls: 'bad', region: e.region };
+      if (e.def === me) return { text: e.from >= 1000 ? `The enemy has taken the beach of ${R(e.region)} on the ${S(e.from)}.` : `The enemy has taken our first line at ${R(e.region)} on the border with ${R(e.from)}.`, cls: 'bad', region: e.region };
       return null;
     case 'depth':
       if (e.faction === me) return { text: `Our troops push into the depth of ${R(e.region)}.`, cls: 'me', region: e.region };
@@ -121,6 +123,30 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
     }
     case 'eliminated': return { text: `${cap(F(e.faction).the)} has been destroyed.`, cls: e.faction === me ? 'bad' : '' };
     case 'newOrders': return e.faction === me ? { text: 'Your target fell to another power. New orders: hold 30 regions.', cls: 'me' } : null;
+    case 'shipBuilt': return e.faction === me ? { text: `A new ${SHIP[e.kind].one} is ready in ${R(e.region)}.`, cls: 'good', region: e.region } : null;
+    case 'portBuilt': return e.faction === me ? { text: `The port of ${R(e.region)} is open.`, cls: 'good', region: e.region } : null;
+    case 'shipped': return e.faction === me ? { text: `${e.units} formation${e.units === 1 ? '' : 's'} embark in ${R(e.from)} for ${R(e.to)}.`, cls: 'me', region: e.to } : null;
+    case 'offshore':
+      if (e.owner === me) return { text: `Enemy fleet off the coast of ${R(e.region)} on the ${Z(e.zone)}: about ${e.est} battalions. A landing is coming!`, cls: 'bad', region: e.region };
+      if (e.faction === me) return { text: `Our assault fleet assembles off ${R(e.region)}. The landing goes in shortly.`, cls: 'me', region: e.region };
+      return null;
+    case 'landing':
+      if (e.faction === me) return e.ok ? { text: `The first wave goes ashore at ${R(e.region)}.`, cls: 'me', region: e.region } : { text: `The landing at ${R(e.region)} has failed. The boats take off what is left.`, cls: 'bad', region: e.region };
+      if (e.owner === me) return e.ok ? { text: `The enemy is landing at ${R(e.region)}!`, cls: 'bad', region: e.region } : { text: `The landing at ${R(e.region)} is thrown back into the sea.`, cls: 'good', region: e.region };
+      return null;
+    case 'convoyLost':
+      if (e.faction !== me) return null;
+      return { text: e.by === 'uboat' ? `Convoy torpedoed in the ${Z(e.zone)}: ${e.ships} ${e.ships === 1 ? 'transport' : 'transports'}, ${e.men} men lost.` : e.ships ? `${e.ships} of our ships sunk in the ${Z(e.zone)}${e.men ? `, ${e.men} men lost with them` : ''}.` : `${e.men} men lost at sea in the ${Z(e.zone)}.`, cls: 'bad' };
+    case 'scuttled': return e.faction === me ? { text: `Our ships in the port of ${R(e.region)} were scuttled as the town fell.`, cls: 'bad', region: e.region } : null;
+    case 'strait': return null;
+    case 'seaBattle': {
+      const side = e.sides.findIndex(s => s.includes(me)); if (side < 0) return null;
+      const foe = e.sides[1 - side].map(f => F(f).short).join(', ');
+      if (e.start) return { text: `Naval battle in the ${Z(e.zone)}: our ships engage the ${foe} fleet.`, cls: 'me' };
+      const lost = (i: number) => { const s = e.sunk[i] ?? {}; const n = (s.dn ?? 0) + (s.cv ?? 0), d = s.dd ?? 0, t = (s.tr ?? 0) + (s.lc ?? 0); return [n ? `${n} capital ship${n === 1 ? '' : 's'}` : '', d ? `${d} destroyer${d === 1 ? '' : 's'}` : '', t ? `${t} transport${t === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ') || 'nothing'; };
+      const res = e.winner === side ? 'the enemy breaks off' : e.winner === 1 - side ? 'our fleet withdraws' : 'neither side gives way';
+      return { text: `Battle of the ${Z(e.zone)}: ${res}. We lost ${lost(side)}; the ${foe} lost ${lost(1 - side)}.`, cls: e.winner === side ? 'good' : e.winner === 1 - side ? 'bad' : '' };
+    }
     default: return null;
   }
 }

@@ -1,7 +1,7 @@
 // Three.js world renderer: a Command & Conquer style top-down war map that zooms into painted, pixel-art ground and battlefields.
 // Implements the contract in api.ts. It never mutates game state; it only reads session.state and drains visual effects.
 import * as THREE from 'three';
-import { AIR_RANGE, HW, buildWorld, hops, tileAtW, wrapDx, type Battle, type Fx, type GameState, type World } from '@riskrts/shared';
+import { AIR_RANGE, HW, buildWorld, carrierAt, carrierHops, fleetPos, hops, tileAtW, wrapDx, type Battle, type Fx, type GameState, type World } from '@riskrts/shared';
 import type { Session } from '../game/session';
 import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
@@ -18,6 +18,7 @@ import { Input } from './input';
 import { Labels } from './labels';
 import { NetworkLayer } from './network';
 import { MapBattles } from './mapBattle';
+import { NavyDraw } from './navy';
 import { Models } from './models';
 import { MeshPools } from './meshPools';
 import { Impostors } from './impostors';
@@ -61,6 +62,10 @@ class WorldRenderer implements WorldRendererApi {
   private readonly ambient = new Ambient();
   private readonly dyn: DynamicDraw;
   private readonly war: MapBattles;
+  private readonly navy: NavyDraw;
+  /** Sea zone and world point under the last pointer pick (-1 on land). */
+  private pickZone = -1; private pickX = 0; private pickZ = 0;
+  private lastDt = 0;
   private readonly net: NetworkLayer;
   /** True when a battle's close-up troops are on screen (map-scale fighting is drawn otherwise). */
   private readonly isClose = (b: Battle) => { const v = this.views.get(b.id); return !!v && v.visible; };
@@ -114,6 +119,7 @@ class WorldRenderer implements WorldRendererApi {
       this.dyn = new DynamicDraw(this.world, this.terrain, this.models, this.lines, this.fx);
       this.net = new NetworkLayer(this.world, this.terrain);
       this.war = new MapBattles(this.world, this.terrain, this.models, this.fx);
+      this.navy = new NavyDraw(this.world, this.terrain, this.models, this.fx);
       this.post = new Post(renderer, this.scene, this.rig.camera);
     } catch (e) {
       renderer.dispose();
@@ -124,7 +130,8 @@ class WorldRenderer implements WorldRendererApi {
     this.rig.snap();
 
     this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); },
-      (id) => { cb.onSelect(id); const u = useUi.getState(), st = this.session?.state; if (st && st.regions[id].owner === this.session!.me) u.setTab('deploy'); });
+      (id) => { cb.onSelect(id); const u = useUi.getState(), st = this.session?.state; if (st && st.regions[id].owner === this.session!.me) u.setTab('deploy'); },
+      (fleet) => useUi.getState().selectFleet(fleet), (sea) => { useUi.getState().selectSea(sea); this.flyToSea(sea); });
     this.labelCtx = {
       g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
@@ -133,7 +140,7 @@ class WorldRenderer implements WorldRendererApi {
 
     this.input = new Input({
       canvas, rig: this.rig, regionAt: (x, y) => this.regionAt(x, y), orderMode: () => useUi.getState().orderMode,
-      onSelect: (id) => { if (!this.pickSector(id)) cb.onSelect(id); }, onOrder: (id) => cb.onOrder(id),
+      onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); }, onOrder: (id) => cb.onOrder(id, id < 0 ? this.pickZone : undefined),
       onHover: (id) => { if (id !== this.lastHover) { this.lastHover = id; cb.onHover(id); } },
       onDoubleClick: (id) => { const b = this.session?.state.regions[id].battle ?? -1; this.flyTo(id, b >= 0 ? 6 : Math.min(this.rig.gdist, 24)); },
     });
@@ -178,12 +185,28 @@ class WorldRenderer implements WorldRendererApi {
   private pickSector(id: number): boolean {
     const ui = useUi.getState(), sel = ui.sel, g = this.session?.state;
     if (!g || sel < 0 || ui.tab !== 'fort' || g.regions[sel]?.owner !== this.session!.me) return false;
-    if (id !== sel && !this.world.regions[sel].adj.includes(id)) return false;
+    if (id !== sel && id >= 0 && !this.world.regions[sel].adj.includes(id)) return false;
     const x = this.tmpV.x, z = this.tmpV.z; let best = -2, bd = .7 * .7;
-    for (const s of [...this.world.regions[sel].adj, -1]) { const p = sectorPoint(this.world, sel, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
+    for (const s of [...this.world.regions[sel].sectors, -1]) { const p = sectorPoint(this.world, sel, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
     if (best < -1) return false;
     ui.setFortMarker([sel, best]); Sfx.click(); return true;
   }
+
+  /** A click on the water picks the nearest fleet or naval battle under the pointer. */
+  private pickSea(): boolean {
+    const g = this.session?.state; if (!g) return false;
+    const x = this.pickX, z = this.pickZ, r = Math.max(.8, this.rig.dist * .03), ui = useUi.getState();
+    for (const b of g.seaBattles ?? []) if (!b.ended && Math.hypot(wrapDx(x, b.x), z - b.z) < Math.max(3, r)) { ui.selectSea(b.id); return true; }
+    let best = -1, bd = r * r;
+    for (const fl of g.fleets) { if (!fl.path.length || fl.sea !== undefined) continue; const p = fleetPos(fl), d = wrapDx(x, p.x) ** 2 + (z - p.z) ** 2; if (d < bd) { bd = d; best = fl.id; } }
+    if (best >= 0) { ui.selectFleet(best); return true; }
+    if (ui.fleet >= 0 || ui.seaSel >= 0) { ui.selectFleet(-1); return true; }
+    return false;
+  }
+
+  /** Fly to a naval battle. */
+  flyToSea(id: number, distance = 9) { const b = this.session?.state.seaBattles?.find(x => x.id === id); if (b) this.rig.flyTo(b.x, b.z, distance); }
+  flyToPoint(x: number, z: number, distance?: number) { this.rig.flyTo(x, z, distance); }
 
   /** Fly to one front (battle). */
   flyToBattle(id: number, distance = 6) {
@@ -212,13 +235,16 @@ class WorldRenderer implements WorldRendererApi {
   frame(dtReal: number) {
     if (this.disposed) return;
     const t0 = performance.now();
-    const dt = clamp(dtReal, 0, .05), ui = useUi.getState(), s = this.session, g = s ? s.state : null;
+    const dt = clamp(dtReal, 0, .05), ui = useUi.getState(), s = this.session, g = s ? s.state : null; this.lastDt = dt;
     this.now += dt; this.frameNo++;
     if (ui.quality !== this.lastStoreQ) { this.lastStoreQ = ui.quality; if (ui.quality !== this.quality) this.setQuality(ui.quality); }
     { // context cursor: attack / march / air / no-go while giving orders, spade while fortifying, binoculars over unknown land
       let c = '';
       const me = s?.me ?? -1, hov = ui.hover, sel = ui.sel, rs = g && hov >= 0 ? g.regions[hov] : null;
-      if (ui.orderMode) c = ui.orderKind === 'air' ? 'c-air' : !rs ? 'c-no' : sel >= 0 && !this.world.regions[sel].adj.includes(hov) ? 'c-no' : rs.owner === me ? 'c-move' : 'c-atk';
+      if (ui.orderMode && ui.orderKind === 'station') c = 'c-move';
+      else if (ui.orderMode && ui.orderKind === 'cvair') c = 'c-air';
+      else if (ui.orderMode && (ui.orderKind === 'ship' || ui.orderKind === 'landing')) c = !rs || !this.world.regions[hov].zones.length ? 'c-no' : ui.orderKind === 'ship' ? (rs.owner === me ? 'c-move' : 'c-no') : rs.owner !== me ? 'c-atk' : 'c-no';
+      else if (ui.orderMode) c = ui.orderKind === 'air' ? 'c-air' : !rs ? 'c-no' : sel >= 0 && !this.world.regions[sel].adj.includes(hov) ? 'c-no' : rs.owner === me ? 'c-move' : 'c-atk';
       else if (ui.tab === 'fort' && sel >= 0 && g?.regions[sel].owner === me) c = 'c-fort';
       else if (rs && rs.owner !== me && (rs.vis ?? 3) < 2) c = 'c-scout';
       if (c !== this.cursorCls) { if (this.cursorCls) this.canvas.classList.remove(this.cursorCls); if (c) this.canvas.classList.add(c); this.cursorCls = c; }
@@ -284,6 +310,7 @@ class WorldRenderer implements WorldRendererApi {
   private regionAt(cx: number, cy: number): number {
     if (!this.rig.screenToWorld(cx, cy, this.canvas.getBoundingClientRect(), this.tmpV)) return -1;
     const i = tileAtW(this.tmpV.x, this.tmpV.z);
+    this.pickX = this.tmpV.x; this.pickZ = this.tmpV.z; this.pickZone = i >= 0 && !this.world.land[i] ? this.world.zoneOf[i] : -1;
     return (i >= 0 && this.world.land[i]) ? this.world.terrOf[i] : -1;
   }
 
@@ -291,6 +318,9 @@ class WorldRenderer implements WorldRendererApi {
     const g = this.session?.state, ui = useUi.getState(), sel = ui.sel; if (!g || sel < 0) return false;
     const s = g.regions[sel]; if (!s || s.owner !== this.session!.me) return false;
     if (ui.orderMode && ui.orderKind === 'air') return id !== sel && hops(sel, id, AIR_RANGE) <= AIR_RANGE;
+    if (ui.orderMode && ui.orderKind === 'ship') return id !== sel && g.regions[id].owner === s.owner && this.world.regions[id].zones.length > 0;
+    if (ui.orderMode && ui.orderKind === 'landing') return g.regions[id].owner !== s.owner && this.world.regions[id].zones.length > 0;
+    if (ui.orderMode && ui.orderKind === 'cvair') { const cv = g.ships.find(x => x.id === ui.orderArg); const at = cv ? carrierAt(g, cv) : null; return !!at && g.regions[id].owner !== s.owner && carrierHops(at.zone, id) <= AIR_RANGE; }
     return this.world.regions[sel].adj.includes(id) && g.regions[id].owner !== s.owner;
   }
 
@@ -373,6 +403,7 @@ class WorldRenderer implements WorldRendererApi {
   private processFx(s: Session) {
     const list = s.drainFx();
     for (const f of list) {
+      if (!('b' in f)) { this.navy.effect(f); continue; }
       if (!this.visible.has(f.b)) continue;
       const v = this.views.get(f.b); if (!v) continue;
       this.spawnFx(v, f);
@@ -407,7 +438,9 @@ class WorldRenderer implements WorldRendererApi {
       fx.spawn(wx, y + .05, wz, 0, .1, 0, 0, .1, .04, .07, K.flash, F_GLOW);
       fx.spawn(wx, y + .06, wz, 0, .08, 0, 0, 1.6, .03, .11, K.smoke, F_HOT);
       for (let i = 0; i < 3; i++) { const an = Math.random() * 6.28; fx.spawn(wx, y + .02, wz, Math.cos(an) * .12, .02, Math.sin(an) * .12, 0, 1.4, .03, .09, K.dust, F_DUST); }
-    } else {
+    } else if (f.k === 'bomb') {
+      this.navy.bombard(v.cx + f.x * BS, v.cz + f.z * BS, v.cx + f.tx * BS, v.cz + f.tz * BS, fy(f.tx, f.tz), f.fl);
+    } else if (f.k === 'boom') {
       const s = f.s * .65, wx = v.cx + f.x * BS, wz = v.cz + f.z * BS, y = fy(f.x, f.z);
       Sfx.boom(wx, wz, s);
       this.blast(wx, y, wz, s, 1);
@@ -434,6 +467,7 @@ class WorldRenderer implements WorldRendererApi {
     this.models.hi = rig.dist < 7; this.models.hiMesh = rig.dist < 12; this.models.t = T;
     if (g) {
       this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
+      this.navy.me = this.dyn.me; this.navy.zoomK = this.dyn.zoomK; this.navy.fleet = useUi.getState().fleet; this.navy.draw(g, rig, T, this.lastDt);
       this.net.draw(lines, g, this.session?.me ?? -1, rig);
       for (const b of g.battles) {
         const v = this.views.get(b.id); if (!v || !v.visible) continue;

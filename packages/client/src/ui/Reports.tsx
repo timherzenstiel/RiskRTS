@@ -1,5 +1,5 @@
 // After-action reports: what each battle cost both sides, the shells fired, how far the attackers got.
-import { FACTIONS, UNIT_TYPES, UT, buildWorld, type Report } from '@riskrts/shared';
+import { FACTIONS, UNIT_TYPES, UT, buildWorld, sectorName, type Report } from '@riskrts/shared';
 import { dateStr, useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { Modal } from './Modal';
@@ -12,7 +12,7 @@ function Detail({ r, me }: { r: Report; me: number }) {
   const win = r.winner === null ? 'No one held the field.' : r.winner === me ? 'We held the field.' : `${FACTIONS[r.winner].name} held the field.`;
   return (
     <div className="aar">
-      <p className="lede small">{r.from >= 0 ? `Over the ${W.regions[r.from].name} border · ` : ''}{Math.floor(r.dur / 60)} min {r.dur % 60} s · the attackers {REACH[r.reach]}. {win}</p>
+      <p className="lede small">{r.from >= 0 ? `${r.from >= 1000 ? 'On the ' + sectorName(W, r.from) : `Over the ${W.regions[r.from].name} border`} · ` : ''}{Math.floor(r.dur / 60)} min {r.dur % 60} s · the attackers {REACH[r.reach]}. {win}</p>
       <table>
         <thead><tr><th />{UNIT_TYPES.map(k => <th key={k}>{UT[k].short}</th>)}<th>Men</th><th>Shells</th><th>Morale</th></tr></thead>
         <tbody>

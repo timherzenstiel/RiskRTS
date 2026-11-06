@@ -2,7 +2,8 @@
 // observes an estimate of the troops and the defences facing it; everything else it knows only from reconnaissance reports
 // (cavalry patrols, reconnaissance flights, spies), which age. Views are built from the authoritative state for one viewer:
 // the local player's screen, each network guest's snapshots and each computer power's decisions all go through fogView.
-import { emptyUnits, type Units } from '../data/units';
+import { isCoast, zoneAt, zoneOfKey } from '../world/zones';
+import { emptyUnits, groundUnits, type Units } from '../data/units';
 import { emit, menTotal, rnd, world } from './core';
 import type { Army, Battle, Corps, Defence, GameState, Intel, RegionState, Works } from './types';
 import { groupMen } from './posts';
@@ -88,19 +89,29 @@ export function estimateMen(g: GameState, key: number, m: number): [number, numb
   return [Math.max(100, Math.floor(c * .7 / 100) * 100), Math.max(100, Math.ceil(c * 1.3 / 100) * 100)];
 }
 
+/** Sea zones a power watches: it (or an ally) has a coast on them, or ships at sea there. */
+export function seenZones(g: GameState, fid: number): boolean[] {
+  const W = world(), out = W.zones.map(() => false);
+  if (fid < 0 || g.over) return out.map(() => true);
+  const mates = (o: number) => o === fid || (o >= 0 && allied(g, fid, o));
+  for (const r of g.regions) if (mates(r.owner)) for (const z of W.regions[r.id].zones) out[z] = true;
+  for (const fl of g.fleets ?? []) if (mates(fl.owner) && fl.zs.length) { const z = zoneAt(fl.zs, fl.d); if (z >= 0) out[z] = true; }
+  return out;
+}
+
 /** Region record as `fid` sees it. */
-function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: Intel | null, spied: boolean): RegionState {
+function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: Intel | null, spied: boolean, zones: boolean[]): RegionState {
   if (vis >= 3) return { ...r, units: { ...r.units }, men: { ...r.men }, defs: r.defs, works: r.works, vis: 3, spied };
-  const W = world(), mine = (s: number) => s >= 0 && g.regions[s]?.owner === fid;
+  const W = world(), mine = (s: number) => isCoast(s) ? zones[zoneOfKey(s)] : s >= 0 && g.regions[s]?.owner === fid;
   // the viewer's own holdouts are always known; a report fills in what lies beyond
   const defs: Defence[] = r.defs.filter(d => d.f === fid);
   const works: Record<number, Works> = {};
   if (it && it.owner === r.owner) { for (const d of it.defs) if (!(vis >= 1 && mine(d.s))) defs.push(d); for (const [k, w] of Object.entries(it.works)) works[+k] = w; }
-  if (vis >= 1) for (const s of W.regions[r.id].adj) if (mine(s)) { for (const d of r.defs) if (d.s === s && d.f === r.owner) defs.push(d); if (r.works[s]) works[s] = r.works[s]; else delete works[s]; }
+  if (vis >= 1) for (const s of W.regions[r.id].sectors) if (mine(s)) { for (const d of r.defs) if (d.s === s && d.f === r.owner) defs.push(d); if (r.works[s]) works[s] = r.works[s]; else delete works[s]; }
   const known = it && it.owner === r.owner ? it : null;
   // corps: those on a report, and those across the viewer's own borders as an estimate (a fake concentration swells the biggest)
   let fr: Record<number, Corps> | undefined = known?.fr ? cloneCorps(known.fr) : undefined;
-  if (vis >= 1) for (const s of W.regions[r.id].adj) if (mine(s)) {
+  if (vis >= 1) for (const s of W.regions[r.id].sectors) if (mine(s)) {
     const c = r.fr?.[s];
     if (fr) delete fr[s];
     if (!c) continue;
@@ -110,7 +121,7 @@ function regionView(g: GameState, fid: number, r: RegionState, vis: number, it: 
   return {
     fr,
     id: r.id, owner: r.owner, units: known ? { ...known.units } : emptyUnits(), men: known ? { ...known.men } : emptyUnits(),
-    factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false,
+    factory: known?.factory ?? false, barracks: known?.barracks ?? false, airfield: known?.airfield ?? false, port: r.port, portAt: vis >= 1 ? r.portAt : undefined,
     supplyQ: undefined, bombed: vis >= 1 ? r.bombed : undefined, defs, works, mor: 70, home: r.home, cut: false, strike: vis >= 1 ? r.strike : undefined, contested: r.contested, capitalOf: r.capitalOf, battle: vis >= 1 ? r.battle : -1, stance: 0, cr: vis >= 1 ? r.cr : undefined,
     vis, seen: known ? known.day : undefined, est: vis >= 1 ? estimate(g, r, it?.day ?? -1) : undefined,
   };
@@ -122,9 +133,17 @@ export function fogView(g: GameState, fid: number): GameState {
   // troops forming up in the middle of a region are only seen in full view (a spy there); once they march, observers see them
   const seeArmy = (a: Army) => a.owner === fid || (a.wait ? vis[a.from] >= 3 : vis[a.to] >= 1 || vis[a.from] >= 1);
   const seeBattle = (b: Battle) => b.sides.includes(fid) || vis[b.region] >= 1;
+  // at sea: own and allied ships always; others' fleets in watched zones (troops aboard as a rough count), docked ships in ports in view
+  const zones = seenZones(g, fid), mates = (o: number) => o === fid || (o >= 0 && allied(g, fid, o)) || fid < 0 || g.over;
+  const fleets = (g.fleets ?? []).filter(fl => mates(fl.owner) || (fl.zs.length > 0 && zones[zoneAt(fl.zs, fl.d)] && fl.state !== 'muster'))
+    .map(fl => mates(fl.owner) ? fl : { ...fl, cargo: { ...emptyUnits(), inf: Math.round(groundUnits(fl.cargo) / 5) * 5 }, men: emptyUnits(), toPost: undefined, from: -1, to: fl.task === 'assault' && fl.state !== 'sail' ? fl.to : -1 });
+  const seenFleet = new Set(fleets.map(f => f.id));
+  const ships = (g.ships ?? []).filter(s => mates(s.owner) || (s.fleet >= 0 ? seenFleet.has(s.fleet) : s.port >= 0 && (vis[s.port] >= 1) && (s.ready ?? 0) <= g.time));
+  const seaBattles = (g.seaBattles ?? []).filter(b => b.sides.some(side => side.some(mates)) || zones[b.zone]);
   return {
     ...g,
-    regions: g.regions.map(r => regionView(g, fid, r, vis[r.id], it[r.id] ?? null, spied.has(r.id))),
+    ships, fleets, seaBattles,
+    regions: g.regions.map(r => regionView(g, fid, r, vis[r.id], it[r.id] ?? null, spied.has(r.id), zones)),
     factions: g.factions.map(f => (f.id === fid || g.over) ? f : { ...f, mission: null }),
     // a decoy looks like the real thing to everyone but its owner
     armies: g.armies.filter(seeArmy).map(a => !a.decoy || a.owner === fid ? a : { ...a, decoy: undefined, fake: undefined, units: { ...a.units, inf: a.fake ?? 8 }, men: { ...a.men, inf: (a.fake ?? 8) * 100 } }),

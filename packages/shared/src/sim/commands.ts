@@ -23,6 +23,11 @@ import { bombedNow } from './economy';
 import { recordIntel, MAX_SPIES } from './fog';
 import { ASSEMBLE, UNREG, armyNo, autoDeploy, column, columnArrives, fixPosts, formTime, groupUnits, landRoute, mainOf, moveK, routeColumn, setAttackCheck, takeGroup } from './posts';
 import { allied } from './diplomacy';
+import { buildPort, buildShip, coastal, dock, landing, shipTroops, station } from './navy';
+import { breakOff } from './naval';
+import { carrierAir, embarkAir, landOnCarrier } from './carrier';
+import { isCoast } from '../world/zones';
+import { SHIP_KINDS } from '../data/sea';
 import type { Army, Battle, BuildKind, Command, GameState, Order, RegionState } from './types';
 import type { Units } from '../data/units';
 
@@ -72,6 +77,7 @@ export function build(g: GameState, fid: number, r: RegionState, kind: BuildKind
   const f = g.factions[fid];
   if (r.owner !== fid) return 'You can only build in your own regions.';
   if (r.contested >= 0) return contestedMsg(r);
+  if (kind === 'port') return buildPort(g, fid, r);
   if (r[kind]) return 'Already built.';
   if (kind === 'airfield' && !techOn(g, fid, 'air')) return locked(g, fid, 'air', 'Airfields');
   const c = buildCostOf(fid, kind);
@@ -101,7 +107,7 @@ export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKin
   if (r.owner !== fid) return 'You can only fortify your own regions.';
   if (r.contested >= 0) return contestedMsg(r);
   if (!(kind in DT) && !isWork(kind)) return 'Invalid order.';
-  if (sector !== -1 && !W.regions[r.id].adj.includes(sector)) return 'That border does not belong to this region.';
+  if (sector !== -1 && !W.regions[r.id].sectors.includes(sector)) return 'That border does not belong to this region.';
   if (isWork(kind) && sector < 0) return 'Trenches, sandbags and wire are dug on a border. Pick one.';
   if (kind === 'trench' && worksAt(r, sector).tr >= 1 && !techOn(g, fid, 'trench2')) return locked(g, fid, 'trench2', 'Deeper trenches');
   if (kind === 'trench' && worksAt(r, sector).tr >= 2 && !techOn(g, fid, 'trench3')) return locked(g, fid, 'trench3', 'Trench III systems');
@@ -141,7 +147,7 @@ export function formArmy(g: GameState, fid: number, fromId: number, toId: number
   if (!A || !B) return 'Unknown region.';
   if (A.owner !== fid) return 'Select one of your own regions first.';
   if (A.battle >= 0 && !frontsOf(g, A.id).every(b => b.goal)) return `${WA.name} is under attack. Its troops cannot leave.`;
-  if (!WA.adj.includes(toId)) return `${WB.name} does not border ${WA.name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
+  if (!WA.land.includes(toId)) return WA.seaAdj.includes(toId) ? `${WB.name} lies across the sea from ${WA.name}. Troops cross it by ship.` : `${WB.name} does not border ${WA.name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
   const tot = groundUnits(A.units); if (tot < 2) return `${WA.name} needs at least 2 ground formations to march. One always stays behind.`;
   const main = mainOf(A); if (groundUnits(main) < 1) return `The main army of ${WA.name} is empty: its troops stand on the borders. Move some back to the centre, or give the corps on the border its orders.`;
   const n = shareOf(main, frac, groundUnits(main) >= tot);
@@ -171,15 +177,19 @@ export function sendArmy(g: GameState, fid: number, fromId: number, toId: number
   if (!A || !B) return 'Unknown region.';
   if (B.owner === fid || (B.owner >= 0 && allied(g, fid, B.owner))) {
     if (B.owner !== fid) return 'Your troops do not garrison allied regions.';
-    const a = formArmy(g, fid, fromId, toId, frac, post !== undefined && W.regions[toId].adj.includes(post) ? post : -1); if (typeof a === 'string') return a;
+    // over the sea by transport
+    if (!W.regions[fromId].land.includes(toId) && coastal(fromId) && coastal(toId)) return shipTroops(g, fid, fromId, -1, toId, post !== undefined && W.regions[toId].sectors.includes(post) ? post : -1, frac);
+    const a = formArmy(g, fid, fromId, toId, frac, post !== undefined && W.regions[toId].sectors.includes(post) ? post : -1); if (typeof a === 'string') return a;
     emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(a.units) });
     return null;
   }
   if (A.owner !== fid) return 'Select one of your own regions first.';
   const cap = capCheck(g, fid, toId); if (cap) return cap;
   const t = treatyCheck(g, fid, toId, brk); if (t) return t;
-  if (!W.regions[fromId].adj.includes(toId)) return `${W.regions[toId].name} does not border ${W.regions[fromId].name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
   if (goal !== 1 && goal !== 2) goal = 2;
+  // over a sea lane: an amphibious assault (landing craft carry the first wave)
+  if (W.regions[fromId].seaAdj.includes(toId) && !W.regions[fromId].land.includes(toId)) return landing(g, fid, fromId, toId, frac, goal);
+  if (!W.regions[fromId].adj.includes(toId)) return `${W.regions[toId].name} does not border ${W.regions[fromId].name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders. Over the sea, order an assault.`;
   const main = mainOf(A), c = A.fr?.[toId];
   if (groundUnits(main) < 1 || groundUnits(A.units) < 2) {
     if (c && groundUnits(c.u) > 0) return setOrder(g, fid, fromId, toId, goal, false, brk);
@@ -200,8 +210,8 @@ export function moveGroup(g: GameState, fid: number, region: number, post: numbe
   if (!A || !B) return 'Unknown region.';
   if (A.owner !== fid) return 'Select one of your own regions first.';
   if (B.owner !== fid) return `${W.regions[to].name} is not yours. To attack, give the corps on its border an order.`;
-  if (post >= 0 && !W.regions[region].adj.includes(post)) return 'That border does not belong to this region.';
-  if (toPost >= 0 && !W.regions[to].adj.includes(toPost)) return `That border does not belong to ${W.regions[to].name}.`;
+  if (post >= 0 && !W.regions[region].sectors.includes(post)) return 'That border does not belong to this region.';
+  if (toPost >= 0 && !W.regions[to].sectors.includes(toPost)) return `That border does not belong to ${W.regions[to].name}.`;
   if (region === to && post === toPost) return 'The troops are already there.';
   const src = groupUnits(A, post); if (groundUnits(src) < 1) return post < 0 ? `The main army of ${W.regions[region].name} has no ground troops.` : 'There is no corps on that border.';
   const n = shareOf(src, frac, false);
@@ -211,6 +221,8 @@ export function moveGroup(g: GameState, fid: number, region: number, post: numbe
     if (sent >= tot) for (const k of GROUND_TYPES) if ((n[k] ?? 0) > 0) { n[k]!--; break; }
   }
   const route = region === to ? [] : landRoute(g, fid, region, to);
+  // no way over land: by sea, if both are on a coast
+  if (!route && coastal(region) && coastal(to)) return shipTroops(g, fid, region, post, to, toPost, frac);
   if (!route) return `No route through your own land leads from ${W.regions[region].name} to ${W.regions[to].name}.`;
   const fb = toPost >= 0 && region === to ? frontsOf(g, region).find(b => b.from === toPost && b.def === fid) : undefined;
   const gk = post < 0 ? 0 : 1, gn = post < 0 ? armyNo(g, A) : A.fr?.[post]?.n, st = post >= 0 ? A.fr?.[post]?.st ?? A.stance : A.stance;
@@ -229,8 +241,9 @@ export function moveGroup(g: GameState, fid: number, region: number, post: numbe
 export function setOrder(g: GameState, fid: number, region: number, post: number, k: Order, now = false, brk?: boolean): string | null {
   const W = world(), r = g.regions[region];
   if (!r || r.owner !== fid) return 'Select one of your own regions first.';
-  if (!W.regions[region].adj.includes(post)) return 'That border does not belong to this region.';
+  if (!W.regions[region].sectors.includes(post)) return 'That border does not belong to this region.';
   if (k !== 0 && k !== 1 && k !== 2) return 'Invalid order.';
+  if (isCoast(post) && k !== 0) return 'A coast corps holds the coast. To attack over the sea, order an amphibious assault from the region.';
   const c = r.fr?.[post];
   const foothold = frontsOf(g, post).find(b => b.from === region && b.attacker === fid && b.stage === 3);
   const advance = () => { foothold!.stage = 1; foothold!.stT = foothold!.age; foothold!.goal = 2; emit(g, { k: 'advance', faction: fid, region: post }); };
@@ -406,8 +419,10 @@ export function arrive(g: GameState, a: Army) {
     if (!fb || !(fb.def === a.owner ? t.owner === a.owner : fb.sides.includes(a.owner))) return false;
     joinBattle(g, fb, a.owner, a.units, dir, fb.def === a.owner, a.to, a.men, a.mor, a.stance); return true;
   })) return;
-  const sector = a.air ? approachSector(a.from, a.to) : a.from;
+  const sector = approachSector(a.from, a.to);
   if (a.ret) {
+    // aircraft back from a carrier sortie land aboard (what does not fit lands ashore)
+    if (a.cv !== undefined) { const left = landOnCarrier(g, a); if (left <= 0) return; a.men.plane = Math.round(a.men.plane * left / a.units.plane); a.units.plane = left; }
     // returning aircraft land at home, or join its defence; a lost home means a lost squadron
     if (t.owner !== a.owner) return;
     const b = frontFor(g, t, a.owner);
@@ -417,7 +432,7 @@ export function arrive(g: GameState, a: Army) {
   const fronts = frontsOf(g, t.id);
   if (t.owner === a.owner) {
     const b = frontFor(g, t, a.owner, sector);
-    if (b) joinBattle(g, b, a.owner, a.units, dir, b.def === a.owner, a.air ? a.from : a.to, a.men, a.mor);
+    if (b) { joinBattle(g, b, a.owner, a.units, dir, b.def === a.owner, a.air ? a.from : a.to, a.men, a.mor); tagCarrier(b, a); }
     else {
       const before = groundUnits(t.units), add = groundUnits(a.units);
       for (const k of UNIT_TYPES) { t.units[k] += a.units[k]; t.men[k] += a.men[k]; }
@@ -429,14 +444,21 @@ export function arrive(g: GameState, a: Army) {
   if (atPeace(g, a.owner, t.owner) && g.regions[a.from].owner === a.owner) { turnBack(a); a.t = 0; g.armies.push(a); return; }
   // attacking: join the front over the same border, aircraft support any front, otherwise open a new front
   const same = fronts.find(b => b.from === sector) ?? (a.air ? fronts.find(b => b.sides.includes(a.owner)) ?? fronts[0] : undefined);
-  if (same) { joinBattle(g, same, a.owner, a.units, dir, same.def === a.owner, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance); return; }
+  if (same) { joinBattle(g, same, a.owner, a.units, dir, same.def === a.owner, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance); tagCarrier(same, a); return; }
   const nb = startBattle(g, t, dir, a.owner, sector, !a.air && a.post !== undefined ? (a.ord || 2) : undefined);
+  if (isCoast(sector)) nb.src = a.from;
   if (a.now) nb.unreg = UNREG;
   joinBattle(g, nb, a.owner, a.units, dir, false, a.air ? a.from : a.to, a.men, a.mor, a.air ? undefined : a.stance);
+  tagCarrier(nb, a);
+}
+/** Aircraft that flew off a carrier remember it (they fly back to it when they leave the battle). */
+function tagCarrier(b: Battle, a: Army) {
+  if (a.cv === undefined || !a.air) return;
+  let n = a.units.plane; for (let i = b.agents.length - 1; i >= 0 && n > 0; i--) { const x = b.agents[i]; if (x.f === a.owner && x.type === 'plane' && x.cv === undefined) { x.cv = a.cv; n--; } }
 }
 
 const FORT_KINDS: FortKind[] = ['trench', 'sand', 'wire', 'pill', 'fort', 'flak', 'bunk'];
-const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode'] as const;
+const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship'] as const;
 /** Commands arrive from the network: every numeric field must be a finite number. */
 function validCommand(c: Command): boolean {
   if (!c || typeof c !== 'object' || typeof c.t !== 'string') return false;
@@ -457,7 +479,20 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
       for (let i = 0; i < n; i++) { const e = recruit(g, fid, r, c.unit); if (e) return i ? null : e; }
       return null;
     }
-    case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
+    case 'build': { const r = g.regions[c.region]; if (!r || !['factory', 'barracks', 'airfield', 'port'].includes(c.kind)) return 'Invalid order.'; return build(g, fid, r, c.kind); }
+    case 'buildShip': {
+      const r = g.regions[c.region]; if (!r || !SHIP_KINDS.includes(c.kind)) return 'Invalid order.';
+      const n = Math.max(1, Math.min(5, Math.floor(c.n ?? 1)));
+      for (let i = 0; i < n; i++) { const e = buildShip(g, fid, r, c.kind); if (e) return i ? null : e; }
+      return null;
+    }
+    case 'ship': return shipTroops(g, fid, c.region, c.post, c.to, c.toPost, c.frac);
+    case 'landing': { const cap = capCheck(g, fid, c.to); if (cap) return cap; const t = g.regions[c.to] ? treatyCheck(g, fid, c.to, c.brk) : 'Unknown region.'; if (t) return t; return landing(g, fid, c.from, c.to, c.frac, c.goal === 1 ? 1 : 2, c.zone, c.escort !== false); }
+    case 'station': return station(g, fid, c.zone, c.region, c.fleet, c.kind);
+    case 'dock': return dock(g, fid, c.fleet);
+    case 'breakOff': return breakOff(g, fid, c.sea);
+    case 'embarkAir': return embarkAir(g, fid, c.region, c.ship, c.n);
+    case 'carrierAir': return carrierAir(g, fid, c.ship, c.to, !!c.rail, !!c.factory, c.brk);
     case 'fortify': { const r = g.regions[c.region]; if (!r || !FORT_KINDS.includes(c.kind)) return 'Invalid order.'; return fortify(g, fid, r, c.kind, c.sector); }
     case 'march': return sendArmy(g, fid, c.from, c.to, c.frac, c.brk, c.goal ?? 2, c.post);
     case 'move': return moveGroup(g, fid, c.region, c.post, c.to, c.toPost, c.frac);

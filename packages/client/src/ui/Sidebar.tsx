@@ -1,6 +1,7 @@
 // The War Office sidebar, docked on the right: radar (minimap) with the map layers under it, the selected region's
 // file (header, tabs, cameo grids), and a supply gauge along the inner edge. On phones it becomes a bottom tray.
-import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income } from '@riskrts/shared';
+import { FleetList } from './Navy';
+import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income, sectorName } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { BANDS, bandOf } from '../render/camera';
 import { click } from './actions';
@@ -66,10 +67,11 @@ function Idle() {
         {fronts.slice(0, 8).map(b => (
           <button key={b.id} className="it nb front-it" onClick={() => { click(); ui().select(b.region); rendererRef.current?.flyToBattle(b.id, 8); }}>
             <i className="dot" style={{ '--c': FACTIONS[g.regions[b.region].owner].color } as React.CSSProperties} />
-            <span className="tx"><b>{W.regions[b.region].name}</b><small>{b.def === me ? 'Defending' : 'Attacking'}{b.from >= 0 ? ` · from ${W.regions[b.from].name}` : ''}</small></span>
+            <span className="tx"><b>{W.regions[b.region].name}</b><small>{b.def === me ? 'Defending' : 'Attacking'}{b.from >= 0 ? ` · ${b.from >= 1000 ? 'on the ' + sectorName(W, b.from) : 'from ' + W.regions[b.from].name}` : ''}</small></span>
             <span className="go">Go</span>
           </button>
         ))}
+        <FleetList />
         <p className="note">Select a region on the map to open its file: recruit, fortify, build, deploy and march.</p>
       </div>
     </section>

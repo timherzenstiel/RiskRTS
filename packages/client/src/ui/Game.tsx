@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useSim, useUi } from '../game/store';
 import { GuestSession } from '../game/session';
 import { BattleCard } from './BattleCard';
+import { FleetCard, SeaCard } from './Navy';
 import { Feed } from './Feed';
 import { Hint } from './Hint';
 import { Overlays } from './Overlays';
@@ -77,7 +78,7 @@ export function Game() {
       <Sidebar />
       <OfferBanner />
       <div id="leftcol"><Feed /></div>
-      <div id="bottom"><BattleCard /><Hint /></div>
+      <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>
       <Connection />
       <Overlays />
       <Fatal />

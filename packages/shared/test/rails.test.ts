@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATION, RAIL_BUILD, RAIL_LINKS, UNIT_TYPES, applyCommand, applySnapshot, buildWorld, createGame, createMirror, dayOf, emptyUnits, fortCost, frontsOf, hasRail,
-  initMirrorCapitals, isMountain, makeSnapshot, railOpen, run, step, updateSupplyLines, weatherAt, COST, type GameState,
+  initMirrorCapitals, isMountain, makeSnapshot, newShip, railOpen, run, seaControl, step, updateSupplyLines, weatherAt, COST, type GameState,
 } from '../src';
 import { strike } from './helpers';
 
@@ -68,9 +68,16 @@ describe('sea lanes and blockade', () => {
     const g = blank(); const S = id('Scandinavia'), D = id('Germany'), B = id('Britain');
     g.regions[D].owner = 3; g.regions[D].capitalOf = 3; g.regions[S].owner = 3; g.regions[B].owner = 0; g.regions[B].capitalOf = 0;
     g.regions[id('Iceland')].owner = 0; g.regions[id('France')].owner = 0;
+    for (const r of [B, D]) g.regions[r].port = true;
     updateSupplyLines(g);
-    expect(g.regions[S].supplyQ).toBe(0); // Germany is blockaded, and Britain sits next to the lane
+    expect(g.regions[S].supplyQ).toBe(1); // a docked fleet holds no zone: the lane is thin (Germany is blockaded)
     expect(g.regions[id('Iceland')].supplyQ).toBe(2); expect(g.regions[id('France')].supplyQ).toBe(2);
+    // the Grand Fleet at sea in the North Sea cuts the German lane
+    newShip(g, 0, 'bb', B); newShip(g, 0, 'bb', B);
+    expect(applyCommand(g, 0, { t: 'station', region: B, zone: 0 })).toBeNull();
+    run(g, 30); updateSupplyLines(g);
+    expect(seaControl(g).ctrl[0]).toBe(0);
+    expect(g.regions[S].supplyQ).toBe(0);
   });
 });
 

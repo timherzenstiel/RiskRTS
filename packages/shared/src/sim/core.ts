@@ -1,5 +1,6 @@
 // Small helpers shared by the simulation modules.
 import { buildWorld, wrapDx } from '../world/build';
+import { coastKey, isCoast } from '../world/zones';
 import type { Army, Battle, GameEvent, GameState, RegionState, Works } from './types';
 import { FORMATION, SLOTS_INTERIOR, SLOTS_LAND, SLOTS_SEA, SLOT_USE, UNIT_TYPES, emptyUnits, totalUnits, type Units } from '../data/units';
 
@@ -30,13 +31,23 @@ export function hops(a: number, b: number, max = 2): number {
   return Infinity;
 }
 
-/** The neighbour of `to` an attack from `from` comes through: `from` itself if adjacent, else a shared neighbour. */
+/**
+ * The sector of `to` an attack from `from` comes through: `from` itself over a land border, the coast a sea lane runs to,
+ * else a land neighbour of `to` next to `from` (aircraft), else the coast of `to` nearest to `from`.
+ */
 export function approachSector(from: number, to: number): number {
-  const W = world(), adj = W.regions[to].adj;
-  if (adj.includes(from)) return from;
-  for (const n of adj) if (W.regions[n].adj.includes(from)) return n;
-  return -1;
+  const W = world(), T = W.regions[to];
+  if (T.land.includes(from)) return from;
+  const lz = W.laneZone.get(to + '|' + from); if (lz !== undefined && lz >= 0 && T.zones.includes(lz)) return coastKey(lz);
+  for (const n of T.land) if (W.regions[n].adj.includes(from)) return n;
+  const F = W.regions[from]; let best = -1, bd = 1e9;
+  for (const z of T.zones) { const c = T.coast[z], d = wrapDx(F.cx, c.x) ** 2 + (F.cz - c.z) ** 2; if (d < bd) { bd = d; best = coastKey(z); } }
+  return best;
 }
+/** Is `s` a sector of the region (a land border or a coast)? */
+export const isSector = (region: number, s: number) => world().regions[region].sectors.includes(s);
+/** A region id usable as a supply source behind a front: the land neighbour an attack comes over, or the region behind a coast battle. */
+export const sectorRegion = (b: { from: number; src?: number }) => isCoast(b.from) ? (b.src ?? -1) : b.from;
 
 /** Regions a power is currently attacking (armies on the way to a foreign region, or battles it fights as the attacker). */
 export function offensives(g: GameState, fid: number): Set<number> {
@@ -75,7 +86,7 @@ export const worksFor = (r: RegionState, s: number): Works => (r.works[s] ??= { 
 /** Deepest trench on any border of the region. */
 export const maxTrench = (r: RegionState) => Object.values(r.works).reduce((m, w) => Math.max(m, w.tr), 0);
 /** Building slots a border sector offers (sea lanes have less room, the interior has no field works). */
-export function slotsMax(region: number, s: number) { return s < 0 ? SLOTS_INTERIOR : world().seaLane.has(region + '|' + s) ? SLOTS_SEA : SLOTS_LAND; }
+export function slotsMax(region: number, s: number) { return s < 0 ? SLOTS_INTERIOR : isCoast(s) || world().seaLane.has(region + '|' + s) ? SLOTS_SEA : SLOTS_LAND; }
 /** Slots in use on a sector by the owner's defences, sandbags and wire. */
 export function slotsUsed(r: RegionState, s: number) {
   let n = 0; for (const d of r.defs) if (d.s === s && d.f === r.owner) n += SLOT_USE[d.k];

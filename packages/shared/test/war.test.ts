@@ -116,7 +116,8 @@ describe('strength, wounded and war weariness', () => {
 describe('supply lines', () => {
   it('a conquered region with no route home is cut off, cannot recruit and wears down', () => {
     const { g, A, B } = setup();
-    const far = id('India'); g.regions[far].owner = 0; g.regions[far].units.inf = 4; fill(g);
+    // India without its port: no route home over land or sea
+    const far = id('India'); g.regions[far].owner = 0; g.regions[far].port = false; g.regions[far].units.inf = 4; fill(g);
     updateSupplyLines(g);
     expect(g.regions[far].cut).toBe(true); expect(g.regions[A].cut).toBe(false);
     expect(applyCommand(g, 0, { t: 'recruit', region: far, unit: 'inf' })).toMatch(/cut off/);
@@ -178,7 +179,7 @@ describe('saves', () => {
     old.v = 2; for (const r of old.regions) { r.trench = r.capitalOf >= 0 ? 2 : 0; delete r.works; delete r.men; delete r.mor; delete r.cut; delete r.home; }
     for (const f of old.factions) { delete f.ww; delete f.wounded; } delete old.intel; delete old.spies;
     const m = migrateState(old)!;
-    expect(m.v).toBe(5); expect(m.intel.length).toBe(m.factions.length); expect(m.factions[0].shells).toBeGreaterThan(0);
+    expect(m.v).toBe(6); expect(m.intel.length).toBe(m.factions.length); expect(m.factions[0].shells).toBeGreaterThan(0);
     const cap = m.regions.find(r => r.capitalOf === 1)!;
     expect(Object.values(cap.works).some(w => w.tr === 2)).toBe(true);
     expect(cap.men.inf).toBe(cap.units.inf * 100);

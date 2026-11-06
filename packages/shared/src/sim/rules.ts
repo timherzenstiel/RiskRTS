@@ -1,5 +1,6 @@
 // One place for every rule modifier the battle and economy code asks about: unit stats per power, national traits, stance and
 // suppression effects. Later systems (weather, terrain, doctrines) plug in here so the battle code needs no special cases.
+import { PORT } from '../data/sea';
 import { AS, COST, isDef, type AgentType, type UnitStats, type UnitType } from '../data/units';
 import { nationOf, nationalUnit } from '../data/nations';
 import { isMountain, weatherAt } from '../data/terrain';
@@ -67,7 +68,7 @@ export const holdMorale = (f: number) => nationOf(f).hold;
 /** Supply cost of a unit for a power. */
 export const unitCost = (g: GameState, f: number, t: UnitType) => t === 'tank' ? Math.round(COST.tank * nationOf(f).tankCost * (hasDoc(g, f, 'tankcorps') ? .7 : 1)) : COST[t];
 /** Supply cost of a building for a power. */
-export const buildCostOf = (f: number, kind: 'factory' | 'barracks' | 'airfield') => COST[kind] + (kind === 'factory' ? nationOf(f).factoryCost : 0);
+export const buildCostOf = (f: number, kind: 'factory' | 'barracks' | 'airfield' | 'port') => kind === 'port' ? PORT.cost : COST[kind] + (kind === 'factory' ? nationOf(f).factoryCost : 0);
 
 /** Ground conditions of a front: mud (weather), winter, and whether the attack comes over a mountain border. */
 export interface Field { mud: boolean; winter: boolean; mtn: boolean }

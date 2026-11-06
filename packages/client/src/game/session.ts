@@ -98,7 +98,7 @@ export class HostSession implements Session {
   }
 
   private sendSnap(p: PeerSlot, full: boolean) {
-    const fx = this.fxNet.filter(f => p.watch.has(f.b));
+    const fx = this.fxNet.filter(f => 'b' in f ? p.watch.has(f.b) : true);
     const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: this.speed };
     try { p.ch.send(msg); } catch { /* peer went away; onClose will clean up */ }
   }

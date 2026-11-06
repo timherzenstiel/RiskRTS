@@ -4,7 +4,7 @@
 import {
   ECON, FORMATION, OVER, REPL, WOUNDED, barrageWeeks, capacity, econOf, ledger, load,
   COST, FACTIONS, MANPOWER, borderLabel, buildWorld, groundUnits, hostileBorders, income, incomeTerms, poolGrowth, poolTerms, shellIncome, shellTerms,
-  NATIONS, SHIP, activeSpies, type GameState, type Term,
+  NATIONS, SHIP, activeSpies, econOptions, mobOptions, type GameState, type Term,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { click } from './actions';
@@ -29,6 +29,19 @@ function Ledger({ terms, total, unit }: { terms: Term[]; total: number; unit: st
         <tr className="sum"><td>{t('Per week')}</td><td>{fmt(total)} {t(unit)}</td></tr>
       </tbody>
     </table>
+  );
+}
+
+/** A lever as cards (design-play §4.2): each option shows what it would do, the one in force is lit. */
+function LeverCards({ label, cards, on, pick }: { label: string; cards: { name: string; lines: string[]; warn?: boolean }[]; on: number; pick: (i: number) => void }) {
+  return (
+    <div className="lcards" role="group" aria-label={t(label)}>
+      {cards.map((c, i) => (
+        <button key={i} className={'lcard' + (c.warn ? ' warn' : '')} aria-pressed={on === i} onClick={() => { click(); if (on !== i) pick(i); }}>
+          <b>{c.name}</b>{c.lines.map((l, k) => <small key={k}>{l}</small>)}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -62,11 +75,12 @@ export function EconomyPanel() {
       <Ledger terms={incomeTerms(g, me)} total={income(g, me)} unit="Production" />
       <div className="lbl"><span>{t('Shells · {0} in stock', Math.floor(f.shells ?? 0))}</span><small>{isFinite(wk) ? t('~{0} weeks of light barrage', wk < 10 ? Math.round(wk * 10) / 10 : Math.round(wk)) : t('no batteries')}</small></div>
       <Ledger terms={shellTerms(g, me)} total={shellIncome(g, me)} unit="shells" />
-      <div className="lv-row"><span className="lv-l" title={ECON.map(e => t('{0}: {1} % of factory output goes to shells', e.name, Math.round(e.shells * 100))).join('\n')}>{t('War economy')}</span>
-        <div className="seg" role="group" aria-label={t('War economy')}>
-          {ECON.map((e, i) => <button key={e.name} aria-pressed={econ === i} onClick={() => { click(); ui().order({ t: 'econ', level: i }); }}>{tx(e.name)}</button>)}
-        </div>
-      </div>
+      <div className="lbl"><span>{t('War economy')}</span><small>{t('per week, and the shell stock after a week')}</small></div>
+      <LeverCards label="War economy" on={econ} pick={i => ui().order({ t: 'econ', level: i })} cards={econOptions(g, me).map((o, i) => ({
+        name: tx(ECON[i].name),
+        lines: [t('{0} Production', o.prod), t('{0} shells', o.shells), isFinite(o.weeks) ? t('~{0} weeks of barrage', o.weeks < 10 ? Math.round(o.weeks * 10) / 10 : Math.round(o.weeks)) : t('no guns to feed')],
+        warn: isFinite(o.weeks) && o.weeks < 2,
+      }))} />
       <p className="note">{t('{0} % of what the factories make goes to the shell works; the rest is Production. The capital and the base output make shells either way.', Math.round(ECON[econ].shells * 100))}</p>
       <div className="lbl"><span>{tn('Men · {0} in the pool', { raw: menStr(f.men ?? 0) })}</span><small>{tn('{0} field · {1} training · {2} wounded', { raw: menStr(field) }, { raw: menStr(training) }, { raw: menStr(f.wounded ?? 0) })}</small></div>
       <table className="ledger two">
@@ -77,12 +91,13 @@ export function EconomyPanel() {
         </tbody>
       </table>
       <p className="note" title={poolTerms(g, me).map(x => `${tx(x.label)}  ${fmt(x.v)}`).join('\n')}>{t('Recruits train for a week. Each week under-strength corps in supplied regions under their capacity take up to {0} % of their full strength from the pool – the front line first. {1} % of the casualties come back to the pool after {2} weeks.', Math.round(REPL.share * 100), Math.round(WOUNDED.share * 100), WOUNDED.days / 7)}</p>
-      <div className="lv-row"><span className="lv-l" title={t('Each level: +{0} % age class and +{1} war weariness per week', Math.round(MANPOWER.mobGrowth * 100), MANPOWER.mobWW)}>{t('Conscription')}</span>
-        <div className="seg" role="group" aria-label={t('Conscription')}>
-          {MOB.map((m, i) => <button key={m} aria-pressed={mob === i} onClick={() => { click(); ui().order({ t: 'mobilise', level: i }); }}>{t(m)}</button>)}
-        </div>
-      </div>
-      <p className="note">{mob ? t('+{0} % age class, +{1} war weariness a week.', mob * Math.round(MANPOWER.mobGrowth * 100), mob * MANPOWER.mobWW) + ' ' : ''}{t('War weariness {0} % · unrest at {1} %.', Math.round(f.ww), NATIONS[me].unrest)}</p>
+      <div className="lbl"><span>{t('Conscription')}</span><small>{t('War weariness {0} % · unrest at {1} %.', Math.round(f.ww), NATIONS[me].unrest)}</small></div>
+      <LeverCards label="Conscription" on={mob} pick={i => ui().order({ t: 'mobilise', level: i })} cards={mobOptions(g, me).map((o, i) => ({
+        name: t(MOB[i]),
+        lines: [tn('+{0} men/week', { raw: menStr(o.men) }), o.ww <= 0 ? t('weariness fades') : i === 2 ? t('+{0}/week, never fades', Math.round(o.ww * 10) / 10) : t('+{0}/week', Math.round(o.ww * 10) / 10),
+          o.unrest === 0 ? t('unrest now') : isFinite(o.unrest) ? t('unrest in ~{0} weeks', Math.max(1, Math.round(o.unrest))) : t('no unrest')],
+        warn: o.unrest < 10,
+      }))} />
       {f.unrestT > 0 && !strike.length && <p className="note budget full">{f.unrestT === 1 ? t('Unrest is brewing: 1 week above the threshold.') : t('Unrest is brewing: {0} weeks above the threshold.', f.unrestT)}</p>}
       <p className="note">{t('Each level adds {0}% to the manpower growth and {1} war weariness per week; under total conscription the weariness no longer fades. Above {2}% for {3} weeks, remote home regions go on strike; {4} points higher they may rise.', Math.round(MANPOWER.mobGrowth * 100), MANPOWER.mobWW, NATIONS[me].unrest, MANPOWER.strikeAfter, MANPOWER.riseAbove)}</p>
       <div className="lbl"><span>{t('Supply')}</span><small>{t('{0} by rail · {1} by road · {2} cut off', mine.length - cut.length - road.length, road.length, cut.length)}</small></div>

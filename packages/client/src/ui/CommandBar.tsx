@@ -43,7 +43,7 @@ function regionVerbs(g: GameState, me: number, sel: number): Verb[] {
     { id: 'move', label: t('Move troops'), key: 'm', run: () => { ui().orderMode && ui().orderKind === 'march' ? ui().cancelOrder() : ui().beginOrder('march'); }, on: ui().orderMode && ui().orderKind === 'march',
       off: busy ?? (ground < 2 ? t('Needs 2 battalions') : undefined), title: t('Pick a neighbour on the map: the share set in the Overview marches there or attacks it') },
     { id: 'form', label: t('Form corps from reserve'), key: 'j', run: () => { ui().order({ t: 'form', region: sel, u: upToCap(depotOf(r).u) }); },
-      off: dep < 1 ? t('The reserve holds no battalions') : undefined, title: t('A corps of up to {0} battalions from the troops in reserve, under your orders', CORPS_CAP) },
+      off: dep < 1 ? t('The reserve holds no battalions') : undefined, title: t('Turn the {0} battalions waiting in the reserve into a corps you command. Only corps can be selected, moved and put into an army.', Math.min(dep, CORPS_CAP)) },
   ];
   if (r.units.plane > 0) v.push({ id: 'air', label: t('Air strike'), key: 'a', ext: true, run: () => ui().beginOrder('air'), off: busy ?? undefined });
   return v;

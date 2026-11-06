@@ -91,6 +91,12 @@ button.lcd:hover{border-color:var(--lcd-dim)}
 .lcd b{font:400 20px/1 var(--f-lcd);color:var(--lcd);text-shadow:0 0 7px rgba(159,224,112,.55);animation:roll .35s ease-out;font-variant-numeric:tabular-nums}
 .lcd i{font:400 11px var(--f-lcd);font-style:normal;color:var(--lcd-dim)}
 .lcd.hi b{color:#f08a6c;text-shadow:0 0 7px rgba(240,120,90,.5)}
+.lcd.wn b{color:var(--amber);text-shadow:0 0 7px rgba(224,168,58,.45)}
+.lcd.home{min-width:104px;gap:1px}.lcd.home .lcd-w i{white-space:nowrap}
+.lcd.home.hi .lcd-w i,.lcd.home.wn .lcd-w i{color:#f0b07a}
+.hf-bar{position:relative;display:block;width:100%;height:4px;margin-top:2px;background:rgba(159,224,112,.12);border-radius:1px}
+.hf-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--lcd);border-radius:1px}.lcd.wn .hf-bar i{background:var(--amber)}.lcd.hi .hf-bar i{background:#f08a6c}
+.hf-bar em{position:absolute;top:-2px;bottom:-2px;width:2px;margin-left:-1px;background:#c8402e}
 @keyframes roll{from{transform:translateY(-40%);opacity:.2}to{transform:none;opacity:1}}
 .lcd.sup{display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;column-gap:8px;align-items:center;padding-left:4px}
 .lcd.sup .ring{grid-row:1/3;width:30px;height:30px;background:conic-gradient(var(--lcd) var(--p),rgba(159,224,112,.12) 0)}
@@ -98,13 +104,6 @@ button.lcd:hover{border-color:var(--lcd-dim)}
 .lcd.sup .ring span{font:400 11px var(--f-lcd);color:var(--lcd)}
 .lcd.sup.pulse{animation:lcdpulse .9s ease-out}
 @keyframes lcdpulse{0%{box-shadow:inset 0 2px 6px rgba(0,0,0,.85),0 0 0 0 rgba(159,224,112,.8)}100%{box-shadow:inset 0 2px 6px rgba(0,0,0,.85),0 0 0 14px rgba(159,224,112,0)}}
-.needle{display:flex;align-items:center;gap:4px;height:38px;padding:0 8px 0 4px;background:var(--lcd-bg);border:1px solid #000;border-radius:2px;box-shadow:inset 0 2px 6px rgba(0,0,0,.85);color:var(--lcd)}
-.needle svg{width:40px;height:24px;color:var(--lcd)}
-.needle line{transition:transform .8s cubic-bezier(.3,1.6,.5,1)}
-.needle span{display:flex;flex-direction:column;line-height:1}
-.needle small{font:600 9px var(--f-head);letter-spacing:.14em;color:var(--lcd-dim)}
-.needle b{font:400 16px var(--f-lcd);color:var(--lcd)}
-.needle.mid b{color:var(--amber)}.needle.hi b{color:#f08a6c}
 #top .pills{background:var(--well);border:1px solid #000;border-radius:2px;padding:2px;box-shadow:inset 0 2px 5px rgba(0,0,0,.7);gap:1px}
 #top .pill{border-radius:1px;font:600 12.5px var(--f-head);padding:3px 6px 3px 5px;color:var(--khaki)}
 #top .pill i{border-radius:1px;width:9px;height:9px;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
@@ -328,8 +327,7 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
   #top .right{gap:4px}
   #top .ico{width:30px}
   .seg kbd{display:none}
-  .ticker,.needle,#top .lcd.sh,#top button.lcd.men,#date.lcd,#top .wx,#top .pills .k{display:none}
-  #top .counters{position:static}
+  .ticker,  #top .counters{position:static}
   #top .pills{display:none}
   #app .stage{right:0}
   #side{top:auto;left:0;right:0;width:auto;max-height:58%;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));border-width:2px 0 0;border-top:2px solid var(--brass)}
@@ -351,23 +349,20 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 @media (max-height:520px) and (min-width:761px){
   :root{--strip:44px;--side:280px}
   .crt{display:none}
-  .ticker,.needle{display:none}
-  #top .mtx small{display:none}
+  .ticker,  #top .mtx small{display:none}
 }
 @media (max-width:1700px) and (min-width:761px){
   #top .pills .k{display:none}
   #top .wx{display:none}
 }
 @media (max-width:1500px) and (min-width:761px){
-  .needle svg{display:none}
-  .lcd.sup .ring{width:26px;height:26px}
+    .lcd.sup .ring{width:26px;height:26px}
 }
 @media (max-width:1280px) and (min-width:761px){
   .ticker{display:none}
 }
 @media (max-width:1080px) and (min-width:761px){
-  .needle svg{display:none}
-  #top .pills{display:none}
+    #top .pills{display:none}
 }
 @media (pointer:coarse){
   .seg button{min-height:38px}
@@ -757,3 +752,14 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 #vote.on{border-left-color:var(--lcd)}
 .pause-call{white-space:nowrap}
 @media (max-width:760px){#ib-toasts,#vote{left:50%}}
+
+/* ---- lever cards (design-play §4.2): every option shows what it would do ---- */
+.lcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:2px 0 6px}
+.lcard{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:6px 7px;text-align:left;background:var(--well);border:1px solid #0d0e0b;border-top:3px solid #4a4b44;border-radius:2px;color:var(--fg);cursor:pointer}
+.lcard b{font:600 12px/1.15 var(--f-head);letter-spacing:.05em;text-transform:uppercase;color:var(--khaki);margin-bottom:2px}
+.lcard small{font:400 11px/1.3 var(--f-head);letter-spacing:.03em;color:var(--mute)}
+.lcard:hover{border-top-color:var(--brass-lo);background:#1d1e19}
+.lcard[aria-pressed=true]{border-top-color:var(--brass-hi);background:linear-gradient(180deg,rgba(214,178,99,.16),var(--well) 70%);box-shadow:inset 0 0 0 1px var(--brass-lo)}
+.lcard[aria-pressed=true] small{color:#d8cfae}
+.lcard.warn small:last-child{color:#f0b07a}
+.lv-fc{margin:-2px 0 4px;font:400 11px/1.3 var(--f-head);letter-spacing:.03em;color:var(--mute)}.lv-fc.warn{color:#f0b07a}

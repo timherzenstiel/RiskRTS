@@ -164,7 +164,7 @@ export function ForcesPanel() {
               </button>
               {cs.map(c => <CorpsRow key={c.id} g={g} me={me} r={r} c={c} sel={selC.includes(c.id)} />)}
               {!mine && dn > 0 && <div className="oob-c dep" title={t('Battalions in no corps: recruits and the troops Auto arranges')}><span className="oc-n"><b>{t('Reserve')}</b><small>{unitsLine(dep)}</small></span><span className="oc-v"><b className="lcdn">{dn}</b><small>{t('btl')}</small></span>
-                <button className="btn sm" title={t('Form a corps of up to {0} battalions from the reserve, under your orders', CORPS_CAP)} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>{t('Form corps from reserve')}</button></div>}
+                <button className="btn sm" title={t('Turn the {0} battalions waiting in the reserve into a corps you command. Only corps can be selected, moved and put into an army.', Math.min(dn, CORPS_CAP))} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>{t('Form corps from reserve')}</button></div>}
             </div>
           );
         })}

@@ -10,7 +10,7 @@ import { F_DUST, F_MAP } from './fxSystem';
 import type { Models } from './models';
 import type { LineBatch } from './pools';
 import { FLAGD, K, facCol } from './palette';
-import { sectorPoint } from '@riskrts/shared';
+import { battleAnchor, sectorPoint } from '@riskrts/shared';
 import type { Terrain } from './terrain';
 import { lerp } from './util';
 
@@ -20,6 +20,9 @@ export const CLOSE_PAINT = 15;
 export const MAP_S = .5;
 /** Map scale of buildings relative to their original model size. */
 const BLD = .5;
+
+/** Dark outline under the attack arrows, so a grey or purple arrow still reads on land of the same colour. */
+const INK = new THREE.Color(.04, .035, .03);
 
 export class DynamicDraw {
   private factT = 0; private holdT = 0;
@@ -218,6 +221,48 @@ export class DynamicDraw {
     const tx = wrap(a.ax + a.dx), tz = a.az + a.dz, ty = groundY(tx, tz), r = (.14 + Math.sin(T * 4) * .02) * K2;
     for (let k = 0; k < 10; k++) { const an = k / 10 * Math.PI * 2; m.part(tx, ty, tz, -an, 0, 0, r, .05 * K2, .01, .02 * K2, col, m.glowPool); }
   }
+  /**
+   * Attack arrows: every battle you can see gets a broad arrow in the attacker's colour, from the region it attacks out of to the
+   * contested border, so the map says who attacks whom at a glance. Fights you are in are bright; other powers' wars are dimmer.
+   * Hidden close in, where the battlefield itself shows the fight.
+   */
+  fronts(g: GameState, T: number, dist: number) {
+    if (dist < 13) return;
+    const m = this.m, W = this.world, K2 = this.zoomK;
+    for (const b of g.battles) {
+      if (b.ended || b.attacker < 0) continue;
+      const end = battleAnchor(W, b), mine = b.sides.includes(this.me) || b.def === this.me;
+      let sx: number, sz: number;
+      if (b.from >= 0 && b.from < W.regions.length && W.regions[b.region].adj.includes(b.from)) { const R = W.regions[b.from]; sx = R.cx; sz = R.cz; }
+      else { const L = 3.2 * K2; sx = end.x + b.ax * L; sz = end.z + b.az * L; }
+      // the shortest way round the date line
+      let dx = sx - end.x; if (dx > HW) dx -= 2 * HW; else if (dx < -HW) dx += 2 * HW;
+      const dz = sz - end.z, full = Math.hypot(dx, dz); if (full < .05) continue;
+      const ux = -dx / full, uz = -dz / full, face = Math.atan2(ux, uz);
+      // start a little out of the source region, stop just short of the border
+      const len = Math.min(full * .8, 6 * K2), head = Math.min(.55 * K2, len * .4), x0 = end.x - ux * len, z0 = end.z - uz * len;
+      const col = mine ? facCol[b.attacker] : this.dimCol(b.attacker), w = (mine ? .2 : .14) * K2, pulse = (T * .6) % 1;
+      const yAt = (x: number, z: number) => Math.max(.36, this.hAt(x, z, .2) + .14);
+      const wrap = (x: number) => x < -HW ? x + 2 * HW : x > HW ? x - 2 * HW : x;
+      // shaft in short pieces (so it follows the ground and the globe), with a bright band running towards the target
+      const shaft = len - head, n = Math.max(2, Math.ceil(shaft / (.25 * K2))), seg = shaft / n;
+      for (let k = 0; k < n; k++) {
+        const d = (k + .5) * seg, x = wrap(x0 + ux * d), z = z0 + uz * d, f = k / n, lit = Math.abs(f - pulse) < .12;
+        const y = yAt(x, z), ww = w * (.55 + .45 * f);
+        m.part(x, y - .006, z, face, 0, 0, 0, ww + .07 * K2, .012, seg * 1.02, INK, m.glowPool);
+        m.part(x, y, z, face, 0, 0, 0, ww, .012, seg * 1.02, lit ? this.hiCol(b.attacker) : col, m.glowPool);
+      }
+      // head: stacked bars narrowing to the point
+      for (let k = 0; k < 6; k++) {
+        const d = shaft + (k + .5) * head / 6, x = wrap(x0 + ux * d), z = z0 + uz * d;
+        const y = yAt(x, z), ww = w * 2.6 * (1 - k / 6);
+        m.part(x, y - .006, z, face, 0, 0, 0, ww + .07 * K2, .012, head / 6 * 1.05 + (k === 5 ? .05 * K2 : 0), INK, m.glowPool);
+        m.part(x, y, z, face, 0, 0, 0, ww, .012, head / 6 * 1.05, col, m.glowPool);
+      }
+    }
+  }
+  private readonly hiC = new Map<number, THREE.Color>();
+  private hiCol(f: number) { let c = this.hiC.get(f); if (!c) { c = facCol[f].clone().lerp(new THREE.Color(1, 1, 1), .45); this.hiC.set(f, c); } return c; }
   private readonly dimC = new Map<number, THREE.Color>();
   private dimCol(f: number) { let c = this.dimC.get(f); if (!c) { c = facCol[f].clone().multiplyScalar(.75); this.dimC.set(f, c); } return c; }
   /** The local player (set by the renderer each frame; -1 when spectating). */

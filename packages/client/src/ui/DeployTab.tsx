@@ -138,11 +138,11 @@ export function DeployTab({ region, id }: { region: RegionState; id: number }) {
       </div>
       <div className="post main">
         <div className="post-h"><span className="ic"><Icon k="barracks" size={18} /></span>
-          <div className="tx"><b>{t('Centre · {0}', groupName(me, 0, region.an))}</b><small>{tn('Depot {0}', { raw: unitsLine(dep) })}{dep.plane ? ' · ' + (dep.plane === 1 ? t('{0} squadron', 1) : t('{0} squadrons', dep.plane)) : ''}{reserve.length ? ' · ' + t('{0} reserve corps', reserve.length) : ''}</small></div>
-          <button className="btn sm" disabled={groundUnits(dep) < 1} title={t('Form a corps of up to {0} battalions from the depot, under your orders', CORPS_CAP)} onClick={() => { click(); ui().order({ t: 'form', region: id, u: upTo(dep) }); }}>{t('Form corps')}</button>
+          <div className="tx"><b>{t('Centre · {0}', groupName(me, 0, region.an))}</b><small>{tn('Reserve {0}', { raw: unitsLine(dep) })}{dep.plane ? ' · ' + (dep.plane === 1 ? t('{0} squadron', 1) : t('{0} squadrons', dep.plane)) : ''}{reserve.length ? ' · ' + t('{0} reserve corps', reserve.length) : ''}</small></div>
+          <button className="btn sm" disabled={groundUnits(dep) < 1} title={t('Form a corps of up to {0} battalions from the reserve, under your orders', CORPS_CAP)} onClick={() => { click(); ui().order({ t: 'form', region: id, u: upTo(dep) }); }}>{t('Form corps from reserve')}</button>
         </div>
         {reserve.map(x => <CorpsLine key={x.id} g={g} me={me} r={region} c={x} />)}
-        <small className="note">{t('The depot: recruits join it, it meets any enemy who breaks through, and Auto and offensives draw on it.')} {groundUnits(main) ? t('{0} battalions stand at the centre.', groundUnits(main)) : ''}</small>
+        <small className="note">{t('The reserve: recruits join it, it meets any enemy who breaks through, and Auto and offensives draw on it.')} {groundUnits(main) ? t('{0} battalions stand at the centre.', groundUnits(main)) : ''}</small>
       </div>
       <SharePicker />
       <div className="lbl"><span>{t('Borders and coasts · a corps on each one holds its trench')}</span></div>

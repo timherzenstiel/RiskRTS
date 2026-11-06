@@ -285,10 +285,13 @@ export class Labels {
     }
     for (const [k, l] of this.corps) if (l.seen !== ctx.frame) { l.el.remove(); this.corps.delete(k); }
 
-    // Fronts mode: a balance chip on each of the viewer's borders with a power at war with it (design-command §1.3)
-    if (this.mode === 1 && ctx.me >= 0 && dist < 140 && dist >= 20) {
+    // Fronts mode: a balance chip on each of the viewer's borders with a power at war with it (design-command §1.3). In the
+    // other modes only the selected own region shows its chips, so a border card is one click away anywhere (design-play §1).
+    const allChips = this.mode === 1 && dist >= 20, selOwn = ctx.sel >= 0 && g.regions[ctx.sel]?.owner === ctx.me;
+    if (ctx.me >= 0 && dist < 140 && (allChips || selOwn)) {
       if (ctx.now >= this.nextBal) { this.nextBal = ctx.now + .4; this.balances = hostileBorders(g, ctx.me); }
       for (const b of this.balances) {
+        if (!allChips && b.region !== ctx.sel) continue;
         const key = b.region + '|' + b.sector;
         let l = this.chips.get(key);
         if (!l) {

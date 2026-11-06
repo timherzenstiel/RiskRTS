@@ -697,3 +697,43 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 @keyframes rl-blink{50%{opacity:.25}}
 @media (max-width:900px){.radio-line{left:50%;max-width:calc(100% - 24px);font-size:12px}}
 #app.look-ra .radio-line{color:#8fd6ff;text-shadow:0 0 7px rgba(143,214,255,.45);box-shadow:inset 0 0 0 1px rgba(143,214,255,.2),0 3px 10px rgba(0,0,0,.55)}
+
+/* ---- command bar (design-play §1): verbs for the selection, at the top of the sidebar ---- */
+.cmdbar{flex:none;background:var(--plate-2);border:1px solid #111;border-radius:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06);padding:5px 6px 6px}
+.cmdbar.idle{padding:7px 8px}.cmdbar.idle small{color:var(--mute);font-size:11.5px;line-height:1.3;display:block}
+.cb-h{display:flex;align-items:baseline;gap:6px;margin:0 2px 5px;min-width:0}
+.cb-h b{font:600 13px var(--f-head);letter-spacing:.06em;text-transform:uppercase;color:var(--khaki);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-h small{color:var(--mute);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-v{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+.cb{position:relative;display:flex;align-items:center;gap:4px;min-height:32px;padding:3px 14px 3px 6px;border-radius:2px;border:1px solid var(--plate-lo);
+  background:linear-gradient(180deg,#55574e,#41433b 55%,#383a33);color:var(--khaki);font:600 11.5px/1.1 var(--f-head);letter-spacing:.04em;text-align:left;cursor:pointer}
+.cb span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cb kbd{position:absolute;top:2px;right:2px;font-size:8.5px;line-height:1.2;padding:0 2px;opacity:.85}
+.cb:hover{background:linear-gradient(180deg,#666860,#4d4f47 55%,#41433b);border-color:#111}
+.cb[aria-pressed=true]{background:linear-gradient(180deg,#d6b263,#a8863a);color:#1b1407;border-color:#4a3a12}
+.cb[aria-pressed=true] kbd{color:#1b1407;background:rgba(255,240,200,.35)}
+.cb.danger{background:linear-gradient(180deg,#7a3428,#5e251b);color:#f4d6c8;border-color:#2a0d08}
+.cb.danger:hover{background:linear-gradient(180deg,#93402f,#6d2a1f)}
+.cb.off,.cb.off:hover{background:#2c2e28;color:#7c7d72;border-color:#1c1d19;cursor:not-allowed}
+.cb.off kbd{opacity:.4}
+@media (max-width:1280px) and (min-width:761px){.cb kbd{display:none}.cb{padding-right:6px}}
+@media (max-width:760px){.cmdbar{order:-1}.cb-v{grid-template-columns:repeat(4,minmax(0,1fr))}.cb kbd{display:none}}
+
+/* ---- borders list in the region Overview ---- */
+.blist{margin:6px 0 4px;scroll-margin-top:44px}
+.bl-row{display:flex;align-items:stretch;gap:4px;margin-bottom:3px;background:var(--well);border:1px solid #0d0e0b;border-left:4px solid #4a4b44;border-radius:2px}
+.bl-row.d0{border-left-color:var(--lcd)}.bl-row.d1{border-left-color:var(--khaki)}.bl-row.d2{border-left-color:var(--amber)}.bl-row.d3,.bl-row.mass{border-left-color:var(--alarm)}.bl-row.du{border-left-color:#77786e}
+.bl-row.on{box-shadow:0 0 0 1px var(--brass)}
+.bl-main{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:4px 6px;background:none;border:0;color:inherit;text-align:left;cursor:pointer}
+.bl-main:hover{background:rgba(216,207,174,.05)}
+.bl-main .tx{flex:1;min-width:0;display:flex;flex-direction:column}
+.bl-main .tx b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bl-main .tx small{font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bl-bal{font-size:12px;color:var(--lcd);white-space:nowrap}
+.bl-row>.btn{margin:3px 3px 3px 0;padding:0 8px}
+.blist.flash{animation:blflash 1.2s ease-out}
+@keyframes blflash{0%{box-shadow:0 0 0 2px var(--brass-hi)}100%{box-shadow:0 0 0 2px transparent}}
+.pn-sub{margin:0;padding:4px 12px 6px;font-size:11.5px;line-height:1.35;color:var(--mute);border-bottom:1px solid #1a1b17}
+.pn-nation{margin-top:10px}.pn-nation summary{cursor:pointer;font:600 12px var(--f-head);letter-spacing:.08em;text-transform:uppercase;color:var(--khaki);padding:4px 0}
+.rb.pulse .rbadge{animation:rbpulse 1s ease-in-out infinite}
+@keyframes rbpulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(200,64,46,.7)}50%{transform:scale(1.18);box-shadow:0 0 0 5px rgba(200,64,46,0)}}

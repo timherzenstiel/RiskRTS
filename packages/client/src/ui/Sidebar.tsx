@@ -11,6 +11,7 @@ import { Minimap } from './Minimap';
 import { BorderCard } from './Situation';
 import { CorpsCard } from './Forces';
 import { ArmyCard } from './Staff';
+import { CommandBar } from './CommandBar';
 import { rendererRef } from './refs';
 import { getLang, t, tx } from '../i18n';
 
@@ -97,6 +98,7 @@ export function Sidebar() {
         <LayerPicker />
         <ZoomPicker />
       </div>
+      <CommandBar />
       <div className="side-body"><ArmyCard /><CorpsCard /><BorderCard />{sel >= 0 ? <Drawer /> : <Idle />}</div>
       <SupplyGauge />
     </aside>

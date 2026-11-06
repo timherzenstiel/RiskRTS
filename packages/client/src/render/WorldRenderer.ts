@@ -156,7 +156,8 @@ class WorldRenderer implements WorldRendererApi {
 
     this.input = new Input({
       canvas, rig: this.rig, regionAt: (x, y) => this.regionAt(x, y), orderMode: () => useUi.getState().orderMode,
-      onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); }, onOrder: (id) => cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }),
+      onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); },
+      onOrder: (id) => { if (this.pickSector(id, true)) return; cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }); },
       onHover: (id) => { if (id !== this.lastHover) { this.lastHover = id; cb.onHover(id); } },
       onDoubleClick: (id) => { const b = this.session?.state.regions[id].battle ?? -1; this.flyTo(id, b >= 0 ? 6 : Math.min(this.rig.gdist, 24)); },
     });
@@ -197,14 +198,17 @@ class WorldRenderer implements WorldRendererApi {
     if (b) { this.flyToBattle(b.id, distance); return; }
     this.rig.flyTo(r.cx, r.cz, distance);
   }
-  /** A click inside the selected own region, close to one of its borders or coasts, opens that border's card. */
-  private pickSector(id: number): boolean {
+  /** A click inside the selected own region, close to one of its borders or coasts, opens that border's card. A right-click
+   *  (`any`) does the same in any own region when nothing else would take the order (no corps, no target mode). The catch
+   *  radius grows with the camera distance, up to three times as wide in the theatre view (design-play §1). */
+  private pickSector(id: number, any = false): boolean {
     const ui = useUi.getState(), sel = ui.sel, g = this.session?.state;
-    if (!g || sel < 0 || id !== sel || g.regions[sel]?.owner !== this.session!.me || ui.corps.length) return false;
-    const x = this.tmpV.x, z = this.tmpV.z; let best = -2, bd = .7 * .7;
-    for (const s of this.world.regions[sel].sectors) { const p = sectorPoint(this.world, sel, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
+    if (!g || id < 0 || g.regions[id]?.owner !== this.session!.me || ui.corps.length) return false;
+    if (any ? ui.orderMode || (sel >= 0 && sel !== id && g.regions[sel]?.owner === this.session!.me) : id !== sel) return false;
+    const x = this.pickX, z = this.pickZ, rad = Math.min(2.1, Math.max(.7, .7 * this.rig.dist / 40)); let best = -2, bd = rad * rad;
+    for (const s of this.world.regions[id].sectors) { const p = sectorPoint(this.world, id, s), d = wrapDx(x, p.x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
     if (best < 0) return false;
-    ui.selectBorder(sel, best); Sfx.click(); return true;
+    ui.selectBorder(id, best); Sfx.click(); return true;
   }
 
   /** A click on the water picks the nearest fleet or naval battle under the pointer. */

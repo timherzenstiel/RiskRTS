@@ -26,8 +26,10 @@ export const MAP_MODES = [
 export type Panel = null | 'situation' | 'forces' | 'staff' | 'economy' | 'navy' | 'intel';
 const layerOf = (m: MapMode): MapLayer => m === 2 ? 1 : m === 3 ? 2 : 0;
 /** march / air strike, and the navy: ship troops to an own coast, assault an enemy coast, station warships in a zone, carrier strike. */
-export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair';
-export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy' | 'rules';
+export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair' | 'corps';
+/** Which tool of the border card is open: send corps, fortify, scout (design-play §1). */
+export type BorderTool = '' | 'fort' | 'send' | 'scout';
+export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'calendar' | 'doctrine' | 'diplomacy' | 'rules';
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 interface Ui {
@@ -48,6 +50,8 @@ interface Ui {
   panel: Panel;
   /** Border opened from a balance chip or a list: [own region, sector], shown as the border card above the region file. */
   border: [number, number] | null;
+  /** Tool open on the border card. */
+  borderTool: BorderTool;
   /** Selected own corps (ids). Right-clicking the map orders them: an own region or border moves them, an enemy region attacks. */
   corps: number[];
   /** Army (Hq id) whose card is open, or -1. */
@@ -83,7 +87,8 @@ interface Ui {
   setLayer(l: MapLayer): void;
   setMode(m: MapMode, auto?: boolean): void;
   setPanel(p: Panel): void;
-  selectBorder(region: number, sector: number): void;
+  selectBorder(region: number, sector: number, tool?: BorderTool): void;
+  setBorderTool(t: BorderTool): void;
   closeBorder(): void;
   /** Select corps (add with `add`, toggling ones already selected); [] clears. `region` selects their region too. */
   selectCorps(ids: number[], add?: boolean, region?: number): void;
@@ -142,7 +147,7 @@ export function loadVoiceMode(get: (k: string) => string | null = lsGet): VoiceM
 Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -160,13 +165,14 @@ export const useUi = create<Ui>((set, get) => ({
   setLayer: (layer) => set({ layer, mode: layer === 1 ? 2 : layer === 2 ? 3 : 0, modeSet: true }),
   setMode: (mode, auto) => { if (auto && get().modeSet) return; set({ mode, layer: layerOf(mode), modeSet: get().modeSet || !auto }); },
   setPanel: (panel) => set({ panel }),
-  selectBorder: (region, sector) => set({ sel: region, border: [region, sector], fortMarker: [region, sector], orderMode: false, fleet: -1, seaSel: -1, corps: [], armySel: -1 }),
+  selectBorder: (region, sector, tool) => set({ sel: region, border: [region, sector], borderTool: tool ?? (get().border?.[0] === region && get().border?.[1] === sector ? get().borderTool : ''), fortMarker: [region, sector], orderMode: false, fleet: -1, seaSel: -1, corps: [], armySel: -1 }),
   selectCorps: (ids, add, region) => {
     const cur = get().corps, next = !add ? ids : [...cur.filter(i => !ids.includes(i)), ...ids.filter(i => !cur.includes(i))];
     set({ corps: next, armySel: -1, orderMode: false, fleet: -1, seaSel: -1, border: null, ...(region !== undefined && region >= 0 ? { sel: region } : {}) }); Sfx.click();
   },
   selectArmy: (armySel) => { set({ armySel, corps: [], border: null }); Sfx.click(); },
-  closeBorder: () => set({ border: null, fortMarker: null }),
+  closeBorder: () => set({ border: null, fortMarker: null, borderTool: '' }),
+  setBorderTool: (borderTool) => set({ borderTool }),
   dismiss: (key, until) => set(st => ({ dismissed: { ...st.dismissed, [key]: until } })),
   beginOrder: (orderKind = 'march', orderArg = -1, orderSub = 'bb') => set({ orderMode: true, orderKind, orderArg, orderSub }),
   selectFleet: (fleet) => { set({ fleet, seaSel: -1, orderMode: false }); Sfx.click(); },

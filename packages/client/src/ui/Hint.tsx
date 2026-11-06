@@ -19,6 +19,7 @@ export function Hint() {
   else if (orderMode && orderKind === 'landing') text = rich(t('Click an <b>enemy coast</b> to land on · <kbd>Esc</kbd> cancels'));
   else if (orderMode && orderKind === 'station') text = rich(t('Click a <b>sea zone</b> to station the fleet in · <kbd>Esc</kbd> cancels'));
   else if (orderMode && orderKind === 'cvair') text = rich(t("Click a region on the coasts of the carrier's zone, or next to them · <kbd>Esc</kbd> cancels"));
+  else if (orderMode && orderKind === 'corps') text = rich(t('Click <b>an own region or border</b> to move the selected corps there, <b>an enemy region</b> to attack · <kbd>Esc</kbd> cancels'));
   else if (orderMode) text = rich(t('Click a <b>bordering region</b> to march on it · <kbd>Esc</kbd> cancels'));
   else if (tut < 1) text = rich(touch ? t('Tap one of your <b>{0}</b> regions on the map to open it', FACTIONS[me].short) : t('Click one of your <b>{0}</b> regions on the map to open it', FACTIONS[me].short));
   else if (tut < 2) text = own ? rich(t('Spend Production in the <b>Recruit</b> tab · keys <kbd>1</kbd>–<kbd>4</kbd>')) : t('Select one of your own regions to recruit');

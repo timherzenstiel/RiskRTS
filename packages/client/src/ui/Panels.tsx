@@ -4,7 +4,7 @@
 import {
   ECON, FORMATION, OVER, REPL, WOUNDED, barrageWeeks, capacity, econOf, ledger, load,
   COST, FACTIONS, MANPOWER, borderLabel, buildWorld, groundUnits, hostileBorders, income, incomeTerms, poolGrowth, poolTerms, shellIncome, shellTerms,
-  SHIP, activeSpies, type GameState, type Term,
+  NATIONS, SHIP, activeSpies, type GameState, type Term,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { click } from './actions';
@@ -15,8 +15,10 @@ import { getLang, t, tx } from '../i18n';
 import { tn } from './LangPicker';
 import { rendererRef } from './refs';
 import { FleetList } from './Navy';
+import { NationCard } from './Nation';
 
-const MOB = ['Peacetime', 'Extended', 'Total'] as const;
+/** Conscription levels (design-play §4.3: full words). */
+export const MOB = ['Peacetime classes', 'Extended call-up', 'Total mobilisation'] as const;
 const fmt = (v: number) => { const de = getLang() === 'de'; return (v > 0 ? '+' : v < 0 ? '−' : '') + (Math.abs(v) >= 100 ? Math.round(Math.abs(v)).toLocaleString(de ? 'de-DE' : 'en-GB') : String(Math.round(Math.abs(v) * 10) / 10).replace('.', de ? ',' : '.')); };
 
 function Ledger({ terms, total, unit }: { terms: Term[]; total: number; unit: string }) {
@@ -30,11 +32,12 @@ function Ledger({ terms, total, unit }: { terms: Term[]; total: number; unit: st
   );
 }
 
-function Shell({ title, children }: { title: string; children: React.ReactNode }) {
+function Shell({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   const ui = useUi.getState;
   return (
     <section id="panel" className="plate" aria-label={t(title)}>
       <div className="pn-h"><h2>{t(title)}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
+      {sub && <p className="pn-sub">{t(sub)}</p>}
       <div className="pn-body">{children}</div>
     </section>
   );
@@ -54,7 +57,7 @@ export function EconomyPanel() {
   const L = ledger(g, me), wk = barrageWeeks(g, me);
   const sum = (terms: Term[]) => terms.reduce((s, x) => s + x.v, 0);
   return (
-    <Shell title="Economy">
+    <Shell title="Economy" sub="What the nation makes and how many men it has. Levers for shells and conscription.">
       <div className="lbl"><span>{t('Production · {0} in hand', f.supply)}</span><small>{t('spent on recruits, works, buildings, scouting')}</small></div>
       <Ledger terms={incomeTerms(g, me)} total={income(g, me)} unit="Production" />
       <div className="lbl"><span>{t('Shells · {0} in stock', Math.floor(f.shells ?? 0))}</span><small>{isFinite(wk) ? t('~{0} weeks of light barrage', wk < 10 ? Math.round(wk * 10) / 10 : Math.round(wk)) : t('no batteries')}</small></div>
@@ -79,13 +82,16 @@ export function EconomyPanel() {
           {MOB.map((m, i) => <button key={m} aria-pressed={mob === i} onClick={() => { click(); ui().order({ t: 'mobilise', level: i }); }}>{t(m)}</button>)}
         </div>
       </div>
-      <p className="note">{mob ? t('+{0} % age class, +{1} war weariness a week.', mob * Math.round(MANPOWER.mobGrowth * 100), mob * MANPOWER.mobWW) + ' ' : ''}{t('War weariness {0} %.', Math.round(f.ww))}</p>
+      <p className="note">{mob ? t('+{0} % age class, +{1} war weariness a week.', mob * Math.round(MANPOWER.mobGrowth * 100), mob * MANPOWER.mobWW) + ' ' : ''}{t('War weariness {0} % · unrest at {1} %.', Math.round(f.ww), NATIONS[me].unrest)}</p>
+      {f.unrestT > 0 && !strike.length && <p className="note budget full">{f.unrestT === 1 ? t('Unrest is brewing: 1 week above the threshold.') : t('Unrest is brewing: {0} weeks above the threshold.', f.unrestT)}</p>}
+      <p className="note">{t('Each level adds {0}% to the manpower growth and {1} war weariness per week; under total conscription the weariness no longer fades. Above {2}% for {3} weeks, remote home regions go on strike; {4} points higher they may rise.', Math.round(MANPOWER.mobGrowth * 100), MANPOWER.mobWW, NATIONS[me].unrest, MANPOWER.strikeAfter, MANPOWER.riseAbove)}</p>
       <div className="lbl"><span>{t('Supply')}</span><small>{t('{0} by rail · {1} by road · {2} cut off', mine.length - cut.length - road.length, road.length, cut.length)}</small></div>
       {cut.map(r => <button key={'c' + r.id} className="sit-row" onClick={() => go(r.id)}><span><b>{nm(W.regions[r.id].name)}</b> <small>{tn('Cut off: {0}', { raw: cutReason(g, r) })}</small></span><span className="go">{t('Go')}</span></button>)}
       {loads.slice(0, 8).map(({ r, l, c }) => <button key={'l' + r.id} className="sit-row" title={capLines(g, r)} onClick={() => go(r.id)}><span><b>{nm(W.regions[r.id].name)}</b> <small>{t(l > c * OVER.far ? 'Far over capacity: men fall sick' : l > c ? 'Over capacity: no replacements, morale falls' : 'Near capacity')} · {l} / {c}</small></span><span className="go">{t('Go')}</span></button>)}
       {strike.map(r => <button key={'s' + r.id} className="sit-row" onClick={() => go(r.id)}><span><b>{nm(W.regions[r.id].name)}</b> <small>{t('On strike: pays nothing')}</small></span><span className="go">{t('Go')}</span></button>)}
       {!cut.length && !strike.length && !loads.length && <p className="note">{t('Every region is supplied and under its capacity.')}</p>}
       <p className="note">{t('A railway, a factory, a harbour or the capital raise what a region can feed; mud, winter and heat lower it.')}</p>
+      <details className="pn-nation"><summary>{t('The nation: strengths and weaknesses')}</summary><NationCard f={me} compact /></details>
     </Shell>
   );
 }
@@ -98,7 +104,7 @@ export function NavyPanel() {
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState;
   const ports = g.regions.filter(r => r.owner === me && r.port);
   return (
-    <Shell title="Navy">
+    <Shell title="Navy" sub="Ports, warships and convoys. Select a fleet to give it orders.">
       <FleetList />
       <div className="lbl"><span>{t('Ports · {0}', ports.length)}</span><small>{t('ships docked')}</small></div>
       {ports.map(r => {
@@ -129,7 +135,7 @@ export function IntelPanel() {
     .sort((x, y) => (y.b.danger - x.b.danger) || (y.age - x.age)).slice(0, 8);
   const reports = g.regions.filter(r => r.owner !== me && r.owner >= 0 && r.seen !== undefined).sort((a, b) => (b.seen ?? 0) - (a.seen ?? 0)).slice(0, 10);
   return (
-    <Shell title="Intel">
+    <Shell title="Intel" sub="What you know of the enemy and how old it is. Send scouts where you know too little.">
       <div className="lbl"><span>{t('Agents · {0}/3', spies.length)}</span></div>
       {spies.length ? spies.map(s => (
         <button key={s.id} className="sit-row" onClick={() => go(s.region)}><span><Icon k="spy" size={14} /> <b>{nm(W.regions[s.region].name)}</b> <small>{working.has(s.id) ? `${t('reporting')}${(s.hot ?? -1) > g.day ? ' · ' + t('exposed after sabotage') : ''}` : t('on the way · {0} s', Math.ceil(s.eta - g.time))}</small></span><span className="go">{t('Go')}</span></button>

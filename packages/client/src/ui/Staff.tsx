@@ -36,7 +36,12 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
       ] };
     }
     case 'fort': return { title: `${q.fort === 'wire' ? 'Barbed wire' : 'Trench'} on ${where}`, why: `The border is not safe: ${bal}.`, opts: [{ label: `Dig · ${q.cost}`, opt: 'yes', off: sup < (q.cost ?? 0) }, { label: 'Deny', opt: 'deny' }] };
-    case 'recon': return { title: `Patrol over ${where}`, why: q.own !== undefined && q.their ? 'Our last report is old.' : 'We do not know what is across.', opts: [{ label: `Send · ${q.cost}`, opt: 'yes', off: sup < (q.cost ?? 0) }, { label: 'Deny', opt: 'deny' }] };
+    case 'recon': {
+      const what = q.by === 'spy' ? `Spy into ${R(q.sector)}` : q.by === 'recon' ? `Reconnaissance flight over ${R(q.sector)}` : `Cavalry patrol across to ${R(q.sector)}`;
+      const how = q.by === 'spy' ? 'An agent from the capital reports from inside every week until caught.' : q.by === 'recon' ? `From the airfield at ${R(q.from ?? q.region)}: troops, buildings and every border.` : `From ${R(q.from ?? q.region)}: the troops and the defences of this border.`;
+      const why = q.for === 'attack' ? 'He will not propose an attack without a fresh report.' : q.for === 'target' ? 'He wants eyes on the target of his offensive.' : 'Our report on this border is missing or old.';
+      return { title: what, why: `${why} ${how}`, opts: [{ label: `Send · ${q.cost}`, opt: 'yes', off: sup < (q.cost ?? 0) }, { label: 'Deny', opt: 'deny' }] };
+    }
     case 'attack': return { title: `${q.goal === 2 ? 'Invade' : 'Take the first line of'} ${R(q.sector)}`, why: `${names || 'His corps'} on ${where} · ${bal} · ratio ${(q.ratio ?? 0).toFixed(1)}×.`, opts: [{ label: 'Attack', opt: 'yes', danger: true, title: 'The corps assemble on the border and go over' }, { label: 'Deny', opt: 'deny' }] };
     case 'fallback': return { title: `Fall back from ${where}`, why: `The border cannot be held: ${bal}. ${names} would fall back to the centre.`, opts: [{ label: 'Fall back', opt: 'yes', danger: true }, { label: 'Hold on', opt: 'deny' }] };
     case 'release': {

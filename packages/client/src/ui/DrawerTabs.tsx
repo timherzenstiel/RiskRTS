@@ -78,9 +78,9 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
           title={t('Unlocks squadrons and reconnaissance flights here')} onBuy={() => build(id, 'airfield')} />; })()}
       </CameoGrid>
       <Railways region={region} id={id} />
-      <div className="lbl"><span>Defences in the interior · they join the first front of every battle here</span></div>
+      <div className="lbl"><span>{t('Defences in the interior · they join the first front of every battle here')}</span></div>
       <FortGrid region={region} id={id} sector={-1} />
-      <p className="note">Trenches, wire and defences on a border are built from its border card: click the border on the map, or a chip in Fronts mode.</p>
+      <p className="note">{t('Trenches, wire and defences on a border are built from its border card: click the border on the map, or a chip in Fronts mode.')}</p>
     </>
   );
 }
@@ -126,7 +126,7 @@ export function FortifyTab({ region, id }: { region: RegionState; id: number }) 
           );
         })}
       </div>
-      {sector > -2 ? <FortGrid region={region} id={id} sector={sector} /> : <p className="note">Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.</p>}
+      {sector > -2 ? <FortGrid region={region} id={id} sector={sector} /> : <p className="note">{t('Everything stands on the border you build it on. A trench facing one neighbour does nothing against an attack from another. If the field army falls, defences on other borders hold out and keep the region contested.')}</p>}
     </>
   );
 }
@@ -139,18 +139,18 @@ export function FortGrid({ region, id, sector }: { region: RegionState; id: numb
   const here = (s: number) => region.defs.filter(d => d.s === s && d.f === region.owner);
   return (
     <>
-      <div className="lbl"><span>{sector < 0 ? 'Interior defences join the first front of every battle here' : `${sector >= 1000 ? `Works on the ${W.zones[sector - 1000].name} coast only fight landings there` : `Works facing ${W.regions[sector].name} only fight attacks from there`} · ${slotsUsed(region, sector)}/${slotsMax(id, sector)} slots`}</span></div>
-      <CameoGrid label="Works">
+      <div className="lbl"><span>{sector < 0 ? t('Interior defences join the first front of every battle here') : `${sector >= 1000 ? t('Works on the {0} coast only fight landings there', W.zones[sector - 1000].name) : t('Works facing {0} only fight attacks from there', W.regions[sector].name)} · ${t('{0}/{1} slots', slotsUsed(region, sector), slotsMax(id, sector))}`}</span></div>
+      <CameoGrid label={t('Works')}>
         {(sector < 0 ? INTERIOR_KINDS : BORDER_KINDS).map(k => {
           const c = fortCost(region, k, sector, g), w = worksAt(region, sector);
           const need = k === 'flak' ? 'air' : k === 'bunk' ? 'trench3' : k === 'trench' && w.tr >= 2 ? 'trench3' : k === 'trench' && w.tr >= 1 ? 'trench2' : null;
           const early = need && !techOn(g, me, need);
           const room = k === 'trench' || slotsUsed(region, sector) + SLOT_USE[k] <= slotsMax(id, sector);
           const pips = k === 'trench' ? '■'.repeat(w.tr) + '□'.repeat(MAX_TRENCH - w.tr) : k === 'sand' ? '■'.repeat(w.sand) + '□'.repeat(MAX_SAND - w.sand) : k === 'wire' ? '■'.repeat(w.wire) + '□'.repeat(MAX_WIRE - w.wire) : undefined;
-          const cost = c === null ? 'Max' : !room && !early ? 'Full' : <><SupplyIcon />{c}</>;
-          return <Cameo key={k} k={k} name={FNAME[k]} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
+          const cost = c === null ? t('Max') : !room && !early ? t('Full') : <><SupplyIcon />{c}</>;
+          return <Cameo key={k} k={k} name={t(FNAME[k])} pips={pips} done={c === null} lock={early ? monthStr(techDayFor(me, need!, g.factions[me].rushed)) : undefined} cost={cost}
             count={k === 'trench' || k === 'sand' || k === 'wire' ? undefined : here(sector).filter(d => d.k === k).length}
-            title={FDESC[k]} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
+            title={t(FDESC[k])} disabled={c === null || !!early || !room || supply < (c ?? 0)} onBuy={() => ui().fortify(id, k, sector)} />;
         })}
       </CameoGrid>
     </>
@@ -258,7 +258,7 @@ export function AirSection({ region, id }: { region: RegionState; id: number }) 
         return (
           <div className="it nb" key={r.id}>
             <i className="dot" style={{ '--c': F.color } as React.CSSProperties} />
-            <div className="tx"><b>{nm(W.regions[r.id].name)}</b><small>{r.owner === me ? t('Support our defence') : nm(F.short)} · {d > 1 ? t('{0} borders', d) : t('{0} border', d)}{r.battle >= 0 ? ' · ' + t('battle') : ''}{flak ? ' · ' + t('{0} AA', flak) : ''}</small></div>
+            <div className="tx"><b>{nm(W.regions[r.id].name)}</b><small>{r.owner === me ? t('Support our defence') : nm(F.short)} · {d > 1 ? t('{0} borders', d) : d === 1 ? t('1 border') : t('{0} border', d)}{r.battle >= 0 ? ' · ' + t('battle') : ''}{flak ? ' · ' + t('{0} AA', flak) : ''}</small></div>
             <button className={'buy ' + (r.owner === me ? 'plain' : 'atk')} onClick={() => ui().air(id, r.id)}>{r.owner === me ? t('Support') : t('Strike')}</button>
           </div>
         );

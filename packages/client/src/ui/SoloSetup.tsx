@@ -45,7 +45,7 @@ export function SoloSetup() {
         <div className="row spread">
           <div><div className="lbl"><span>{t('Difficulty · {0}', DIFFICULTIES[diff].desc)}</span></div>
             <div className="seg" role="group" aria-label={t('Difficulty')}>
-              {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={diff === i} onClick={() => { click(); setDiff(i); }}>{tx(d.name)}</button>)}
+              {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={diff === i} onClick={() => { click(); setDiff(i); }}>{t('difficulty|' + d.name)}</button>)}
             </div></div>
           <div className="row"><button className="btn" onClick={() => { click(); useUi.getState().setScreen('title'); }}>{t('Back')}</button>
             <button className="btn primary" disabled={pick < 0} onClick={begin}>{t('Begin the war')}</button></div>

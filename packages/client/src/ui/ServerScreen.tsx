@@ -63,7 +63,7 @@ export function ServerScreen() {
           return (
             <div key={w.id} className={'world' + (w.over ? ' over' : '')}>
               <div className="wh"><b>{w.name}</b>{w.ranked && <span className="badge">{t('Ranked')}</span>}
-                <small>{w.over ? `${t('Over')}${w.winner !== null ? ` · ${t('{0} won', FACTIONS[w.winner].name)}` : ''}` : dateStr(w.day)} · {tx(DIFFICULTIES[w.difficulty]?.name)}{w.spectators ? ` · ${t('{0} watching', w.spectators)}` : ''}</small></div>
+                <small>{w.over ? `${t('Over')}${w.winner !== null ? ` · ${t('{0} won', FACTIONS[w.winner].name)}` : ''}` : dateStr(w.day)} · {t('difficulty|' + (DIFFICULTIES[w.difficulty]?.name ?? ''))}{w.spectators ? ` · ${t('{0} watching', w.spectators)}` : ''}</small></div>
               <div className="wseats">
                 {w.seats.map(s => {
                   const F = FACTIONS[s.faction], mine = seat?.faction === s.faction;

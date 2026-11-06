@@ -181,13 +181,16 @@ export const UI_MENUS: Record<string, string> = {
   'Select a region. Its file opens on the right: garrison, recruiting, building and march orders.':
     'Wähle eine Region aus. Rechts öffnet sich ihre Akte: Besatzung, Aushebung, Bauten und Marschbefehle.',
   'Right-click': 'Rechtsklick',
-  'With your region selected, right-click another region to march troops there: into an enemy region to attack, or into one of your own (further inland too) to move them. A move between your own regions takes idle troops from the centre and the quiet borders. The share picker in the March tab sets how many go. On a phone use':
-    'Ist deine Region ausgewählt, schickt ein Rechtsklick auf eine andere Region Truppen dorthin: in eine feindliche Region zum Angriff oder in eine eigene (auch weiter im Landesinneren), um sie zu verlegen. Eine Verlegung zwischen eigenen Regionen nimmt untätige Truppen aus dem Hinterland und von ruhigen Grenzen. Wie viele gehen, legst du mit dem Anteil im Marsch-Reiter fest. Am Handy nimm',
-  'March → Pick a target on the map': 'Marsch → Ziel auf der Karte wählen',
-  '. Dashed sea lanes count as borders; troops sail across. Attacks run in phases: forming up, the march to the border, assembly, then the first line and the depth.':
-    '. Gestrichelte Seewege gelten als Grenzen; die Truppen setzen über. Angriffe laufen in Phasen ab: Aufstellung, Marsch zur Grenze, Bereitstellung, dann die erste Linie und die Tiefe.',
-  'Map layers: troops (corps, front lines, columns) or industry (buildings, rails). Press again for the full map.':
-    'Kartenebenen: Truppen (Korps, Frontlinien, Kolonnen) oder Industrie (Gebäude, Eisenbahn). Nochmals drücken für die volle Karte.',
+  "With your region selected, right-click another region to march troops there: into an enemy region to attack, or into one of your own (further inland too) to move them. A move between your own regions takes idle troops from the centre and the quiet borders. The share picker in the region's Overview sets how many go. On a phone use <b>Overview → Pick a target on the map</b>. Click close to one of your borders inside the selected region to open its border card: fortify, scout across, send corps. Dashed sea lanes count as borders; troops sail across. Attacks run in phases: forming up, the march to the border, assembly, then the first line and the depth.":
+    'Ist deine Region ausgewählt, schickt ein Rechtsklick auf eine andere Region Truppen dorthin: in eine feindliche Region zum Angriff oder in eine eigene (auch weiter im Landesinneren), um sie zu verlegen. Eine Verlegung zwischen eigenen Regionen nimmt untätige Truppen aus dem Hinterland und von ruhigen Grenzen. Wie viele gehen, legst du mit dem Anteil in der Übersicht der Region fest. Am Handy nimm <b>Übersicht → Ziel auf der Karte wählen</b>. Ein Klick nahe einer deiner Grenzen in der ausgewählten Region öffnet ihre Grenzkarte: befestigen, hinüberspähen, Korps schicken. Gestrichelte Seewege gelten als Grenzen; die Truppen setzen über. Angriffe laufen in Phasen ab: Aufstellung, Marsch zur Grenze, Bereitstellung, dann die erste Linie und die Tiefe.',
+  'Corps · O': 'Korps · O',
+  'Click a corps marker on the map, or a corps in the Forces panel (<kbd>O</kbd>), to select it; Shift-click adds more. Then right-click: an own region or one of its borders moves the corps there, an enemy region next to it attacks. A corps holds at most 20 battalions and keeps its men, morale and experience (a star per battle won, +5 % damage each). Corps you have ordered are marked ✋; Auto leaves them alone.':
+    'Klicke auf eine Korpsmarke auf der Karte oder auf ein Korps unter Truppen (<kbd>O</kbd>), um es auszuwählen; Umschalt-Klick fügt weitere hinzu. Dann Rechtsklick: Auf eine eigene Region oder eine ihrer Grenzen verlegt das Korps dorthin, auf eine angrenzende feindliche Region greift es an. Ein Korps umfasst höchstens 20 Bataillone und behält seine Männer, seine Moral und seine Erfahrung (ein Stern je gewonnener Schlacht, je +5 % Schaden). Korps, denen du Befehle gegeben hast, tragen ein ✋; Auto lässt sie in Ruhe.',
+  'Armies · G': 'Armeen · G',
+  'Select corps and press <b>Form army</b> on the corps card: a commander takes them and the regions they stand in as his front. He shifts his corps to the borders that need them and asks you (Staff panel, <kbd>G</kbd>) for men, trenches and wire, patrols, and permission to attack, to fall back or to send corps back he no longer needs, after a treaty or when a border is safe. Set his mandate, target, budget and standing approvals on the army card.':
+    'Wähle Korps aus und drücke auf der Korpskarte <b>Armee bilden</b>: Ein Befehlshaber übernimmt sie und die Regionen, in denen sie stehen, als seine Front. Er verschiebt seine Korps an die Grenzen, die sie brauchen, und bittet dich (Stab, <kbd>G</kbd>) um Männer, Gräben und Draht, Patrouillen und um die Erlaubnis, anzugreifen, zurückzuweichen oder Korps zurückzuschicken, die er nicht mehr braucht – nach einem Vertrag oder wenn eine Grenze sicher ist. Seinen Auftrag, sein Ziel, sein Budget und seine Daueranweisungen legst du auf der Armeekarte fest.',
+  'Map modes: political, fronts (wars, battles and the balance on each of your borders), forces (corps, front lines, columns), supply (buildings, rails), intel (what you know). Press again for the political map.':
+    'Kartenmodi: Politisch, Fronten (Kriege, Schlachten und das Kräfteverhältnis an jeder deiner Grenzen), Truppen (Korps, Frontlinien, Kolonnen), Nachschub (Gebäude, Eisenbahn), Aufklärung (was du weißt). Nochmals drücken für die politische Karte.',
   'Drag · wheel': 'Ziehen · Mausrad',
   'Pan and zoom (pinch on a phone).': 'Verschieben und zoomen (am Handy mit zwei Fingern).',
   'jump to the theatre, front, battle and close views at the cursor;': 'springen am Mauszeiger zur Kriegsschauplatz-, Front-, Schlacht- und Nahansicht;',
@@ -196,8 +199,8 @@ export const UI_MENUS: Record<string, string> = {
   'Recruit one infantry battalion, MG company, field battery or tank platoon in the selected region.':
     'Hebe in der ausgewählten Region ein Infanteriebataillon, eine MG-Kompanie, eine Feldbatterie oder einen Panzerzug aus.',
   'Space · Esc': 'Leertaste · Esc',
-  'Pause. Esc steps back: cancels a march, closes the scoreboard, deselects, then opens the menu.':
-    'Pause. Esc geht einen Schritt zurück: bricht einen Marsch ab, schließt die Punktetafel, hebt die Auswahl auf und öffnet schließlich das Menü.',
+  'Pause. Esc steps back: cancels a march, closes the scoreboard, clears the selected corps, deselects, then opens the menu.':
+    'Pause. Esc geht einen Schritt zurück: bricht einen Marsch ab, schließt die Punktetafel, hebt die Korpsauswahl auf, hebt die Regionsauswahl auf und öffnet schließlich das Menü.',
   "Every {0} seconds a convoy arrives with supply for every region linked by your own land (or sea lanes between your regions) to your capital, a factory or your home territory, plus continent bonuses and +2 per factory. One infantry unit is a battalion of 100 men; losses thin formations out and wounded return with later convoys. Battles are fought on the border the attack comes over, against that border's trench, sandbags, wire and defences. You see rivals only across your borders, as an estimate: patrols, reconnaissance flights and spies tell you more. Heavy losses raise war weariness, which cuts income and morale; broken troops surrender.":
     'Alle {0} Sekunden trifft ein Konvoi mit Nachschub ein – für jede Region, die über eigenes Land (oder Seewege zwischen deinen Regionen) mit deiner Hauptstadt, einer Fabrik oder deinem Kernland verbunden ist, dazu Kontinentboni und +2 je Fabrik. Eine Infanterieeinheit ist ein Bataillon von 100 Mann; Verluste dünnen Verbände aus, Verwundete kehren mit späteren Konvois zurück. Gekämpft wird an der Grenze, über die der Angriff kommt, gegen deren Schützengraben, Sandsäcke, Stacheldraht und Verteidigungsanlagen. Gegner siehst du nur jenseits deiner Grenzen, und nur als Schätzung: Patrouillen, Aufklärungsflüge und Spione verraten mehr. Schwere Verluste steigern die Kriegsmüdigkeit, die Einkommen und Moral senkt; gebrochene Truppen ergeben sich.',
   'Every front has its own levers. Your guns fire light, heavy or not at all; each shot uses shells from the national stockpile (factories and the capital make more, or buy them with supply). Shells landing on a trench':
@@ -296,9 +299,9 @@ export const UI_MENUS: Record<string, string> = {
   'Click one of your <b>{0}</b> regions on the map to open it': 'Klicke auf der Karte auf eine Region von <b>{0:dat}</b>, um sie zu öffnen',
   'Spend supply in the <b>Recruit</b> tab · keys <kbd>1</kbd>–<kbd>4</kbd>': 'Gib Nachschub im Reiter <b>Ausheben</b> aus · Tasten <kbd>1</kbd>–<kbd>4</kbd>',
   'Select one of your own regions to recruit': 'Wähle eine deiner Regionen, um Truppen auszuheben',
-  'Open the <b>March</b> tab to send troops to a neighbour': 'Öffne den Reiter <b>Marsch</b>, um Truppen in eine Nachbarregion zu schicken',
-  'Now <b>right-click</b> a neighbouring region to march, or use the <b>March</b> tab': 'Jetzt mit <b>Rechtsklick</b> auf eine Nachbarregion marschieren – oder den Reiter <b>Marsch</b> nutzen',
-  'Select your region, then open its March tab': 'Wähle deine Region und öffne ihren Marsch-Reiter',
+  'Use <b>Pick a target on the map</b> in the Overview to send troops to a neighbour': 'Nutze <b>Ziel auf der Karte wählen</b> in der Übersicht, um Truppen in eine Nachbarregion zu schicken',
+  'Now <b>right-click</b> a neighbouring region to march, or select a corps and right-click': 'Jetzt mit <b>Rechtsklick</b> auf eine Nachbarregion marschieren – oder ein Korps wählen und rechtsklicken',
+  'Select your region, then pick a target from its Overview': 'Wähle deine Region und dann in ihrer Übersicht ein Ziel',
   'Select your region, then right-click a neighbour to attack': 'Wähle deine Region und greif mit Rechtsklick einen Nachbarn an',
   'Pinch in on a <b>red battle marker</b> to watch the fight': 'Zoom mit zwei Fingern an eine <b>rote Schlachtmarke</b> heran, um dem Kampf zuzusehen',
   'Scroll in on a <b>red battle marker</b> to watch the fight': 'Scroll an eine <b>rote Schlachtmarke</b> heran, um dem Kampf zuzusehen',
@@ -361,7 +364,7 @@ export const UI_MENUS: Record<string, string> = {
 
   // ---- the nation ----
   'National unit': 'Nationale Einheit',
-  'from {0}': 'ab {0}',
+  'date|from {0}': 'ab {0}',
   'Strengths': 'Stärken',
   'Weaknesses': 'Schwächen',
   'Tanks from {0} at {1}% extra cost': 'Panzer ab {0} zu {1} % Mehrkosten',
@@ -417,4 +420,5 @@ export const UI_MENUS: Record<string, string> = {
   'Message all powers': 'Nachricht an alle Mächte',
   'Accept': 'Annehmen',
   'Decline': 'Ablehnen',
+  'Ready to play offline.': 'Bereit zum Offline-Spielen.',
 };

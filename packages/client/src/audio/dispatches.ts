@@ -34,9 +34,10 @@ export interface Dispatch {
 const de = () => getLang() === 'de';
 
 /** A line in the current language: the English template (or its German) with the pieces filled in as given. */
-function L(en: string, ...a: (string | number)[]): string {
+function L(key: string, ...a: (string | number)[]): string {
+  const bar = /^[a-z]+\|/.exec(key), en = bar ? key.slice(bar[0].length) : key;
   let tpl = en;
-  if (de()) { const g = DE[en]; if (g === undefined) missing.add(en); else tpl = g; }
+  if (de()) { const g = DE[key]; if (g === undefined) missing.add(key); else tpl = g; }
   return tpl.replace(/\{(\d+)\}/g, (_, i: string) => String(a[+i] ?? ''));
 }
 
@@ -172,17 +173,17 @@ export function commanderCall(g: GameState, e: Extract<GameEvent, { k: 'request'
     : (G ? `${dat ? 'der' : 'die'} Küste bei ${R(e.region)}` : `the coast at ${R(e.region)}`);
   const corps = (q?.corps ?? []).map(id => { for (const r of g.regions) { const c = r.cs?.find(x => x.id === id); if (c) return corpsName(c.n); } return null; }).filter(Boolean) as string[];
   const many = corps.length > 1;
-  const names = corps.length ? corps.length === 1 ? corps[0] : `${corps.slice(0, -1).join(', ')} ${G ? 'und' : 'and'} ${corps[corps.length - 1]}` : L('the corps');
+  const names = corps.length ? corps.length === 1 ? corps[0] : `${corps.slice(0, -1).join(', ')} ${G ? 'und' : 'and'} ${corps[corps.length - 1]}` : L('radio|the corps');
   const count = (fallback: string) => q?.n !== undefined ? String(q.n) : L(fallback);
   let say: string;
   switch (e.kind) {
     case 'men': say = e.urg === 2
-      ? pick([L('{0} Urgent. They are massing against {1}. I need {2} battalions or the line will not hold. {3}', head, border(), count('more'), over),
-        L('{0} {1} is too thin. Request reinforcements at once, {2} battalions. {3}', head, border(), count('several'), over)])
-      : L('{0} Request reinforcements for {1}, {2} battalions. {3}', head, border(), count('a few'), over); break;
+      ? pick([L('{0} Urgent. They are massing against {1}. I need {2} battalions or the line will not hold. {3}', head, border(), count('radio|more'), over),
+        L('{0} {1} is too thin. Request reinforcements at once, {2} battalions. {3}', head, border(), count('radio|several'), over)])
+      : L('{0} Request reinforcements for {1}, {2} battalions. {3}', head, border(), count('radio|a few'), over); break;
     case 'fort': say = pick([
       L('{0} Request permission to dig in on {1}. {2} {3}', head, border(true), L(q?.fort === 'wire' ? 'We want wire out in front.' : 'The men need a proper trench.'), over),
-      L('{0} {1} has no proper works. Request {2}. {3}', head, border(), L(q?.fort === 'wire' ? 'barbed wire' : 'a trench line'), over)]); break;
+      L('{0} {1} has no proper works. Request {2}. {3}', head, border(), L(q?.fort === 'wire' ? 'radio|barbed wire' : 'radio|a trench line'), over)]); break;
     case 'recon': {
       const there = R(e.sector);
       say = q?.by === 'spy' ? L('{0} Before we go in, I want an agent inside {1}. Request a spy from the capital. {2}', head, there, over)
@@ -191,7 +192,7 @@ export function commanderCall(g: GameState, e: Extract<GameEvent, { k: 'request'
       break;
     }
     case 'attack': say = pick([
-      L(many ? '{0} {1} are ready on {2}. Request permission to {3}. {4}' : '{0} {1} is ready on {2}. Request permission to {3}. {4}', head, names, border(true), L(q?.goal === 2 ? 'invade' : 'take their first line'), over),
+      L(many ? '{0} {1} are ready on {2}. Request permission to {3}. {4}' : '{0} {1} is ready on {2}. Request permission to {3}. {4}', head, names, border(true), L(q?.goal === 2 ? 'radio|invade' : 'radio|take their first line'), over),
       L('{0} We have the advantage facing {1}. Request permission to attack. {2}', head, R(e.sector), over)]); break;
     case 'fallback': say = L('{0} We cannot hold {1}. Request permission to fall back to the centre. {2}', head, border(), over); break;
     case 'release': say = q?.why === 'peace'

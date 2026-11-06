@@ -60,7 +60,7 @@ export function HostLobby() {
       <div className="row spread">
         <div><div className="lbl"><span>{t('Difficulty of the computer powers · {0}', DIFFICULTIES[s.difficulty].desc)}</span></div>
           <div className="seg" role="group" aria-label={t('Difficulty')}>
-            {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={s.difficulty === i} onClick={() => { click(); l.setDifficulty(i); }}>{tx(d.name)}</button>)}
+            {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={s.difficulty === i} onClick={() => { click(); l.setDifficulty(i); }}>{t('difficulty|' + d.name)}</button>)}
           </div></div>
         <div><div className="lbl"><span>{t('In the room ({0})', humans)}</span></div><Players lobby={s} you="host" /></div>
       </div>

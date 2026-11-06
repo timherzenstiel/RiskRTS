@@ -66,10 +66,13 @@ function fill(tpl: string, get: (i: number, c: Case | undefined) => string): str
   });
 }
 
-/** Translate an English template and fill in its arguments. */
+const CTX = /^[a-z]+\|/;
+/** Translate an English template and fill in its arguments. A template may start with a context, "difficulty|Recruit". */
 export function t(tpl: string, ...args: Arg[]): string {
-  if (lang === 'en') return fill(tpl, i => arg(args[i]));
-  const de = DE[tpl] ?? (/[A-Za-z]{3}/.test(tpl) && missing.add(tpl), tpl);
+  // "context|English": the same English word with different German by context (e.g. 'difficulty|Recruit')
+  const bar = CTX.exec(tpl), en = bar ? tpl.slice(bar[0].length) : tpl;
+  if (lang === 'en') return fill(en, i => arg(args[i]));
+  const de = DE[tpl] ?? DE[en] ?? (/[A-Za-z]{3}/.test(en) && missing.add(tpl), en);
   return fill(de, (i, c) => arg(args[i], c));
 }
 
@@ -81,7 +84,7 @@ function patterns(): Pat[] {
   if (pats) return pats;
   const list: { p: Pat; lit: number }[] = [];
   for (const [en, de] of Object.entries(DE)) {
-    if (!/\{\d+\}/.test(en)) continue;
+    if (!/\{\d+\}/.test(en) || CTX.test(en)) continue;
     const order: number[] = []; let src = '^', last = 0, lit = 0;
     for (const m of en.matchAll(/\{(\d+)\}/g)) {
       const part = en.slice(last, m.index); src += esc(part); lit += part.length;

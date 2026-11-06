@@ -138,5 +138,16 @@ describe('commanders on the radio', () => {
     expect(dispatchFor(g, ev!, 1)).toBeNull();
     const rel = commanderCall(g, { k: 'release', faction: 0, army: h.id, n: 7, region: A, why: 'peace' }, 0)!;
     expect(rel.say).toContain('Seventh Corps'); expect(rel.say).toContain('at peace');
+    // the same calls in German, for every kind of request
+    withLang('de', () => {
+      missing.clear();
+      const de = commanderCall(g, ev!, 0)!;
+      expect(de.say).toContain('General Garnier'); expect(de.say).toContain('Armee'); expect(de.say).toContain('Grenze zu Deutschland');
+      expect(commanderCall(g, { k: 'release', faction: 0, army: h.id, n: 7, region: A, why: 'peace' }, 0)!.say).toContain('Siebtes Korps zieht sich nach Frankreich zurück');
+      for (const kind of ['men', 'fort', 'recon', 'attack', 'fallback', 'release'] as const)
+        for (let i = 0; i < 6; i++) expect(commanderCall(g, { ...ev!, kind }, 0)!.say).not.toMatch(/\b(Request|border|Over)\b/);
+      if (process.env.SHOW) for (const kind of ['men', 'fort', 'recon', 'attack', 'fallback', 'release'] as const) console.log(commanderCall(g, { ...ev!, kind }, 0)!.say);
+      expect([...missing]).toEqual([]);
+    });
   });
 });

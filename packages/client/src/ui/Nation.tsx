@@ -12,7 +12,7 @@ export function NationCard({ f, compact }: { f: number; compact?: boolean }) {
   const N = NATIONS[f], F = FACTIONS[f];
   return (
     <div className={'nation' + (compact ? ' compact' : '')} style={{ '--c': F.color } as React.CSSProperties}>
-      <div className="nu"><small>{t('National unit')}{N.from !== undefined ? ` · ${tn('from {0}', { raw: monthStr(N.from) })}` : ''}</small><b>{tx(N.unitName)}</b><span>{tx(N.unitDesc)}</span></div>
+      <div className="nu"><small>{t('National unit')}{N.from !== undefined ? ` · ${tn('date|from {0}', { raw: monthStr(N.from) })}` : ''}</small><b>{tx(N.unitName)}</b><span>{tx(N.unitDesc)}</span></div>
       <div className="nt">
         <div><small>{t('Strengths')}</small>{N.strengths.map(s => <p key={s.name}><b>{tx(s.name)}.</b> {tx(s.desc)}</p>)}</div>
         <div><small>{t('Weaknesses')}</small>{N.weaknesses.map(s => <p key={s.name} className="weak"><b>{tx(s.name)}.</b> {tx(s.desc)}</p>)}</div>

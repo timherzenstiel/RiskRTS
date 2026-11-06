@@ -136,7 +136,9 @@ export class Labels {
     this.cityLabels.forEach((l, i) => { l.el.textContent = tx(this.cities[i].name); });
     for (const l of this.armies.values()) l.count = '';
     for (const l of this.fleets.values()) l.text = '';
-    for (const l of this.corps.values()) { l.key = ''; l.el.title = t('Open the deployment of this region'); }
+    // corps markers (their tooltip depends on the owner) and balance chips are rebuilt in the new language
+    for (const l of this.corps.values()) l.el.remove(); this.corps.clear();
+    for (const l of this.chips.values()) l.el.remove(); this.chips.clear();
     for (const l of [...this.battles.values(), ...this.seas.values()]) { l.label = ''; l.nextText = 0; l.el.setAttribute('aria-label', l.aria()); }
   }
 
@@ -324,7 +326,7 @@ export class Labels {
     const ord = c.ord ?? 0, left = ord >= 1 ? Math.max(0, (c.ready ?? 0) - g.time) : 0;
     const dug = ord === 0 && c.since !== undefined && g.time - c.since >= 40;
     const state = ord >= 1 ? (left > 0 && !c.now ? 'asm' : 'atk') : dug ? 'dug' : 'hold';
-    const name = named && c.n > 0 ? (many > 1 ? `${many} corps` : groupName(f, 1, c.n, true)) : '';
+    const name = named && c.n > 0 ? (many > 1 ? t('{0} corps', many) : tx(groupName(f, 1, c.n, true))) : '';
     const key = f + state + est + name + many + (on ? 'on' : '') + (left > 0 ? Math.ceil(left) : '') + symOf(c.u).length + (c.u.art ? 'a' : '') + (c.u.tank ? 't' : '') + (c.u.mg ? 'm' : '');
     if (key === l.key) return;
     l.key = key;
@@ -386,9 +388,9 @@ function fleetText(g: GameState, fl: Fleet, own: boolean) {
 /** Intel mode: what the viewer knows of a region: everything (its battalions), the date of the last report, an estimate, or nothing. */
 function intelLabel(r: GameState['regions'][number]) {
   const v = r.vis ?? 3;
-  if (v >= 3) return r.spied ? 'Agent' : String(totalUnits(r.units));
-  if (v === 2 && r.seen !== undefined) { const d = new Date(Date.UTC(1914, 7, 1) + r.seen * 864e5); return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]}`; }
-  if (v === 1) return 'Est.';
+  if (v >= 3) return r.spied ? t('Agent') : String(totalUnits(r.units));
+  if (v === 2 && r.seen !== undefined) { const d = new Date(Date.UTC(1914, 7, 1) + r.seen * 864e5), mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]; return getLang() === 'de' ? `${d.getUTCDate()}. ${tx(mon)}` : `${d.getUTCDate()} ${mon}`; }
+  if (v === 1) return t('Est.');
   return '?';
 }
 
@@ -402,10 +404,13 @@ function chipText(l: ChipLabel, b: Balance, W: World) {
   if (key === l.key) return; l.key = key;
   l.el.className = 'bal d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '') + (b.know === 2 ? ' old' : '');
   l.el.innerHTML = `<b>${own}</b><i style="--f:${fill.toFixed(2)}"></i><b>${their}</b>`;
-  const where = b.nb >= 0 ? `Border with ${W.regions[b.nb].name}` : 'Coast';
-  const why = b.danger < 0 ? 'Nothing known of the other side: send a patrol or a reconnaissance flight.' : b.massing ? 'Troops across the border are assembling for an attack.' : ['Safe: we are clearly stronger.', 'About even.', 'They may be stronger.', 'In danger: they are much stronger.'][b.danger];
-  const ours = `Ours: ${b.own.btl[0]} btl on the border${b.own.reserve[0] ? ` + ${b.own.reserve[0]} from the reserve` : ''}${b.own.trench ? `, trench ${'I'.repeat(Math.min(3, b.own.trench))}` : ''}${b.own.wire ? ', wire' : ''}${b.own.defs ? `, ${b.own.defs} defence${b.own.defs > 1 ? 's' : ''}` : ''}`;
-  const theirs = b.know === 0 ? 'Theirs: unknown' : `Theirs${b.know === 1 ? ' (estimate)' : b.know === 2 ? ' (old report)' : ''}: ${rng(b.their.btl)} btl on the border${b.their.reserve[1] ? ` + ${rng(b.their.reserve)} behind` : ''}${b.their.incoming ? ` + ${b.their.incoming} marching in` : ''}`;
-  l.el.title = `${where} · ${why}\n${ours}\n${theirs}\nClick for the border`;
-  l.el.setAttribute('aria-label', `${where}: ours ${own}, theirs ${their}. ${why}`);
+  const where = b.nb >= 0 ? t('Border with {0}', W.regions[b.nb].name) : t('Coast');
+  const why = b.danger < 0 ? t('Nothing known of the other side: send a patrol or a reconnaissance flight.') : b.massing ? t('Troops across the border are assembling for an attack.') : [t('Safe: we are clearly stronger.'), t('About even.'), t('They may be stronger.'), t('In danger: they are much stronger.')][b.danger];
+  const ours = t('Ours: {0} btl on the border', b.own.btl[0]) + (b.own.reserve[0] ? t(' + {0} from the reserve', b.own.reserve[0]) : '') + (b.own.trench ? ', ' + t('trench {0}', 'I'.repeat(Math.min(3, b.own.trench))) : '') + (b.own.wire ? ', ' + t('wire') : '') + (b.own.defs ? ', ' + (b.own.defs > 1 ? t('{0} defences', b.own.defs) : t('{0} defence', b.own.defs)) : '');
+  const theirs = b.know === 0 ? t('Theirs: unknown') : (b.know === 1 ? t('Theirs (estimate): {0} btl on the border', rng(b.their.btl)) : b.know === 2 ? t('Theirs (old report): {0} btl on the border', rng(b.their.btl)) : t('Theirs: {0} btl on the border', rng(b.their.btl)))
+    + (b.their.reserve[1] ? t(' + {0} behind', rng(b.their.reserve)) : '') + (b.their.incoming ? t(' + {0} marching in', b.their.incoming) : '');
+  l.el.title = `${where} · ${why}\n${ours}\n${theirs}\n` + t('Click for the border');
+  // the parts are already in the interface language: fill them in untouched
+  const parts = [where, their, why];
+  l.el.setAttribute('aria-label', t('{0}: ours {1}, theirs {2}. {3}', '\u0001', own, '\u0002', '\u0003').replace(/[\u0001-\u0003]/g, c => parts[c.charCodeAt(0) - 1]));
 }

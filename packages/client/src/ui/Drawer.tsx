@@ -55,7 +55,7 @@ function PickTarget({ region }: { region: { battle: number; units: { inf: number
   return (
     <button className="btn sm wide pick-target" aria-pressed={active} disabled={region.battle >= 0 || ground < 2}
       onClick={() => { click(); const u = useUi.getState(); if (active) u.cancelOrder(); else u.beginOrder('march'); }}>
-      {active ? 'Cancel · pick a target on the map' : 'Pick a target on the map'}
+      {active ? t('Cancel · pick a target on the map') : t('Pick a target on the map')}
     </button>
   );
 }
@@ -123,7 +123,7 @@ export function Drawer() {
           <span className="str">{t('Men')} <b>{menStr(menOf(men))}</b></span>
           <span className="str">{t('Strength')} <b>{Math.round(str * 100)}%</b></span>
           {own && <span className="str">{t('Morale')} <b>{Math.round(r.mor)}%</b></span>}
-          <span className="str">{t('Power')} <b>{Math.round(unitPower(gar) * (.3 + .7 * str) + defPow)}</b></span>
+          <span className="str">{t('strength|Power')} <b>{Math.round(unitPower(gar) * (.3 + .7 * str) + defPow)}</b></span>
         </div>
       )}
       {own && (
@@ -137,7 +137,7 @@ export function Drawer() {
       {!own && r.cs && r.cs.length > 0 && (
         <div className="pad borders corps-seen">
           {r.cs.map(c => (
-            <small key={c.id}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} {c.p < 0 ? 'in the centre' : `on the ${borderLabel(W, c.p).replace(' border', '') + (c.p >= 1000 ? '' : ' border')}`}:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
+            <small key={c.id}><b>{c.p < 0 ? t('{0} in the centre:', c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops') : t('{0} on the {1}:', c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops', borderLabel(W, c.p).replace(' border', '') + (c.p >= 1000 ? '' : ' border'))}</b> {c.est ? t('est. {0}–{1} men', menStr(c.est[0]), menStr(c.est[1])) : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · ' + t('massing for an attack') : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
           ))}
         </div>
       )}
@@ -151,18 +151,18 @@ export function Drawer() {
 
       {own ? (
         <>
-          <div className="tabs" role="tablist" aria-label="Region">
-            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{l}</button>)}
+          <div className="tabs" role="tablist" aria-label={t('Region')}>
+            {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{t(l)}</button>)}
           </div>
           <div className="tb-body" role="tabpanel">
             {tab === 'over' && (
               <>
                 <DeployTab region={r} id={sel} />
-                <div className="lbl"><span>Operations from {wr.name}</span></div>
+                <div className="lbl"><span>{t('Operations from {0}', wr.name)}</span></div>
                 <AttackBudget />
                 <GoalPicker />
                 <PickTarget region={r} />
-                <p className="note">With nothing but this region selected, right-click a neighbour to march the share above there, or attack it (the troops form up, move to the border, assemble and go in). With corps selected, right-click moves or attacks with them.</p>
+                <p className="note">{t('With nothing but this region selected, right-click a neighbour to march the share above there, or attack it (the troops form up, move to the border, assemble and go in). With corps selected, right-click moves or attacks with them.')}</p>
                 <AirSection region={r} id={sel} />
                 <ReconSection region={r} id={sel} />
                 <Feints region={r} id={sel} />
@@ -172,7 +172,7 @@ export function Drawer() {
             {tab === 'build' && (
               <>
                 <BuildTab region={r} id={sel} />
-                {wr.zones.length > 0 && <><div className="lbl"><span>Harbour</span></div><NavyTab region={r} id={sel} /></>}
+                {wr.zones.length > 0 && <><div className="lbl"><span>{t('Harbour')}</span></div><NavyTab region={r} id={sel} /></>}
               </>
             )}
           </div>

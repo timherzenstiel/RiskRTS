@@ -12,6 +12,7 @@ import { Icon } from './icons';
 import { SharePicker } from './DrawerTabs';
 import { t, tx } from '../i18n';
 import { nm } from './format';
+import { tn } from './LangPicker';
 
 /** "6 inf · 2 MG · 1 art" (ground troops only). */
 export function unitsLine(u: Units): string {
@@ -39,7 +40,7 @@ function columnsOf(g: GameState, me: number, id: number): Army[] {
 function ColumnRow({ g, a, id }: { g: GameState; a: Army; id: number }) {
   const W = buildWorld();
   const post = (p: number) => p >= 0 ? borderLabel(W, p) : 'the centre';
-  const dest = a.inner ? post(a.post!) : a.to === id ? `here (${post(a.post!)})` : W.regions[a.path?.length ? a.path[a.path.length - 1] : a.to].name;
+  const dest = a.inner ? tx(post(a.post!)) : a.to === id ? t('here ({0})', post(a.post!)) : nm(W.regions[a.path?.length ? a.path[a.path.length - 1] : a.to].name);
   const left = (a.wait ?? 0) + (1 - a.t) * a.dur;
   const what = a.wait ? t('forming up · {0}, then marching', secs(a.wait)) : t('marching · {0}', secs(left));
   const n = groundUnits(a.units);
@@ -62,9 +63,9 @@ function upTo(u: Units): Partial<Units> {
 function CorpsLine({ g, me, r, c }: { g: GameState; me: number; r: RegionState; c: Corps }) {
   const on = useUi(s => s.corps.includes(c.id));
   return (
-    <button className={'st cl' + (on ? ' on' : '')} aria-pressed={on} title="Select this corps (Shift adds), then right-click the map to move or attack"
+    <button className={'st cl' + (on ? ' on' : '')} aria-pressed={on} title={t('Select this corps (Shift adds), then right-click the map to move or attack')}
       onClick={e => { click(); useUi.getState().selectCorps([c.id], e.shiftKey, r.id); }}>
-      <b>{groupName(me, 1, c.n)}</b>{c.man ? ' ✋' : ''} · {unitsLine(c.u)} · {corpsState(g, c)}{c.xp ? ` · ${'★'.repeat(c.xp)}` : ''}
+      <b>{tx(groupName(me, 1, c.n))}</b>{c.man ? ' ✋' : ''} · {unitsLine(c.u)} · {corpsState(g, c)}{c.xp ? ` · ${'★'.repeat(c.xp)}` : ''}
     </button>
   );
 }
@@ -96,20 +97,20 @@ function BorderRow({ g, me, r, n }: { g: GameState; me: number; r: RegionState; 
         </div>
       </div>
       <div className="post-b">
-        {fb ? <small className="st fight">Battle on this border</small>
+        {fb ? <small className="st fight">{t('Battle on this border')}</small>
           : c ? here.map(x => <CorpsLine key={x.id} g={g} me={me} r={r} c={x} />)
-            : <small className={'st ' + (foreign ? 'open' : '')}>{foreign ? `Unmanned: only the fixed defences hold this ${coast ? 'coast' : 'border'}` : coast ? 'Quiet coast · an enemy landing would meet only the defences' : 'Quiet border'}</small>}
-        {foothold && <small className="st good">Foothold held across the border</small>}
+            : <small className={'st ' + (foreign ? 'open' : '')}>{foreign ? (coast ? t('Unmanned: only the fixed defences hold this coast') : t('Unmanned: only the fixed defences hold this border')) : coast ? t('Quiet coast · an enemy landing would meet only the defences') : t('Quiet border')}</small>}
+        {foothold && <small className="st good">{t('Foothold held across the border')}</small>}
       </div>
       <div className="post-a">
-        <button className="btn sm" disabled={groundUnits(main) < 1 || !!fb} onClick={send} title="Send a share of the main army to this border">Send</button>
-        {c && <button className="btn sm" onClick={back} title="Bring a share of the corps here back to the centre">Back</button>}
+        <button className="btn sm" disabled={groundUnits(main) < 1 || !!fb} onClick={send} title={t('Send a share of the main army to this border')}>{t('Send')}</button>
+        {c && <button className="btn sm" onClick={back} title={t('Bring a share of the corps here back to the centre')}>{t('Back')}</button>}
         {!coast && foreign && (c || foothold) && (
           <div className="seg ord" role="group" aria-label={t('Orders for the {0} border', W.regions[n].name)}>
             {ORDERS.map((o, k) => (
               <button key={o} aria-pressed={!!c && here.every(x => (x.ord ?? 0) === k)} disabled={!c && !(foothold && k === 2)}
-                title={k === 0 ? 'Hold the border and dig in' : k === 1 ? 'Take the enemy\'s first line, then dig in there' : 'Take the first line, then push into the region'}
-                onClick={() => order(k as Order)}>{k === 0 ? 'Hold' : k === 1 ? 'First line' : 'Invade'}</button>
+                title={k === 0 ? t('Hold the border and dig in') : k === 1 ? t('Take the enemy\'s first line, then dig in there') : t('Take the first line, then push into the region')}
+                onClick={() => order(k as Order)}>{k === 0 ? t('Hold') : k === 1 ? t('First line') : t('Invade')}</button>
             ))}
           </div>
         )}
@@ -137,11 +138,11 @@ export function DeployTab({ region, id }: { region: RegionState; id: number }) {
       </div>
       <div className="post main">
         <div className="post-h"><span className="ic"><Icon k="barracks" size={18} /></span>
-          <div className="tx"><b>Centre · {groupName(me, 0, region.an)}</b><small>Depot {unitsLine(dep)}{dep.plane ? ` · ${dep.plane} squadron${dep.plane === 1 ? '' : 's'}` : ''}{reserve.length ? ` · ${reserve.length} reserve corps` : ''}</small></div>
-          <button className="btn sm" disabled={groundUnits(dep) < 1} title={`Form a corps of up to ${CORPS_CAP} battalions from the depot, under your orders`} onClick={() => { click(); ui().order({ t: 'form', region: id, u: upTo(dep) }); }}>Form corps</button>
+          <div className="tx"><b>{t('Centre · {0}', groupName(me, 0, region.an))}</b><small>{tn('Depot {0}', { raw: unitsLine(dep) })}{dep.plane ? ' · ' + (dep.plane === 1 ? t('{0} squadron', 1) : t('{0} squadrons', dep.plane)) : ''}{reserve.length ? ' · ' + t('{0} reserve corps', reserve.length) : ''}</small></div>
+          <button className="btn sm" disabled={groundUnits(dep) < 1} title={t('Form a corps of up to {0} battalions from the depot, under your orders', CORPS_CAP)} onClick={() => { click(); ui().order({ t: 'form', region: id, u: upTo(dep) }); }}>{t('Form corps')}</button>
         </div>
         {reserve.map(x => <CorpsLine key={x.id} g={g} me={me} r={region} c={x} />)}
-        <small className="note">The depot: recruits join it, it meets any enemy who breaks through, and Auto and offensives draw on it. {groundUnits(main) ? `${groundUnits(main)} battalions stand at the centre.` : ''}</small>
+        <small className="note">{t('The depot: recruits join it, it meets any enemy who breaks through, and Auto and offensives draw on it.')} {groundUnits(main) ? t('{0} battalions stand at the centre.', groundUnits(main)) : ''}</small>
       </div>
       <SharePicker />
       <div className="lbl"><span>{t('Borders and coasts · a corps on each one holds its trench')}</span></div>

@@ -7,3 +7,4 @@ dist/
 .env
 packages/server/data/
 __pycache__/
+assets/sfx-src/

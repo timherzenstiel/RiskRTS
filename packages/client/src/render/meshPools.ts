@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { nz, uChrome } from './pools';
+import { dressOf } from './palette';
 
 export type MeshKey = 'soldier_aim' | 'soldier_kneel_aim' | 'soldier_throw' | 'soldier_prone' | 'soldier_dead' | 'soldier' | 'soldier_walk_a' | 'soldier_walk_b' | 'soldier_kneel' | 'soldier_lo' | 'soldier_kneel_lo' |
   'helm_brodie' | 'helm_adrian' | 'helm_cap' | 'helm_stahl' | 'helm_kabalak' |
@@ -32,9 +33,14 @@ export const HELM_OF: MeshKey[] = ['helm_brodie', 'helm_adrian', 'helm_cap', 'he
  * ground is shelled and its ruin twin appears in its place, so towns along a front fall to ruins without rebuilding any mesh.
  */
 export const warUniforms = { uWarTex: { value: null as THREE.Texture | null }, uWarGrid: { value: new THREE.Vector4(1, 1, 1, 1) } };
-function unitMaterial(war = 0): THREE.MeshPhongMaterial {
-  const m = new THREE.MeshPhongMaterial({ shininess: 30, specular: 0x404040, vertexColors: true });
-  if (war) m.customProgramCacheKey = () => 'war' + war;
+/**
+ * Paint rule. The mask (texture alpha, or COLOR_0 alpha on untextured models) has three levels: 1 team colour, .5 nation dress,
+ * 0 the model's own paint. Tinted parts are shaded by the painted value: tint * clamp(luma * 4.2, ...), so folds, wear and
+ * camouflage in the atlas still show through.
+ */
+function unitMaterial(war = 0, map: THREE.Texture | null = null): THREE.MeshPhongMaterial {
+  const m = new THREE.MeshPhongMaterial({ shininess: 30, specular: 0x404040, vertexColors: true, map });
+  m.customProgramCacheKey = () => 'unit' + war + (map ? 't' : '');
   m.onBeforeCompile = (sh) => {
     if (war) {
       Object.assign(sh.uniforms, warUniforms);
@@ -48,21 +54,35 @@ function unitMaterial(war = 0): THREE.MeshPhongMaterial {
     }
     sh.uniforms.uChrome = uChrome;
     // keep the vertex colour and the instance tint apart: the tint only applies where the house mask (alpha) is set
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTint; varying vec3 vObj;')
-      .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor = color; vObj = position;\n  #ifdef USE_INSTANCING_COLOR\n  vTint = instanceColor;\n  #else\n  vTint = vec3(1.);\n  #endif');
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTint; varying vec3 vObj; varying vec3 vDress;\n#ifdef USE_INSTANCING\nattribute vec3 instanceDress;\n#endif')
+      .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor = color; vObj = position;\n  #ifdef USE_INSTANCING_COLOR\n  vTint = instanceColor;\n  #else\n  vTint = vec3(1.);\n  #endif\n  #ifdef USE_INSTANCING\n  vDress = instanceDress;\n  #else\n  vDress = vTint;\n  #endif');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-varying vec3 vTint; varying vec3 vObj; uniform float uChrome;
+varying vec3 vTint; varying vec3 vObj; varying vec3 vDress; uniform float uChrome;
 float _gh(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
 float _gn(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(_gh(i),_gh(i+vec3(1,0,0)),f.x),mix(_gh(i+vec3(0,1,0)),_gh(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(_gh(i+vec3(0,0,1)),_gh(i+vec3(1,0,1)),f.x),mix(_gh(i+vec3(0,1,1)),_gh(i+vec3(1,1,1)),f.x),f.y),f.z); }`)
-      .replace('#include <color_fragment>', `float _l = dot(vColor.rgb, vec3(.3,.59,.11));
-  diffuseColor.rgb *= mix(vColor.rgb, vTint * clamp(_l * 4.2, .55, 1.35), vColor.a);
+      .replace('#include <map_fragment>', `
+  #ifdef USE_MAP
+  vec4 _tex = texture2D(map, vMapUv); vec3 _base = _tex.rgb; float _a = _tex.a;
+  #else
+  vec3 _base = vColor.rgb; float _a = vColor.a;
+  #endif`)
+      .replace('#include <color_fragment>', `float _l = dot(_base, vec3(.3,.59,.11));
+  float _team = smoothstep(.7, .9, _a), _dress = smoothstep(.2, .4, _a) * (1. - _team);
+  #ifdef USE_MAP
+  float _sh = clamp(_l * 4.2, .3, 1.6);
+  #else
+  float _sh = clamp(_l * 4.2, .55, 1.35);
+  #endif
+  diffuseColor.rgb *= mix(mix(_base, vDress * _sh, _dress), vTint * _sh, _team);
+  #ifndef USE_MAP
   // painted grime: soft blotches and fine speckle in model space, darker low down (mud splashed up from the ground)
   float _g = _gn(vObj*90.)*.6 + _gn(vObj*260.)*.4;
   diffuseColor.rgb *= (.86 + .24*_g) * mix(.82, 1., smoothstep(.0, .05, vObj.y));
+  #endif
   diffuseColor.a = 1.;`)
-      .replace('#include <specularmap_fragment>', 'float specularStrength = (1. - vColor.a) * smoothstep(.02,.2,dot(vColor.rgb,vec3(.33))) * uChrome * 2.;');
+      .replace('#include <specularmap_fragment>', 'float specularStrength = (1. - step(.2, _a)) * smoothstep(.02,.2,dot(_base,vec3(.33))) * uChrome * 2.;');
   };
   return m;
 }
@@ -72,7 +92,10 @@ class MeshPool {
   n = 0;
   private readonly M: Float32Array;
   private readonly C: Float32Array;
+  private readonly D: THREE.InstancedBufferAttribute;
   constructor(parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, readonly max: number) {
+    this.D = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3); this.D.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('instanceDress', this.D);
     this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.frustumCulled = false; this.mesh.castShadow = this.mesh.receiveShadow = true;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -80,11 +103,15 @@ class MeshPool {
     this.mesh.count = 0; parent.add(this.mesh);
     this.M = this.mesh.instanceMatrix.array as Float32Array; this.C = this.mesh.instanceColor!.array as Float32Array;
   }
-  /** One instance at (x,y,z), turned by `face` about Y, uniform scale s, optional roll about the model's forward axis. */
-  push(x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0) {
+  /**
+   * One instance at (x,y,z), turned by `face` about Y, uniform scale s, optional roll about the model's forward axis. `c` is the
+   * team tint; the nation dress comes from `dress`, else from the palette's dressOf(c), else the tint itself.
+   */
+  push(x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0, dress?: THREE.Color) {
     if (this.n >= this.max || !Number.isFinite(x + y + z + face + s + roll + pitch)) return;
     s = nz(s);
     const i = this.n++, o = i * 16, M = this.M, co = Math.cos(face) * s, si = Math.sin(face) * s;
+    const d = dress ?? dressOf.get(c) ?? c, D = this.D.array as Float32Array; D[i * 3] = d.r; D[i * 3 + 1] = d.g; D[i * 3 + 2] = d.b;
     if (pitch) {
       // R = RotY(face) * RotX(pitch) * s
       const cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -109,13 +136,15 @@ class MeshPool {
     const k = i * 3; this.C[k] = c.r; this.C[k + 1] = c.g; this.C[k + 2] = c.b;
   }
   begin() { this.n = 0; }
-  end() { this.mesh.count = this.n; this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor!.needsUpdate = true; }
+  end() { this.mesh.count = this.n; this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor!.needsUpdate = true; this.D.needsUpdate = true; }
   dispose() { this.mesh.removeFromParent(); this.mesh.dispose(); }
 }
 
 export class MeshPools {
   private readonly pools = new Map<MeshKey, MeshPool>();
   readonly mat = unitMaterial();
+  /** Models with UVs use the painted atlas (public/art/units.webp, tools/bake/texture.py); until it loads they use `mat`. */
+  readonly texMat: THREE.MeshPhongMaterial;
   /** Houses that collapse into ruins on shelled ground, and the ruins that appear there. */
   readonly houseMat = unitMaterial(1); readonly ruinMat = unitMaterial(2);
   ready = false;
@@ -124,6 +153,10 @@ export class MeshPools {
   geometry(k: MeshKey) { return this.geos.get(k) ?? null; }
 
   constructor(private readonly parent: THREE.Object3D, url = `${import.meta.env.BASE_URL ?? '/'}art/units.glb`) {
+    const atlas = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL ?? '/'}art/units.webp`, () => { this.texMat.needsUpdate = true; this.atlasReady = true; this.swapMaterials(); },
+      undefined, () => console.warn('Unit atlas could not be loaded; drawing vertex colours'));
+    atlas.flipY = false; atlas.colorSpace = THREE.SRGBColorSpace; atlas.anisotropy = 4;
+    this.texMat = unitMaterial(0, atlas);
     new GLTFLoader().load(url, (gltf) => {
       gltf.scene.traverse((o) => {
         const m = o as THREE.Mesh; if (!m.isMesh) return;
@@ -132,13 +165,20 @@ export class MeshPools {
         const geo = m.geometry.clone(); geo.applyMatrix4(m.matrixWorld); this.geos.set(name, geo);
         if (!STATIC.has(name)) this.pools.set(name, new MeshPool(this.parent, geo, this.mat, CAP[name]));
       });
-      this.ready = this.pools.has('soldier_lo');
+      this.ready = this.pools.has('soldier_lo'); this.swapMaterials();
     }, undefined, (e) => console.warn('Unit models could not be loaded; drawing the box models', e));
   }
 
+  private atlasReady = false;
+  /** Textured models switch to the atlas material once both the models and the atlas have loaded. */
+  private swapMaterials() {
+    if (!this.atlasReady) return;
+    for (const p of this.pools.values()) if (p.mesh.geometry.hasAttribute('uv')) p.mesh.material = this.texMat;
+  }
+
   has(k: MeshKey) { return this.ready && this.pools.has(k); }
-  push(k: MeshKey, x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0) { this.pools.get(k)?.push(x, y, z, face, s, c, roll, pitch); }
+  push(k: MeshKey, x: number, y: number, z: number, face: number, s: number, c: THREE.Color, roll = 0, pitch = 0, dress?: THREE.Color) { this.pools.get(k)?.push(x, y, z, face, s, c, roll, pitch, dress); }
   begin() { for (const p of this.pools.values()) p.begin(); }
   end() { for (const p of this.pools.values()) p.end(); }
-  dispose() { for (const p of this.pools.values()) p.dispose(); for (const g of this.geos.values()) g.dispose(); this.mat.dispose(); }
+  dispose() { for (const p of this.pools.values()) p.dispose(); for (const g of this.geos.values()) g.dispose(); this.mat.dispose(); this.texMat.map?.dispose(); this.texMat.dispose(); }
 }

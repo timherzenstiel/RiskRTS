@@ -4,6 +4,7 @@ import { RadarMap } from './RadarMap';
 import { cameoUrl } from './Cameo';
 import { dateStr, useSim, useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
+import type { VoiceMode } from '../audio/voice';
 import { click, quitToTitle } from './actions';
 import { writeSave } from './storage';
 import { Modal } from './Modal';
@@ -71,6 +72,12 @@ export function HelpSheet({ onBack }: { onBack: () => void }) {
   );
 }
 
+const VOICE_MODES: [VoiceMode, string, string][] = [
+  ['off', 'Off', 'No spoken dispatches; signal cues still sound'],
+  ['basic', 'Basic', "Your browser's built-in voice"],
+  ['neural', 'Field telephone', 'A neural voice over a crackling field telephone. Downloads about 90 MB once.'],
+];
+
 function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) {
   return (
     <div className="grp"><span>{label}</span>
@@ -82,7 +89,7 @@ function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boole
 }
 
 export function MenuSheet({ onHelp }: { onHelp: () => void }) {
-  const sim = useSim(); const { quality, sound, radio, tips, log, look } = useUi();
+  const sim = useSim(); const { quality, sound, radio, tips, log, look, voiceState } = useUi();
   if (!sim) return null;
   const { session, g } = sim; const ui = useUi.getState;
   const close = () => { click(); ui().setOverlay(null); };
@@ -106,7 +113,11 @@ export function MenuSheet({ onHelp }: { onHelp: () => void }) {
             {['Tiberian', 'Red Alert'].map((l, i) => <button key={l} aria-pressed={look === i} onClick={() => { click(); ui().setLook(i as 0 | 1); }}>{l}</button>)}
           </div></div>
         <Toggle label="Sound" on={sound} set={v => ui().setSound(v)} />
-        <Toggle label="Radio voice" on={radio} set={v => ui().setRadio(v)} />
+        <div className="grp"><span>Radio voice</span>
+          <div className="seg" role="group" aria-label="Radio voice">
+            {VOICE_MODES.map(([m, l, hint]) => <button key={m} title={hint} aria-pressed={radio === m} onClick={() => { Sfx.init(); ui().setRadio(m); }}>{l}</button>)}
+          </div></div>
+        {radio === 'neural' && voiceState.state !== 'ready' && <small className="muted">{voiceState.state === 'error' ? 'Field telephone voice could not load: using the basic voice.' : voiceState.state === 'loading' ? `Loading field telephone voice… ${Math.round(voiceState.p * 100)}% (about 90 MB, once)` : 'The field telephone voice loads with the first sound (about 90 MB, once).'}</small>}
         <Toggle label="Tips" on={tips} set={v => ui().setTips(v)} />
         <button className="btn wide" onClick={() => { click(); quitToTitle(); }}>{session.kind === 'local' ? 'Save and quit to title' : session.kind === 'host' ? 'End game for everyone and quit' : 'Leave the game'}</button>
         <small>Recent events</small>

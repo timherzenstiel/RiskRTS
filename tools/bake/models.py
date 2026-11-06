@@ -31,18 +31,45 @@ C = {
     'tyre': srgb('#1e1c1a'), 'sand': srgb('#a8946a'), 'earth': srgb('#5a4a34'), 'shield': srgb('#5b6152'),
 }
 HOUSE = 1.0
+DRESS = .5   # mask value for the nation's dress (uniform cloth, vehicle paint); 1 = team colour accents (armbands, markings)
+
+# Material class of each paint, for the texture bake (texture.py): the surface detail it gets (weave, grain, chipped paint, ...).
+MATS = ['plain', 'wool', 'canvas', 'leather', 'skin', 'wood', 'paint', 'steel', 'concrete', 'brick', 'earth', 'brass', 'slate', 'foliage']
+CLASS_OF = {
+    'wool': ('cloth', 'cloth2', 'cloth3', 'puttee'), 'canvas': ('khaki', 'canvas', 'pack', 'wing', 'bag', 'bag2'),
+    'leather': ('boot', 'leather', 'tar', 'tyre'), 'skin': ('skin',), 'wood': ('wood', 'timber', 'timber2'),
+    'paint': ('helm', 'hull', 'shield', 'drab', 'drab2', 'olive', 'rust', 'plate', 'plate2'), 'steel': ('steel', 'gun', 'track', 'rivet'),
+    'concrete': ('concrete', 'concrete2', 'stone'), 'brick': ('brick', 'brick2'), 'earth': ('sand', 'earth', 'mud', 'grass'),
+    'brass': ('brass',), 'slate': ('slate',),
+}
+PAL = {}   # sRGB triple -> class index
+def register(pal):
+    for name, c in pal.items():
+        cls = next((MATS.index(k) for k, v in CLASS_OF.items() if name in v), 0)
+        PAL.setdefault(tuple(c), cls)
+register(C)
 
 class Kit:
     """Accumulates primitives into one bmesh with per-loop RGBA colours."""
     def __init__(self, name, jitter=.05):
-        self.name = name; self.bm = bmesh.new(); self.col = self.bm.loops.layers.color.new('Col')
+        self.name = name; self.bm = bmesh.new(); self.col = self.bm.loops.layers.color.new('Col'); self.cls = self.bm.faces.layers.int.new('cls')
         self.rng = random.Random(name); self.jitter = jitter
 
     def _paint(self, faces, c, house):
         j = 1 + (self.rng.random() - .5) * 2 * self.jitter   # each part a touch lighter or darker: hand-painted variation
-        rgba = (min(1, c[0] * j), min(1, c[1] * j), min(1, c[2] * j), HOUSE if house else 0.0)
+        rgba = (min(1, c[0] * j), min(1, c[1] * j), min(1, c[2] * j), (HOUSE if house else 0.0) if isinstance(house, bool) else float(house))
+        cls = PAL.get(tuple(c), self.default_cls(c))
         for f in faces:
+            f[self.cls] = cls
             for l in f.loops: l[self.col] = rgba
+
+    @staticmethod
+    def default_cls(c):
+        """Paints not in a palette (ships, scenery): greys are painted steel, greens foliage, the rest plain."""
+        r, g, b = c[:3]
+        if max(r, g, b) - min(r, g, b) < .06: return MATS.index('paint')
+        if g > r and g > b: return MATS.index('foliage')
+        return 0
 
     def _add(self, res, c, house, smooth=False):
         faces = list({f for v in res for f in v.link_faces})
@@ -90,6 +117,26 @@ class Kit:
             f.normal_update(); bmesh.ops.translate(self.bm, verts=nv, vec=-f.normal * thick); allv += nv
             bmesh.ops.recalc_face_normals(self.bm, faces=list({fc for v in allv for fc in v.link_faces}))
         self._add(allv, c, house, smooth)
+
+    def loft(self, secs, c, house=False, n=12, ex=2.6, smooth=True):
+        """Tailored body from cross-sections (y, half-width x, half-depth z, z offset): superellipse rings (exponent `ex`,
+        boxier than a cylinder) joined into a closed shell. Tunics, torsos."""
+        rings = []
+        for y, rx, rz, zo in secs:
+            ring = []
+            for i in range(n):
+                a = i / n * math.tau; ca, sa = math.cos(a), math.sin(a)
+                px = rx * math.copysign(abs(ca) ** (2 / ex), ca); pz = rz * math.copysign(abs(sa) ** (2 / ex), sa) + zo
+                ring.append(self.bm.verts.new((px, -pz, y)))
+            rings.append(ring)
+        faces = []
+        for r0, r1 in zip(rings, rings[1:]):
+            for i in range(n): faces.append(self.bm.faces.new((r0[i], r0[(i + 1) % n], r1[(i + 1) % n], r1[i])))
+        faces.append(self.bm.faces.new(list(reversed(rings[0])))); faces.append(self.bm.faces.new(rings[-1]))
+        bmesh.ops.recalc_face_normals(self.bm, faces=faces)
+        for f in faces: f.smooth = smooth
+        faces[-1].smooth = faces[-2].smooth = False
+        self._paint(faces, c, house)
 
     def roof(self, x, y, z, w, h, l, c, house=False, axis='z', thick=.004):
         """Pitched roof: ridge along `axis`, eaves `w` wide at height y, ridge h above, l long."""
@@ -309,6 +356,9 @@ def main():
     import ships
     navy = ships.build(Kit, srgb)
     objs = lo + hi + navy
+    import texture
+    static = ('tree_', 'shrub', 'house_', 'church')   # scenery placed once by the terrain keeps vertex colours (no UVs)
+    texture.texture([o for o in objs if not o.name.startswith(static)])
     print('baking ambient occlusion ...')
     big = {'house_a', 'house_b', 'church', 'house_ruin', 'house_ruin_b', 'house_a_lo', 'house_b_lo'}   # modelled in a unit frame (scaled down per house): occlusion reaches further
     bake_ao([o for o in objs if o.name not in big], ground_for=lambda o: not (o.name.startswith(('helm', 'plane', 'prop', 'mark', 'dreadnought', 'turret', 'destroyer', 'liner', 'carrier', 'lighter'))))  # scenery bakes with the ground too
@@ -319,7 +369,7 @@ def main():
         print(f'{o.name:14s} {tris:5d} tris')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_vertex_color='NAME', export_vertex_color_name='Col', export_active_vertex_color_when_no_material=True,
-                              export_all_vertex_colors=False, export_normals=True, export_texcoords=False, export_materials='PLACEHOLDER',
+                              export_all_vertex_colors=False, export_normals=True, export_texcoords=True, export_materials='PLACEHOLDER',
                               export_yup=True, export_apply=True)
     print('wrote', OUT, os.path.getsize(OUT), 'bytes')
 

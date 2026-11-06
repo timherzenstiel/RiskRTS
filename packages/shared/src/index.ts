@@ -33,3 +33,5 @@ export * from './sim/naval';
 export * from './sim/carrier';
 export * from './sim/posts';
 export * from './data/names';
+export * from './sim/balance';
+export * from './sim/terms';

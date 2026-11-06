@@ -9,6 +9,7 @@ import { Hint } from './Hint';
 import { Overlays } from './Overlays';
 import { OfferBanner } from './Diplomacy';
 import { Sidebar } from './Sidebar';
+import { Alerts, LeftRail, SituationPanel } from './Situation';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -58,7 +59,7 @@ function Fatal() {
 
 export function Game() {
   useGameKeys();
-  const hasDrawer = useUi(s => s.sel >= 0); const look = useUi(s => s.look); const session = useUi(s => s.session); const over = useSim()?.g.over ?? false;
+  const hasDrawer = useUi(s => s.sel >= 0); const panel = useUi(s => s.panel); const look = useUi(s => s.look); const session = useUi(s => s.session); const over = useSim()?.g.over ?? false;
 
   // Single-player autosave every 45 s of play (the wall clock only advances while the game is not paused).
   useEffect(() => {
@@ -72,10 +73,13 @@ export function Game() {
   useEffect(() => { if (offer && !useUi.getState().overlay) useUi.getState().setOverlay('doctrine'); }, [offer]);
 
   return (
-    <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (look ? ' look-ra' : '')}>
+    <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (look ? ' look-ra' : '') + (panel ? ' has-panel' : '')}>
       <Stage />
       <TopBar />
       <Sidebar />
+      <LeftRail />
+      <SituationPanel />
+      <Alerts />
       <OfferBanner />
       <div id="leftcol"><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>

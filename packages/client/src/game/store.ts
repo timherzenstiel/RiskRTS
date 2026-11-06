@@ -10,6 +10,18 @@ export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'se
 export type Tab = 'rec' | 'build' | 'fort' | 'deploy' | 'march' | 'navy';
 /** Map layer: 0 everything, 1 troops (markers and front lines first), 2 industry (buildings, rails, supply). */
 export type MapLayer = 0 | 1 | 2;
+/** Map mode (design-command §1): 0 political, 1 fronts, 2 forces, 3 supply, 4 intel. Forces and supply drive the old troops / industry layers. */
+export type MapMode = 0 | 1 | 2 | 3 | 4;
+export const MAP_MODES = [
+  { name: 'Political', short: 'Pol', key: 'p', hint: 'Owners, capitals and treaties' },
+  { name: 'Fronts', short: 'Fronts', key: 'f', hint: 'Wars and battles, and how strong each of your borders is against the other side' },
+  { name: 'Forces', short: 'Forces', key: 't', hint: 'Corps on the borders, front lines, columns on the move' },
+  { name: 'Supply', short: 'Supply', key: 'b', hint: 'Factories, barracks, airfields, rails and supply lines' },
+  { name: 'Intel', short: 'Intel', key: 'i', hint: 'What you know of each region and how old the report is' },
+] as const;
+/** Left-hand panels (design-command §5.2). */
+export type Panel = null | 'situation';
+const layerOf = (m: MapMode): MapLayer => m === 2 ? 1 : m === 3 ? 2 : 0;
 /** march / air strike, and the navy: ship troops to an own coast, assault an enemy coast, station warships in a zone, carrier strike. */
 export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair';
 export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'nation' | 'calendar' | 'doctrine' | 'diplomacy';
@@ -27,6 +39,14 @@ interface Ui {
   fleet: number; seaSel: number;
   /** Goal of new attacks: 1 take the first line, 2 invade. */
   goal: 1 | 2; layer: MapLayer;
+  /** Map mode, and whether the player has picked one (the map switches to Fronts on the first battle only until they do). */
+  mode: MapMode; modeSet: boolean;
+  /** Open left-hand panel. */
+  panel: Panel;
+  /** Border opened from a balance chip or a list: [own region, sector], shown as the border card above the region file. */
+  border: [number, number] | null;
+  /** Alerts the player dismissed (by key) and until which game time. */
+  dismissed: Record<string, number>;
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
   fortMarker: [number, number] | null;
   overlay: Overlay; scoreOpen: boolean;
@@ -51,6 +71,11 @@ interface Ui {
   setSendFrac(f: number): void;
   setGoal(g: 1 | 2): void;
   setLayer(l: MapLayer): void;
+  setMode(m: MapMode, auto?: boolean): void;
+  setPanel(p: Panel): void;
+  selectBorder(region: number, sector: number): void;
+  closeBorder(): void;
+  dismiss(key: string, until: number): void;
   beginOrder(kind?: OrderKind, arg?: number, sub?: 'bb' | 'carrier'): void;
   selectFleet(id: number): void;
   selectSea(id: number): void;
@@ -98,22 +123,27 @@ export function loadPixelScale(get: (k: string) => string | null = lsGet): Pixel
 Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
-  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1 }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
+  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
   setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
   setGoal: (goal) => set({ goal }),
-  setLayer: (layer) => set({ layer }),
+  setLayer: (layer) => set({ layer, mode: layer === 1 ? 2 : layer === 2 ? 3 : 0, modeSet: true }),
+  setMode: (mode, auto) => { if (auto && get().modeSet) return; set({ mode, layer: layerOf(mode), modeSet: get().modeSet || !auto }); },
+  setPanel: (panel) => set({ panel }),
+  selectBorder: (region, sector) => set({ sel: region, border: [region, sector], orderMode: false, fleet: -1, seaSel: -1 }),
+  closeBorder: () => set({ border: null }),
+  dismiss: (key, until) => set(st => ({ dismissed: { ...st.dismissed, [key]: until } })),
   beginOrder: (orderKind = 'march', orderArg = -1, orderSub = 'bb') => set({ orderMode: true, orderKind, orderArg, orderSub }),
   selectFleet: (fleet) => { set({ fleet, seaSel: -1, orderMode: false }); Sfx.click(); },
   selectSea: (seaSel) => { set({ seaSel, fleet: -1 }); Sfx.click(); },
@@ -154,6 +184,7 @@ export const useUi = create<Ui>((set, get) => ({
       if (e.k === 'supply') { Sfx.supply(); continue; }
       Radio.event(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
+      if (e.k === 'battleStart' && (e.attacker === s.me || e.defender === s.me)) get().setMode(1, true);
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
       items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region, report: d.report });
     }

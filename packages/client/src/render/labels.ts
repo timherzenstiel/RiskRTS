@@ -4,7 +4,7 @@ import { FACTIONS, FORMATION, UNIT_TYPES, GROUND_TYPES, SHIP, armyPos, battleCou
 import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
-import { battleAnchor } from '@riskrts/shared';
+import { battleAnchor, hostileBorders, type Balance } from '@riskrts/shared';
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
 function garrisonLabel(r: GameState['regions'][number], merged = false) {
@@ -41,6 +41,7 @@ interface FleetLabel { el: HTMLDivElement; n: HTMLSpanElement; text: string; sho
 /** A ship symbol for fleet markers. */
 const SHIP_SYM = '<svg viewBox="0 0 16 10" aria-hidden="true"><path d="M1 6h14l-2 3H3z M5 3h6v3H5z M7 1h1.6v2H7z" fill="currentColor"/></svg>';
 interface ArmyLabel { el: HTMLDivElement; n: HTMLSpanElement; count: string; shown: boolean; tf: string; seen: number }
+interface ChipLabel { el: HTMLButtonElement; key: string; shown: boolean; tf: string; seen: number }
 interface BattleLabel { el: HTMLButtonElement; text: HTMLSpanElement; label: string; shown: boolean; tf: string; seen: number; nextText: number }
 
 export interface LabelContext {
@@ -62,6 +63,11 @@ export class Labels {
   private readonly fleets = new Map<number, FleetLabel>();
   private readonly seas = new Map<number, BattleLabel>();
   private layer = 0;
+  private mode = 0;
+  private readonly chips = new Map<string, ChipLabel>();
+  private balances: Balance[] = []; private nextBal = 0;
+  /** Map mode (store.ts MapMode), set as a class md0..md4 on the label layer. */
+  setMode(m: number) { if (m === this.mode) return; this.mode = m; for (let k = 0; k < 5; k++) this.root.classList.toggle('md' + k, k === m); this.nextBal = 0; }
   private readonly brackets: HTMLDivElement[] = [];
   private band = -1;
   /** Zoom band (camera.ts): the theatre band merges each region's corps into one marker and drops city names. */
@@ -72,7 +78,9 @@ export class Labels {
   constructor(private readonly root: HTMLElement, private readonly world: World, private readonly cities: CityInfo[], private readonly cityH: (c: CityInfo) => number,
     private readonly onBattleClick: (regionId: number, battleId: number) => void,
     private readonly onCorpsClick: (regionId: number, post: number) => void = () => {},
-    private readonly onFleetClick: (fleet: number) => void = () => {}, private readonly onSeaClick: (id: number) => void = () => {}) {
+    private readonly onFleetClick: (fleet: number) => void = () => {}, private readonly onSeaClick: (id: number) => void = () => {},
+    private readonly onChipClick: (regionId: number, sector: number) => void = () => {}) {
+    root.classList.add('md0');
     this.zones = world.zones.map(z => { const el = document.createElement('div'); el.className = 'zl'; el.textContent = z.short.toUpperCase(); root.appendChild(el); return { el, shown: true, tf: '', c: '' }; });
     this.regions = world.regions.map((r) => {
       const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="pp"></span><span class="bd"></span><span class="nm"></span>';
@@ -101,7 +109,7 @@ export class Labels {
       if (!rs || rs.battle >= 0) { this.hide(l); return; }
       const color = FACTIONS[rs.owner]?.color ?? '#888';
       if (color !== l.color) { l.color = color; l.el.style.setProperty('--c', color); }
-      const s = garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; }
+      const s = this.mode === 4 ? intelLabel(rs) : garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.dataset.v = String(rs.vis ?? 3); }
       const names = showNames || i === ctx.sel || i === ctx.hover; if (names !== l.names) { l.names = names; l.nm.style.display = names ? '' : 'none'; }
       const isSel = i === ctx.sel, tg = ctx.isTarget(i);
       if (isSel !== l.sel) { l.sel = isSel; l.el.classList.toggle('sel', isSel); }
@@ -227,6 +235,27 @@ export class Labels {
     }
     for (const [k, l] of this.corps) if (l.seen !== ctx.frame) { l.el.remove(); this.corps.delete(k); }
 
+    // Fronts mode: a balance chip on each of the viewer's borders with a power at war with it (design-command §1.3)
+    if (this.mode === 1 && ctx.me >= 0 && dist < 140 && dist >= 20) {
+      if (ctx.now >= this.nextBal) { this.nextBal = ctx.now + .4; this.balances = hostileBorders(g, ctx.me); }
+      for (const b of this.balances) {
+        const key = b.region + '|' + b.sector;
+        let l = this.chips.get(key);
+        if (!l) {
+          const el = document.createElement('button'); el.type = 'button'; el.className = 'bal'; el.style.pointerEvents = 'auto';
+          const rid = b.region, sec = b.sector; el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.onChipClick(rid, sec); });
+          this.root.appendChild(el); l = { el, key: '', shown: true, tf: '', seen: 0 }; this.chips.set(key, l);
+        }
+        l.seen = ctx.frame;
+        chipText(l, b, this.world);
+        const p = sectorPoint(this.world, b.region, b.sector), R = this.world.regions[b.region];
+        // a little inside our side of the border, so the chips of the two sides do not overlap
+        const dx = R.cx - p.x, dz = R.cz - p.z, L = Math.hypot(dx, dz) || 1, k = Math.min(.6, L * .3);
+        this.place(l, ctx, p.x + dx / L * k, ctx.anchorH(b.region) + .7, p.z + dz / L * k);
+      }
+    }
+    for (const [k, l] of this.chips) if (l.seen !== ctx.frame) { l.el.remove(); this.chips.delete(k); }
+
     // selection brackets around the selected region's main army and corps, battle and close bands (design 3.4)
     let nb = 0;
     if (ctx.sel >= 0 && dist < 30) {
@@ -287,6 +316,7 @@ export class Labels {
     for (const l of this.zones) l.el.remove();
     for (const l of this.fleets.values()) l.el.remove();
     for (const l of this.seas.values()) l.el.remove();
+    for (const l of this.chips.values()) l.el.remove(); this.chips.clear();
     this.armies.clear(); this.battles.clear(); this.corps.clear(); this.fleets.clear(); this.seas.clear();
   }
 }
@@ -304,4 +334,31 @@ function fleetText(g: GameState, fl: Fleet, own: boolean) {
   }
   if (fl.state === 'offshore') t += fl.storm ? ' · storm' : ' · offshore';
   return t;
+}
+
+/** Intel mode: what the viewer knows of a region: everything (its battalions), the date of the last report, an estimate, or nothing. */
+function intelLabel(r: GameState['regions'][number]) {
+  const v = r.vis ?? 3;
+  if (v >= 3) return r.spied ? 'Agent' : String(totalUnits(r.units));
+  if (v === 2 && r.seen !== undefined) { const d = new Date(Date.UTC(1914, 7, 1) + r.seen * 864e5); return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]}`; }
+  if (v === 1) return 'Est.';
+  return '?';
+}
+
+const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
+/** Text, danger class and tooltip of a balance chip: our battalions | ratio bar | theirs (exact, estimate, report date or ?). */
+function chipText(l: ChipLabel, b: Balance, W: World) {
+  const own = b.own.btl[0] + b.own.reserve[0], th: [number, number] = [b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]];
+  const their = b.know === 0 ? '?' : rng(th) + (b.their.incoming ? ` +${b.their.incoming}` : '');
+  const fill = b.ratio === null ? .5 : Math.max(.06, Math.min(1, b.ratio / 2));
+  const key = own + '|' + their + '|' + b.danger + '|' + fill.toFixed(2) + (b.know === 2 ? b.day : '') + (b.massing ? 'm' : '');
+  if (key === l.key) return; l.key = key;
+  l.el.className = 'bal d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '') + (b.know === 2 ? ' old' : '');
+  l.el.innerHTML = `<b>${own}</b><i style="--f:${fill.toFixed(2)}"></i><b>${their}</b>`;
+  const where = b.nb >= 0 ? `Border with ${W.regions[b.nb].name}` : 'Coast';
+  const why = b.danger < 0 ? 'Nothing known of the other side: send a patrol or a reconnaissance flight.' : b.massing ? 'Troops across the border are assembling for an attack.' : ['Safe: we are clearly stronger.', 'About even.', 'They may be stronger.', 'In danger: they are much stronger.'][b.danger];
+  const ours = `Ours: ${b.own.btl[0]} btl on the border${b.own.reserve[0] ? ` + ${b.own.reserve[0]} from the reserve` : ''}${b.own.trench ? `, trench ${'I'.repeat(Math.min(3, b.own.trench))}` : ''}${b.own.wire ? ', wire' : ''}${b.own.defs ? `, ${b.own.defs} defence${b.own.defs > 1 ? 's' : ''}` : ''}`;
+  const theirs = b.know === 0 ? 'Theirs: unknown' : `Theirs${b.know === 1 ? ' (estimate)' : b.know === 2 ? ' (old report)' : ''}: ${rng(b.their.btl)} btl on the border${b.their.reserve[1] ? ` + ${rng(b.their.reserve)} behind` : ''}${b.their.incoming ? ` + ${b.their.incoming} marching in` : ''}`;
+  l.el.title = `${where} · ${why}\n${ours}\n${theirs}\nClick for the border`;
+  l.el.setAttribute('aria-label', `${where}: ours ${own}, theirs ${their}. ${why}`);
 }

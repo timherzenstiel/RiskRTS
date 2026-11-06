@@ -507,8 +507,15 @@ export class Terrain {
    * Recolour one region. `hl`: 0 none, 1 hover, 2 selected, 3 valid attack target. `owners` is the current owner of every region
    * (needed for border shading against neighbours).
    */
-  paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3) {
+  paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3, hot?: Map<number, number>) {
     const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE;
+    // Fronts mode: a bright band in the owner's colour along every border with a power it is at war with (wider where a battle
+    // burns), so each war line shows both powers' colours side by side; the rest of the land is dimmed a little
+    let band: Map<number, number> | null = null;
+    if (hot) {
+      band = new Map();
+      for (const [n, lv] of hot) { const bb = this.borderBand(rid, n), deep = lv >= 2 ? 2 : 1; for (let k = 0; k < bb.length; k += 2) if (bb[k + 1] <= deep) { const cur = band.get(bb[k]); const v = lv >= 2 ? 10 + bb[k + 1] : bb[k + 1]; if (cur === undefined || v < cur) band.set(bb[k], v); } }
+    }
     { const B = this.border; B.table[(B.regions * B.regions + rid) * 4] = owner >= 0 ? owner + 1 : 0; }
     const { river, borderNb } = this.world;
     const base = this.baseCol, SD = this.stratData, LD = this.natLData;
@@ -526,6 +533,15 @@ export class Terrain {
       const nb = borderNb[i];
       let pr = nr, pg = ng, pb = nbb;
       if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; if (owners[nb] !== owner) { nr = r; ng = g; nbb = b; } }
+      if (band) {
+        const d = band.get(i);
+        if (d === undefined) { r *= .78; g *= .78; b *= .78; }
+        else {
+          // saturated owner colour at the border line, fading over a tile or two; a battle adds a hot red-orange glow
+          const battle = d >= 10, dd = battle ? d - 10 : d, k = dd === 0 ? 1.5 : dd === 1 ? 1.25 : 1.1, w = dd === 0 ? .1 : .04;
+          r = Math.min(1, fc.r * k + w + (battle ? .22 : 0)); g = Math.min(1, fc.g * k + w + (battle ? .04 : 0)); b = Math.min(1, fc.b * k + w);
+        }
+      }
       if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; nr += (hlC.r - nr) * hlA; ng += (hlC.g - ng) * hlA; nbb += (hlC.b - nbb) * hlA; pr += (hlC.r - pr) * hlA; pg += (hlC.g - pg) * hlA; pb += (hlC.b - pb) * hlA; }
       const o = i * 4, D = this.natData; D[o] = enc(pr); D[o + 1] = enc(pg); D[o + 2] = enc(pb); D[o + 3] = owner >= 0 ? owner + 1 : 0;
       const sr = enc(r), sg = enc(g), sb = enc(b), lr = enc(nr), lg = enc(ng), lb = enc(nbb);

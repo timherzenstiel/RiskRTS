@@ -155,7 +155,7 @@ describe('front commanders', () => {
       for (const h of g.hq ?? []) expect((g.requests ?? []).filter(q => q.army === h.id).length).toBeLessThanOrEqual(3);
       for (const q of g.requests ?? []) if (q.kind !== 'attack' && q.kind !== 'release') applyCommand(g, 3, { t: 'reply', req: q.id, opt: q.kind === 'men' ? 'recruit' : 'yes' });
     }
-    expect((g.hq ?? []).every(h => h.front.every(id => g.regions[id].owner === 3))).toBe(true);
+    expect((g.hq ?? []).every(h => h.front.every(id => g.regions[id].owner === h.owner))).toBe(true);
   }, 120000);
 
   it('scouting: a flight where an airfield reaches, a spy on an Offensive target, and Intelligence officers watch every border', () => {

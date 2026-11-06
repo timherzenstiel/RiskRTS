@@ -38,6 +38,8 @@ const forestAt = (c: number, r: number) => vnoise(c * .11 + 7, r * .11 + 3) * .7
 const WALLS = ['#d8cfb8', '#cfc2a4', '#c9b99c', '#e2dccb'].map(col);
 const ROOFS = ['#74392b', '#7d4a35', '#45474a', '#5a4434', '#66382b'].map(col);
 const WHITE = col('#ffffff'), RED = col('#ff6b4a'), RIVERC = col('#38535a'), CITYC = col('#878272'), ROADC = col('#7a6a4c'), TRUNK = col('#3e2c1e');
+/** Supply mode tints: under 80 %, near, over, far over or cut off. */
+const SUP_COL = [col('#3f9a3a'), col('#e0c030'), col('#ec6a1c'), col('#d0201a')];
 
 function biomeKey(lon: number, lat: number, h: number): Biome {
   const al = Math.abs(lat);
@@ -507,7 +509,9 @@ export class Terrain {
    * Recolour one region. `hl`: 0 none, 1 hover, 2 selected, 3 valid attack target. `owners` is the current owner of every region
    * (needed for border shading against neighbours).
    */
-  paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3, hot?: Map<number, number>) {
+  paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3, hot?: Map<number, number>, sup?: number) {
+    // Supply mode: own land tinted green / yellow / orange / red by load against capacity; other land dimmed
+    const st = sup === undefined ? null : sup < 0 ? null : SUP_COL[Math.min(3, sup)];
     const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE;
     // Fronts mode: a bright band in the owner's colour along every border with a power it is at war with (wider where a battle
     // burns), so each war line shows both powers' colours side by side; the rest of the land is dimmed a little
@@ -541,6 +545,10 @@ export class Terrain {
           const battle = d >= 10, dd = battle ? d - 10 : d, k = dd === 0 ? 1.5 : dd === 1 ? 1.25 : 1.1, w = dd === 0 ? .1 : .04;
           r = Math.min(1, fc.r * k + w + (battle ? .22 : 0)); g = Math.min(1, fc.g * k + w + (battle ? .04 : 0)); b = Math.min(1, fc.b * k + w);
         }
+      }
+      if (sup !== undefined) {
+        if (st) { const k = .78, kn = .55; r += (st.r - r) * k; g += (st.g - g) * k; b += (st.b - b) * k; nr += (st.r - nr) * kn; ng += (st.g - ng) * kn; nbb += (st.b - nbb) * kn; pr += (st.r - pr) * kn; pg += (st.g - pg) * kn; pb += (st.b - pb) * kn; }
+        else { const gr = (x: number, y: number, z: number) => (x + y + z) / 3; const a = gr(r, g, b) * .4, an = gr(nr, ng, nbb) * .5, ap = gr(pr, pg, pb) * .5; r = a; g = a; b = a * 1.05; nr = an; ng = an; nbb = an; pr = ap; pg = ap; pb = ap; }
       }
       if (hlC) { r += (hlC.r - r) * hlA; g += (hlC.g - g) * hlA; b += (hlC.b - b) * hlA; nr += (hlC.r - nr) * hlA; ng += (hlC.g - ng) * hlA; nbb += (hlC.b - nbb) * hlA; pr += (hlC.r - pr) * hlA; pg += (hlC.g - pg) * hlA; pb += (hlC.b - pb) * hlA; }
       const o = i * 4, D = this.natData; D[o] = enc(pr); D[o + 1] = enc(pg); D[o + 2] = enc(pb); D[o + 3] = owner >= 0 ? owner + 1 : 0;

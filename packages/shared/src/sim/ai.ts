@@ -14,6 +14,7 @@ import { dateOf } from '../data/calendar';
 import { charge, mobilise, reinforce, setBarrage, setEcon, setStance, withdraw } from './levers';
 import { capacity, drawOf, inTraining, load, loadRatio, replWanted } from './supply';
 import { underAttack } from './commands';
+import { aiArmies, warMinister } from './aiarmies';
 import { nationOf } from '../data/nations';
 import { unitCost } from './rules';
 import { paceOf } from './battle';
@@ -54,6 +55,8 @@ export function aiThink(g: GameState, f: FactionState) {
       if (cand) spy(g, f.id, cand.id);
     }
   }
+  // armies and their commanders on the fronts, and the war minister's answers to their requests (before the Production is spent)
+  aiArmies(g, f, V); warMinister(g, f);
   levers(g, f, mine);
   offensivesStep(g, f, mine);
   manpower(g, f);

@@ -5,7 +5,8 @@ import { nationOf } from '../data/nations';
 import { weatherAt } from '../data/terrain';
 import { world } from './core';
 import { addToGroup, corpsIn, depotOf, fixPosts, refill, takeDepot } from './posts';
-import { hasRail } from './rails';
+import { hasRail, linkQuality } from './rails';
+import { seaLinks } from './navy';
 import { allied } from './diplomacy';
 import type { Corps, FactionState, GameState, RegionState } from './types';
 
@@ -76,6 +77,42 @@ export function cutBreak(g: GameState, r: RegionState): number {
   }
   const score = (j: number) => { const n = g.regions[j]; return (n.home === o ? 4 : n.home !== n.owner ? 2 : 0) + (n.battle >= 0 ? 1 : 0); };
   return [...edge].sort((a, b) => score(b) - score(a) || a - b)[0] ?? -1;
+}
+
+/** One leg of a supply route: from region `a` to `b`, by rail (2) or road (1), over land or a sea lane. */
+export interface RouteLeg { a: number; b: number; q: number; sea: boolean }
+
+/** Is a region a supply source for its owner: its capital, a factory region, or home territory (not contested)? */
+export const isSource = (r: RegionState) => r.owner >= 0 && r.contested < 0 && (r.capitalOf === r.owner || r.factory || r.home === r.owner);
+
+/**
+ * The route that supplies an own region: the cheapest chain of own (or allied) regions back to a source, rail legs preferred
+ * (a road leg costs three rail legs). Empty for a source itself; null when the region is cut off.
+ */
+export function supplyRoute(g: GameState, r: RegionState): RouteLeg[] | null {
+  const o = r.owner; if (o < 0 || r.cut) return null;
+  if (isSource(r)) return [];
+  const W = world(), N = g.regions.length, dist = new Float64Array(N).fill(Infinity), prev: (RouteLeg | null)[] = new Array(N).fill(null);
+  const sea = new Map<number, [number, number][]>();
+  for (const [a, b, ql] of seaLinks(g, o)) { (sea.get(a) ?? sea.set(a, []).get(a)!).push([b, ql]); (sea.get(b) ?? sea.set(b, []).get(b)!).push([a, ql]); }
+  const ok = (j: number) => { const oj = g.regions[j].owner; return oj === o || allied(g, o, oj); };
+  dist[r.id] = 0; const open = new Set([r.id]);
+  while (open.size) {
+    let i = -1, best = Infinity; for (const k of open) if (dist[k] < best) { best = dist[k]; i = k; }
+    open.delete(i);
+    const R = g.regions[i]; if (i !== r.id && R.owner === o && isSource(R)) {
+      const legs: RouteLeg[] = []; for (let k = i; k !== r.id; k = prev[k]!.a) legs.push(prev[k]!);
+      // from the region to the source
+      return legs.reverse();
+    }
+    const step = (j: number, q: number, isSea: boolean) => {
+      if (q < 1 || !ok(j)) return; const d = best + (q >= 2 ? 1 : 3);
+      if (d < dist[j]) { dist[j] = d; prev[j] = { a: i, b: j, q, sea: isSea }; open.add(j); }
+    };
+    for (const j of W.regions[i].adj) if (!W.seaLane.has(i + '|' + j)) step(j, linkQuality(g, o, i, j), false); else step(j, linkQuality(g, o, i, j), true);
+    for (const [j, ql] of sea.get(i) ?? []) step(j, ql, true);
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- training

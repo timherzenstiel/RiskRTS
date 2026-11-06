@@ -151,7 +151,7 @@ export class NavyDraw {
   effect(f: Fx) {
     if (f.k === 'nfire') {
       this.fx.spawn(f.x0, .22, f.z0, 0, .05, 0, 0, 1.4, .05, .14, K.smoke, F_HOT);
-      if (f.big) Sfx.gun(f.x0, f.z0, f.x1, f.z1, f.fl);
+      if (f.big) Sfx.gun(f.x0, f.z0, f.x1, f.z1, f.fl, 1.6);
       this.pending.push({ t: this.now + f.fl, x: f.x1, z: f.z1, hit: f.hit, big: f.big });
     } else if (f.k === 'nboom') {
       const s = f.big;
@@ -168,7 +168,7 @@ export class NavyDraw {
   bombard(x0: number, z0: number, x1: number, z1: number, y1: number, fl: number) {
     this.fx.spawn(x0, .22, z0, 0, 0, 0, 0, .1, .14, .24, K.flash, F_GLOW);
     this.fx.spawn(x0, .24, z0, 0, .06, 0, 0, 1.6, .06, .18, K.smoke, F_HOT);
-    Sfx.gun(x0, z0, x1, z1, fl);
+    Sfx.gun(x0, z0, x1, z1, fl, 1.6);
     this.pending.push({ t: this.now + fl, x: x1, z: z1, hit: true, big: true, y: y1, bomb: true });
   }
 

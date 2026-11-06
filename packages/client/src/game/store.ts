@@ -4,6 +4,7 @@ import { describeEvent, type BuildKind, type Command, type FortKind, type GameEv
 import type { Session } from './session';
 import { Sfx } from '../audio/sfx';
 import { Radio } from '../audio/radio';
+import { Neural, defaultVoiceMode, type VoiceMode } from '../audio/voice';
 import { DEFAULT_PIXEL_SCALE, type PixelScale } from '../render/api';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
@@ -35,8 +36,11 @@ interface Ui {
   toast: { text: string; id: number } | null;
   feed: FeedItem[]; log: FeedItem[];
   tut: number; tips: boolean; quality: PixelScale; sound: boolean;
-  /** Spoken radio dispatches (signal cues still play when off). */
-  radio: boolean;
+  /** Radio voice: off, the browser voice, or the neural field-telephone voice (signal cues still play when off). */
+  radio: VoiceMode;
+  /** The radio line on air now (subtitle), and the neural voice's loading state. */
+  onAir: { text: string; region?: number } | null;
+  voiceState: { state: 'idle' | 'loading' | 'ready' | 'error'; p: number };
   /** Visual style: 0 = Tiberian (muddy brown/grey), 1 = Red Alert (industrial chrome). */
   look: 0 | 1;
   fatal: string | null;
@@ -63,7 +67,7 @@ interface Ui {
   setQuality(q: PixelScale): void;
   setLook(l: 0 | 1): void;
   setSound(on: boolean): void;
-  setRadio(on: boolean): void;
+  setRadio(m: VoiceMode): void;
   setTips(on: boolean): void;
   advanceTut(n: number): void;
   /** Convenience actions that send a command and surface errors as toasts. */
@@ -95,13 +99,18 @@ export function loadPixelScale(get: (k: string) => string | null = lsGet): Pixel
   return DEFAULT_PIXEL_SCALE;
 }
 
-Sfx.on = lsGet('f14snd') !== '0'; Radio.voice = lsGet('f14radio') !== '0';
+/** Radio voice from storage: '0' off, 'b' browser voice, 'n' neural; the old on/off ('1') and no choice yet mean the device default. */
+export function loadVoiceMode(get: (k: string) => string | null = lsGet): VoiceMode {
+  const v = get('f14radio');
+  return v === '0' ? 'off' : v === 'b' ? 'basic' : v === 'n' ? 'neural' : defaultVoiceMode();
+}
+Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
-  sound: lsGet('f14snd') !== '0', radio: lsGet('f14radio') !== '0', fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
+  sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
@@ -126,7 +135,7 @@ export const useUi = create<Ui>((set, get) => ({
   setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
   setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; if (!sound) Radio.reset(); set({ sound }); },
-  setRadio: (radio) => { lsSet('f14radio', radio ? '1' : '0'); Radio.voice = radio; if (!radio) Radio.reset(); set({ radio }); },
+  setRadio: (radio) => { lsSet('f14radio', radio === 'off' ? '0' : radio === 'basic' ? 'b' : 'n'); Radio.setMode(radio); set({ radio }); },
   setTips: (tips) => { lsSet('f14tips', tips ? '1' : '0'); set({ tips }); },
   advanceTut: (n) => { if (n > get().tut) set({ tut: n }); },
 
@@ -157,11 +166,15 @@ export const useUi = create<Ui>((set, get) => ({
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
       items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region, report: d.report });
     }
+    Radio.tick(s.state, s.me);
     set(st => ({ rev: st.rev + 1, feed: items.length ? [...st.feed, ...items].slice(-4) : st.feed, log: items.length ? [...items.reverse(), ...st.log].slice(0, 60) : st.log }));
     if (items.length) for (const it of items) setTimeout(() => set(st => ({ feed: st.feed.filter(f => f.id !== it.id) })), 10000);
   },
   bump: () => set(st => ({ rev: st.rev + 1 })),
 }));
+
+Radio.onAir = (d) => useUi.setState({ onAir: d ? { text: d.say, region: d.region } : null });
+Neural.onState = () => useUi.setState({ voiceState: { state: Neural.state, p: Neural.progress } });
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export function dateStr(day: number) { const d = new Date(Date.UTC(1914, 7, 1) + day * 864e5); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }

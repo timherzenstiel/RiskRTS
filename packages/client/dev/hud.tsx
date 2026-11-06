@@ -9,10 +9,10 @@ import { Feed } from '../src/ui/Feed';
 import { Overlays } from '../src/ui/Overlays';
 import { Toast } from '../src/ui/Toast';
 import { FrontControls } from '../src/ui/FrontCard';
-import { OfferBanner } from '../src/ui/Diplomacy';
 import { Alerts, LeftRail, SituationPanel } from '../src/ui/Situation';
 import { ForcesPanel } from '../src/ui/Forces';
-import { StaffPanel } from '../src/ui/Staff';
+import { InboxPanel, InboxWatcher } from '../src/ui/Inbox';
+import { VoteBanner } from '../src/ui/Vote';
 import { EconomyPanel, IntelPanel, NavyPanel } from '../src/ui/Panels';
 import { OrderPreview } from '../src/ui/Forces';
 import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
@@ -48,6 +48,6 @@ function Card() {
 }
 function Hud() {
   const hasDrawer = useUi(s => s.sel >= 0); const panel = useUi(s => s.panel);
-  return <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (panel ? ' has-panel' : '')}><TopBar /><Sidebar /><LeftRail /><SituationPanel /><ForcesPanel /><StaffPanel /><EconomyPanel /><NavyPanel /><IntelPanel /><OrderPreview /><Alerts /><OfferBanner /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
+  return <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (panel ? ' has-panel' : '')}><TopBar /><Sidebar /><LeftRail /><SituationPanel /><ForcesPanel /><InboxPanel /><EconomyPanel /><NavyPanel /><IntelPanel /><OrderPreview /><Alerts /><InboxWatcher /><VoteBanner /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
 }
 createRoot(document.getElementById('root')!).render(<Hud />);

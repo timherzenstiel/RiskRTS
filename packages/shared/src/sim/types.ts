@@ -17,6 +17,8 @@ export interface FactionState {
   id: number; supply: number; alive: boolean; mission: Mission | null; aiT: number; ai: boolean;
   /** War weariness 0..100: grows with casualties, cuts income and morale, fades in quiet times. */
   ww: number;
+  /** Game times of this power's last pause calls (at most VOTE.calls per hour). */
+  pc?: number[];
   /** Wounded men on their way back to the manpower pool (the sum of `wq`). */
   wounded: number;
   /** Wounded coming back: [men, day they rejoin the pool]. */
@@ -415,7 +417,13 @@ export type GameEvent =
   | { k: 'strait'; link: number; open: boolean; region: number }
   /** Commanders: a corps sent back to the player (and why), a critical request filed. */
   | { k: 'release'; faction: number; army: number; n: number; region: number; why: HqNote['why'] }
-  | { k: 'request'; faction: number; army: number; kind: ReqKind; region: number; sector: number; urg: 0 | 1 | 2; req: number };
+  | { k: 'request'; faction: number; army: number; kind: ReqKind; region: number; sector: number; urg: 0 | 1 | 2; req: number }
+  /** A request nobody answered in time: it lapses, and the corps concerned lose morale (`mor`, 0 when it costs nothing). */
+  | { k: 'reqExpired'; faction: number; army: number; kind: ReqKind; region: number; sector: number; mor: number; corps: number[] }
+  /** Recruits finished training and joined a region's reserve. */
+  | { k: 'trained'; faction: number; region: number; n: number }
+  /** Pause by vote (design-play §2): called, carried (the war stops), refused, or over. */
+  | { k: 'vote'; faction: number; what: 'call' | 'carried' | 'refused' | 'over' };
 
 export interface GameStats { won: number[]; lost: number[] }
 
@@ -423,6 +431,8 @@ export interface GameStats { won: number[]; lost: number[] }
 export interface GameSettings {
   /** Simultaneous attacks each power may run (0 = unlimited). Reinforcing your own regions never counts. */
   attackCap: number;
+  /** Multiplayer: players may stop the war by a majority vote (on unless the host switches it off). */
+  vote?: boolean;
   /** Battle pace: 0 fast, 1 normal, 2 long. */
   pace: number;
 }
@@ -490,6 +500,10 @@ export interface Req {
   by?: 'patrol' | 'recon' | 'spy'; from?: number; for?: 'watch' | 'attack' | 'target';
 }
 
+/** A pause vote: who called it, the powers for and against, until when (real seconds, `wall`) the call is open, and until when
+ *  the war stands still once it is carried. */
+export interface Vote { by: number; yes: number[]; no: number[]; ends: number; on?: number }
+
 export interface Spy { id: number; f: number; region: number; eta: number; /** Exposed by sabotage until this day: twice as likely to be caught. */ hot?: number }
 
 export interface GameState {
@@ -509,6 +523,10 @@ export interface GameState {
   treaties: Treaty[]; offers: Offer[];
   /** Armies with their commanders, and the requests waiting for an answer. */
   hq?: Hq[]; requests?: Req[];
+  /** A pause vote in multiplayer (design-play §2). */
+  vote?: Vote;
+  /** Real seconds since the game started, counted by the host even while the war stands still (votes run on it). */
+  wall?: number;
   /** The navy: every ship, fleets at sea, naval battles. */
   ships: Ship[]; fleets: Fleet[]; seaBattles: SeaBattle[];
   /** Fog-of-war views only: the faction this view was made for. */
@@ -550,7 +568,10 @@ export type Command =
   | { t: 'detach'; region: number; id: number; u: Partial<Units> }
   | { t: 'merge'; region: number; a: number; b: number }
   /** Form a new corps at the region centre from the depot. */
-  | { t: 'form'; region: number; u: Partial<Units> }
+  | { t: 'form'; region: number; u: Partial<Units>; into?: number }
+  /** Pause by vote: call one, or vote on the one open. */
+  | { t: 'pauseCall' }
+  | { t: 'pauseVote'; yes: boolean }
   /** Corps settings: stance, and whether Auto may manage it (`man` false hands it back to the region). */
   | { t: 'corpsSet'; region: number; id: number; st?: Stance; man?: boolean; refill?: boolean }
   /** Armies: form one from corps (its front starts with their regions), put corps in or out, change its settings, answer a request. */

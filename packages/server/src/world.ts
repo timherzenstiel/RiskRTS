@@ -1,7 +1,7 @@
 // One persistent world on the dedicated server: the authoritative simulation, its seats, connected players and spectators.
 // Same rules as a browser host (createGame, step, applyCommand, makeSnapshot), saved after every convoy.
 import {
-  applyCommand, createGame, drainEvents, eventsFor, makeSnapshot, migrateState, step, TICK_DT,
+  applyCommand, createGame, drainEvents, votePaused, voteTick, eventsFor, makeSnapshot, migrateState, step, TICK_DT,
   type ClientMsg, type Fx, type GameEvent, type GameSettings, type GameState, type ServerMsg, type WorldInfo,
 } from '@riskrts/shared';
 import { randomBytes } from 'node:crypto';
@@ -107,7 +107,9 @@ export class World {
   /** Advance by real seconds (ticks fixed 50 ms steps), stream snapshots, save after each convoy. */
   update(dt: number) {
     if (this.running) {
-      this.acc += Math.min(dt, .5);
+      // pause by vote (design-play §2): real seconds keep counting, the war stands still
+      voteTick(this.sim, Math.min(dt, .5)); this.collect();
+      this.acc = votePaused(this.sim) ? 0 : this.acc + Math.min(dt, .5);
       while (this.acc >= TICK_DT) { step(this.sim, TICK_DT); this.acc -= TICK_DT; this.collect(); }
       if (this.sim.day !== this.lastDay) { this.lastDay = this.sim.day; this.save(); }
       if (this.sim.over) { this.save(); this.onOver?.(this); }
@@ -130,7 +132,7 @@ export class World {
 
   private sendSnap(p: Peer, full: boolean) {
     const fx = this.fxNet.filter(f => 'b' in f ? p.watch.has(f.b) : true);
-    p.conn.send({ t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: this.running ? 1 : 0 });
+    p.conn.send({ t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: this.running && !votePaused(this.sim) ? 1 : 0 });
   }
 
   /** Spectators get full-vision snapshots (no sealed orders) after a delay. */

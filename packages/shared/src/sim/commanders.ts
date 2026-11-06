@@ -289,7 +289,7 @@ function file(g: GameState, h: Hq, asks: Omit<Req, 'id' | 'owner' | 'army' | 'at
     if (next.length >= MAX_REQ) break;
     if (a.kind === 'release' && next.some(q => q.kind === 'release')) continue;
     const old = byKey.get(a.key) ?? (a.kind === 'release' ? mine.find(q => q.kind === 'release' && q.why === a.why) : undefined);
-    const q: Req = { ...(old ?? {}), ...a, id: old?.id ?? g.nextId++, owner: h.owner, army: h.id, at: old?.at ?? g.time } as Req;
+    const q: Req = { ...(old ?? {}), ...a, id: old?.id ?? g.nextId++, owner: h.owner, army: h.id, at: old && !(a.urg === 2 && old.urg < 2) ? old.at : g.time } as Req;
     next.push(q);
     // a new request (or one that has become critical) goes out over the radio
     if (!old || (q.urg === 2 && old.urg < 2)) emit(g, { k: 'request', faction: h.owner, army: h.id, kind: q.kind, region: q.region, sector: q.sector, urg: q.urg, req: q.id });
@@ -426,8 +426,31 @@ export function disband(g: GameState, f: number, army: number): string | null {
   disbandHq(g, h); return null;
 }
 
+/** Weeks a request waits for an answer before it lapses (critical ones one week), and the morale its corps lose then. */
+export const EXPIRE = { weeks: 2, critical: 1, mor: 5 } as const;
+/** Game time at which a request lapses unanswered. */
+export const reqExpiry = (q: Req) => q.at + (q.urg === 2 ? EXPIRE.critical : EXPIRE.weeks) * TICK_SECONDS;
+
+/** Requests nobody answered in time lapse (design-play §2): men, works, patrols and falling back cost the corps concerned
+ *  morale; an attack or a corps to send back simply lapses. The commander does not ask again for a while. */
+function expire(g: GameState) {
+  for (const q of [...(g.requests ?? [])]) {
+    if (g.time < reqExpiry(q)) continue;
+    const h = hqOf(g, q.army); g.requests = (g.requests ?? []).filter(x => x !== q);
+    if (!h) continue;
+    h.deny[q.key] = g.time + DENY_WEEKS * TICK_SECONDS;
+    const cost = q.kind === 'attack' || q.kind === 'release' ? 0 : EXPIRE.mor, hit: number[] = [];
+    if (cost) for (const { r, c } of armyCorps(g, h)) {
+      if (q.corps?.length ? !q.corps.includes(c.id) : r.id !== q.region || (q.sector >= 0 && c.p !== q.sector)) continue;
+      c.mor = Math.max(0, c.mor - cost); hit.push(c.id);
+    }
+    emit(g, { k: 'reqExpired', faction: q.owner, army: h.id, kind: q.kind, region: q.region, sector: q.sector, mor: hit.length ? cost : 0, corps: hit });
+  }
+}
+
 /** Every commander whose turn it is takes a look at his front. Called every step. */
 export function stepCommanders(g: GameState) {
+  if (g.requests?.length) expire(g);
   if (!g.hq?.length) return;
   const views = new Map<number, GameState>();
   for (const h of [...g.hq]) {

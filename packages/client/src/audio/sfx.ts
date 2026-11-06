@@ -476,6 +476,11 @@ class SfxEngine {
     lfo.connect(lg); lg.connect(am.gain); osc.connect(am); const e = c.createGain(); e.gain.setValueAtTime(.12, t); e.gain.setValueAtTime(.12, t + .16); e.gain.linearRampToValueAtTime(0, t + .2); am.connect(e); e.connect(o);
     osc.start(t); lfo.start(t); osc.stop(t + .22); lfo.stop(t + .22);
   }
+  /** Field-telephone ring for an urgent decision in the Inbox: two short bursts of a bell struck by a fast hammer. */
+  ring() {
+    if (!this.ok('ring', 1500)) return; const t = this.ctx!.currentTime, o = this.out(1, undefined, undefined, .05, 'ui', .45);
+    for (const b of [0, .32]) for (let k = 0; k < 9; k++) { const s = t + b + k * .022; this.tone(o, s, 1180, 1150, .05, .07, 'triangle', .001); this.tone(o, s, 2350, 2300, .03, .025, 'sine', .001); }
+  }
   /** Supply convoy: a quick telegraph sounder click-clack and a small bell. Kept soft, it comes every few seconds. */
   supply() {
     if (!this.ok('supply', 500)) return; const t = this.ctx!.currentTime, o = this.out(1.2, undefined, undefined, .1, 'ui', .7);

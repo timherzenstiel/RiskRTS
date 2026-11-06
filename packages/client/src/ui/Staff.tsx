@@ -1,6 +1,6 @@
-// Commanders and requests (design-command §2.5): the Staff panel (requests waiting for an answer, grouped by army, and what the
-// commanders did lately), the army card (commander, mandate, target, budget, standing approvals, front, corps), and the words
-// for a request (the simulation keeps only numbers).
+// Commanders and requests (design-command §2.5): the army card (commander, mandate, target, budget, standing approvals, front,
+// corps), the army row of the corps card, and the words for a request (the simulation keeps only numbers). Requests are answered
+// in the Inbox (Inbox.tsx).
 import {
   BUDGET_MAX, FACTIONS, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
   type GameState, type Hq, type Mandate, type Req, type ReqKind,
@@ -15,8 +15,7 @@ import { nm } from './format';
 import { getLang, t, tx } from '../i18n';
 import { rich, tn } from './LangPicker';
 
-const KIND: Record<ReqKind, string> = { men: 'Reinforcements', fort: 'Field works', recon: 'Reconnaissance', attack: 'Permission to attack', fallback: 'Permission to fall back', release: 'Send corps back' };
-const URG = ['Routine', 'Urgent', 'Critical'] as const;
+export const KIND: Record<ReqKind, string> = { men: 'Reinforcements', fort: 'Field works', recon: 'Reconnaissance', attack: 'Permission to attack', fallback: 'Permission to fall back', release: 'Send corps back' };
 /** Mandates in short words (design-play §4.3); the simulation's names are MANDATES. */
 export const MAND = ['Hold', 'Defend', 'Attack'] as const;
 const SHORT: Record<ReqKind, string> = { men: 'Men', fort: 'Works', recon: 'Patrols', attack: 'Attacks', fallback: 'Falling back', release: 'Sending back' };
@@ -66,49 +65,6 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
 
 function send(cmd: Parameters<ReturnType<typeof useUi.getState>['order']>[0]) { return useUi.getState().order(cmd); }
 
-function ReqRow({ g, me, q }: { g: GameState; me: number; q: Req }) {
-  const rt = reqText(g, me, q);
-  return (
-    <div className={'rq u' + q.urg}>
-      <div className="rq-h"><span className="tag">{t(KIND[q.kind])}</span><small>{t(URG[q.urg])}</small>
-        <button className="lnk" title={t('Show on the map')} onClick={() => { click(); useUi.getState().select(q.region); rendererRef.current?.flyTo(q.region, 22); }}>{t('Show')}</button></div>
-      <b>{rt.title}</b>
-      <small className="rq-w">{rt.why}</small>
-      <div className="rq-a">{rt.opts.map(o => <button key={o.opt} className={'btn sm' + (o.danger ? ' danger' : '')} disabled={o.off} title={o.title} onClick={() => send({ t: 'reply', req: q.id, opt: o.opt, n: o.n })}>{o.label}</button>)}</div>
-    </div>
-  );
-}
-
-/** Left-rail badge: open requests, and whether one is critical. */
-export function staffBadge(g: GameState, me: number) { const qs = (g.requests ?? []).filter(q => q.owner === me); return { n: qs.length, crit: qs.some(q => q.urg === 2) }; }
-
-export function StaffPanel() {
-  const panel = useUi(s => s.panel); const sim = useSim();
-  if (panel !== 'staff' || !sim) return null;
-  const { g, me } = sim, W = buildWorld(), ui = useUi.getState, armies = hqs(g, me);
-  return (
-    <section id="panel" className="plate" aria-label={t('Staff')}>
-      <div className="pn-h"><h2>{t('Staff')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
-      <p className="pn-sub">{t('Requests from your commanders. Answer them here, or let them approve small things by themselves.')}</p>
-      <div className="pn-body">
-        {!armies.length && <p className="note">{rich(t('No armies yet. Select corps (Forces panel, or click them on the map) and press <b>Form army</b> on the corps card. Its commander then holds that stretch of front, shifts his corps where they are needed and asks you for men, works, patrols and permission to attack, fall back or send corps back.'))}</p>}
-        {armies.map(h => {
-          const qs = (g.requests ?? []).filter(q => q.army === h.id).sort((a, b) => b.urg - a.urg), cs = armyCorps(g, h);
-          return (
-            <div key={h.id} className="st-army">
-              <button className="oob-rh" onClick={() => { click(); ui().selectArmy(h.id); }}>
-                <b>{hqName(h)}</b><small>{h.cmd.name} · {t(MAND[h.mandate])}{h.mandate === 2 && h.target !== undefined ? ` → ${nm(W.regions[h.target].name)}` : ''} · {t('{0} corps', cs.length)}</small>
-              </button>
-              {qs.length ? qs.map(q => <ReqRow key={q.id} g={g} me={me} q={q} />) : <p className="note">{t('No requests.')}</p>}
-              {h.notes.length > 0 && <div className="st-log">{h.notes.slice(0, 3).map((n, i) => <small key={i}>{n.k === 'move' ? tn('Moved {0} to {1} of {2}', { raw: groupName(me, 1, n.n) }, borderLabel(W, n.post), W.regions[n.region].name) : tn('Sent {0} back ({1})', { raw: groupName(me, 1, n.n) }, n.why === 'peace' ? 'border at peace' : n.why === 'lost' ? 'front lost' : 'not needed')}</small>)}</div>}
-            </div>
-          );
-        })}
-        <p className="note">{t('Commanders never attack or send troops back without your answer. "Approves by himself" and a front budget (army card) let them carry out the small things themselves.')}</p>
-      </div>
-    </section>
-  );
-}
 
 // ---------------------------------------------------------------- army card
 
@@ -160,7 +116,7 @@ export function ArmyCard() {
       <div className="cc-acts">
         <button className="btn sm" title={t('A new commander takes over; his corps lose 5 morale')} onClick={() => { click(); send({ t: 'relieve', army: h.id }); }}>{t('Relieve')}</button>
         <button className="btn sm" title={t('The corps come under your own orders')} onClick={() => { click(); if (send({ t: 'disband', army: h.id })) ui().selectArmy(-1); }}>{t('Disband')}</button>
-        <button className="btn sm" onClick={() => { Sfx.clunk(); ui().setPanel('staff'); }}>{t('Requests…')}</button>
+        <button className="btn sm" onClick={() => { Sfx.clunk(); ui().setPanel('staff'); }}>{t('Inbox…')}</button>
       </div>
     </section>
   );

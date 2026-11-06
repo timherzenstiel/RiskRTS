@@ -149,7 +149,22 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (e.faction !== me || e.urg < 2) return null;
       const h = (g.hq ?? []).find(x => x.id === e.army), who = h ? h.cmd.name : 'A commander';
       const what = e.kind === 'men' ? 'urgently asks for men' : e.kind === 'fallback' ? 'asks permission to fall back' : 'needs an answer';
-      return { text: `${who} ${what} at ${R(e.region)}${e.sector >= 0 && e.sector < 1000 ? ` (${R(e.sector)} border)` : ''}. See the Staff panel.`, cls: 'bad', region: e.region };
+      return { text: `${who} ${what} at ${R(e.region)}${e.sector >= 0 && e.sector < 1000 ? ` (${R(e.sector)} border)` : ''}. See the Inbox.`, cls: 'bad', region: e.region };
+    }
+    case 'reqExpired': {
+      if (e.faction !== me) return null;
+      const h = (g.hq ?? []).find(x => x.id === e.army), who = h ? h.cmd.name : 'A commander', at = R(e.region);
+      if (!e.mor) return { text: e.kind === 'attack' ? `No answer came: ${who} gave up his attack from ${at}.` : `No answer came: ${who} keeps the corps he offered back at ${at}.`, cls: '', region: e.region };
+      const what = e.kind === 'men' ? `No reinforcements for ${who} at ${at}` : e.kind === 'fort' ? `No field works for ${who} at ${at}` : e.kind === 'recon' ? `No reconnaissance for ${who} at ${at}` : `${who} was not allowed to fall back at ${at}`;
+      return { text: `${what}: no answer came. The corps there lose ${e.mor} morale.`, cls: 'bad', region: e.region };
+    }
+    case 'trained': return e.faction === me ? { text: e.n === 1 ? `1 battalion has finished training in ${R(e.region)}.` : `${e.n} battalions have finished training in ${R(e.region)}.`, cls: '', region: e.region } : null;
+    case 'vote': {
+      const who = e.faction === me ? 'You' : F(e.faction).name;
+      if (e.what === 'call') return { text: e.faction === me ? 'You asked the other players for a pause.' : `${who} asks for a pause.`, cls: 'me' };
+      if (e.what === 'carried') return { text: 'The pause was agreed: the war stands still for a minute.', cls: 'me' };
+      if (e.what === 'refused') return { text: 'No majority for a pause: the war goes on.', cls: '' };
+      return { text: 'The pause is over.', cls: '' };
     }
     case 'seaBattle': {
       const side = e.sides.findIndex(s => s.includes(me)); if (side < 0) return null;

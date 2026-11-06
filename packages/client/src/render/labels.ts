@@ -6,6 +6,7 @@ import type { CityInfo } from './terrain';
 import { lerp } from './util';
 import { battleAnchor, hostileBorders, OVER, capacity, load, type Balance } from '@riskrts/shared';
 import { getLang, langVersion, t, tx } from '../i18n';
+import { pins } from '../game/pins';
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
 function garrisonLabel(r: GameState['regions'][number], merged = false) {
@@ -92,6 +93,7 @@ export class Labels {
   private lv = langVersion();
   private mode = 0;
   private readonly chips = new Map<string, ChipLabel>();
+  private readonly pinEls = new Map<string, ChipLabel>();
   private balances: Balance[] = []; private nextBal = 0;
   /** Map mode (store.ts MapMode), set as a class md0..md4 on the label layer. */
   setMode(m: number) { if (m === this.mode) return; this.mode = m; for (let k = 0; k < 5; k++) this.root.classList.toggle('md' + k, k === m); this.nextBal = 0; }
@@ -309,6 +311,26 @@ export class Labels {
     }
     for (const [k, l] of this.chips) if (l.seen !== ctx.frame) { l.el.remove(); this.chips.delete(k); }
 
+    // Inbox: an envelope pin where a decision waits, in every map mode (design-play §2); pins on one spot fan out a little
+    if (ctx.me >= 0 && dist < 260) {
+      const at = new Map<string, number>();
+      for (const p of pins.items) {
+        let l = this.pinEls.get(p.key);
+        if (!l) {
+          const el = document.createElement('button'); el.type = 'button'; el.className = 'ibpin'; el.style.pointerEvents = 'auto'; el.textContent = '✉';
+          const key = p.key, rid = p.region; el.addEventListener('pointerdown', (e) => { e.stopPropagation(); pins.onClick?.(key, rid); });
+          this.root.appendChild(el); l = { el, key: '', shown: true, tf: '', seen: 0 }; this.pinEls.set(p.key, l);
+        }
+        l.seen = ctx.frame;
+        const cls = 'ibpin u' + p.urg; if (l.el.className !== cls) l.el.className = cls;
+        if (l.key !== p.title) { l.key = p.title; l.el.title = p.title; l.el.setAttribute('aria-label', p.title); }
+        const sp = p.sector !== undefined && p.sector >= 0 ? sectorPoint(this.world, p.region, p.sector) : { x: this.world.regions[p.region].cx, z: this.world.regions[p.region].cz };
+        const spot = p.region + '|' + (p.sector ?? -1), n = at.get(spot) ?? 0; at.set(spot, n + 1);
+        this.place(l, ctx, sp.x + n * .35, ctx.anchorH(p.region) + 1.1, sp.z);
+      }
+    }
+    for (const [k, l] of this.pinEls) if (l.seen !== ctx.frame) { l.el.remove(); this.pinEls.delete(k); }
+
     // selection brackets around the selected region's main army and corps, battle and close bands (design 3.4)
     let nb = 0;
     if (ctx.sel >= 0 && dist < 30) {
@@ -372,6 +394,7 @@ export class Labels {
     for (const l of this.fleets.values()) l.el.remove();
     for (const l of this.seas.values()) l.el.remove();
     for (const l of this.chips.values()) l.el.remove(); this.chips.clear();
+    for (const l of this.pinEls.values()) l.el.remove(); this.pinEls.clear();
     this.armies.clear(); this.battles.clear(); this.corps.clear(); this.fleets.clear(); this.seas.clear();
   }
 }

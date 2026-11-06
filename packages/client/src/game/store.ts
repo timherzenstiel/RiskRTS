@@ -30,6 +30,11 @@ export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvai
 /** Which tool of the border card is open: send corps, fortify, scout (design-play §1). */
 export type BorderTool = '' | 'fort' | 'send' | 'scout';
 export type Overlay = null | 'menu' | 'orders' | 'help' | 'end' | 'reports' | 'calendar' | 'doctrine' | 'diplomacy' | 'rules';
+/** When the game stops by itself (solo) or calls a pause vote (multiplayer): an urgent decision, our region attacked, a
+ *  region lost, a battle won (design-play §2). */
+export interface AutoPause { urgent: boolean; attacked: boolean; lost: boolean; won: boolean }
+export type PauseWhy = keyof AutoPause;
+const AP_DEFAULT: AutoPause = { urgent: true, attacked: true, lost: false, won: false };
 export interface FeedItem { id: number; day: string; text: string; cls: '' | 'me' | 'bad' | 'good'; region?: number; report?: number }
 
 interface Ui {
@@ -74,6 +79,12 @@ interface Ui {
   /** Visual style: 0 = Tiberian (muddy brown/grey), 1 = Red Alert (industrial chrome). */
   look: 0 | 1;
   fatal: string | null;
+  /** Inbox (design-play §2): recruits that finished training per region, the item opened from a map pin, the items shown as
+   *  toasts (until when, game time; Infinity: until answered), and when the game pauses by itself. */
+  trained: Record<number, { n: number; at: number }>;
+  inboxFocus: string | null;
+  toasts: { key: string; until: number }[];
+  autoPause: AutoPause;
 
   setScreen(s: Screen): void;
   clearFatal(): void;
@@ -122,6 +133,12 @@ interface Ui {
   /** Called by the game loop ~5×/s: pulls events from the session into the feed and bumps rev. */
   pump(): void;
   bump(): void;
+  setAutoPause(p: Partial<AutoPause>): void;
+  /** Stop the game for a reason the player picked: pause (solo), or call a pause vote (multiplayer). */
+  autoPauseFor(why: PauseWhy): void;
+  focusInbox(key: string | null): void;
+  /** Leave an Inbox item alone: drop its toast, and for a while the item itself (game seconds). */
+  dropInbox(key: string, quiet?: number): void;
 }
 
 const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -145,16 +162,18 @@ export function loadVoiceMode(get: (k: string) => string | null = lsGet): VoiceM
   return v === '0' ? 'off' : v === 'b' ? 'basic' : v === 'n' ? 'neural' : defaultVoiceMode();
 }
 Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
+function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') ?? 'null') as Partial<AutoPause> | null; return { ...AP_DEFAULT, ...(v ?? {}) }; } catch { return { ...AP_DEFAULT }; } }
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(),
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1 });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, trained: {}, inboxFocus: null, toasts: [] });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
   select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], armySel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
@@ -215,6 +234,10 @@ export const useUi = create<Ui>((set, get) => ({
       Radio.event(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       if (e.k === 'battleStart' && (e.attacker === s.me || e.defender === s.me)) get().setMode(1, true);
+      if (e.k === 'trained' && e.faction === s.me) { const tr = get().trained, old = tr[e.region]; set({ trained: { ...tr, [e.region]: { n: (old && s.state.time - old.at < 60 ? old.n : 0) + e.n, at: s.state.time } } }); }
+      if (e.k === 'battleStart' && e.defender === s.me && e.attacker !== s.me) get().autoPauseFor('attacked');
+      if (e.k === 'battleEnd' && e.prev === s.me && e.winner !== null && e.winner !== s.me) get().autoPauseFor('lost');
+      if (e.k === 'battleEnd' && e.winner === s.me && e.sides.includes(s.me) && e.prev !== s.me) get().autoPauseFor('won');
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
       items.push({ id: ++feedId, day: dateStr(s.state.day), text: d.text, cls: d.cls, region: d.region, report: d.report });
     }
@@ -223,7 +246,23 @@ export const useUi = create<Ui>((set, get) => ({
     if (items.length) for (const it of items) setTimeout(() => set(st => ({ feed: st.feed.filter(f => f.id !== it.id) })), 10000);
   },
   bump: () => set(st => ({ rev: st.rev + 1 })),
+  setAutoPause: (p) => { const autoPause = { ...get().autoPause, ...p }; lsSet('f14ap', JSON.stringify(autoPause)); set({ autoPause }); },
+  autoPauseFor: (why) => {
+    const s = get().session; if (!s || !get().autoPause[why] || s.state.over) return;
+    const g = s.state, humans = g.factions.filter(f => f.alive && !f.ai).length;
+    const msg = { urgent: 'Paused: a decision is waiting in the Inbox.', attacked: 'Paused: one of our regions is under attack.', lost: 'Paused: we lost a region.', won: 'Paused: we won a battle.' }[why];
+    if (s.canControlTime && humans <= 1) { if (s.speed > 0) { s.speed = 0; get().say(msg); get().bump(); } return; }
+    // multiplayer: ask the others, at most once in half a minute and never over an open vote
+    if (g.vote || g.cfg.vote === false || performance.now() - lastCall < 30000) return;
+    lastCall = performance.now(); s.send({ t: 'pauseCall' });
+  },
+  focusInbox: (inboxFocus) => set({ inboxFocus }),
+  dropInbox: (key, quiet) => {
+    const s = get().session, now = s?.state.time ?? 0;
+    set(st => ({ toasts: st.toasts.filter(x => x.key !== key), inboxFocus: st.inboxFocus === key ? null : st.inboxFocus, ...(quiet ? { dismissed: { ...st.dismissed, ['ib:' + key]: now + quiet } } : {}) }));
+  },
 }));
+let lastCall = -1e9;
 
 Radio.onAir = (d) => useUi.setState({ onAir: d ? { text: d.say, region: d.region } : null });
 Neural.onState = () => useUi.setState({ voiceState: { state: Neural.state, p: Neural.progress } });

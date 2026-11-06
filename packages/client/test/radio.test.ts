@@ -80,3 +80,32 @@ describe('radio dispatches', () => {
 });
 
 export type { GameState };
+
+describe('commanders on the radio', () => {
+  it('a commander asks over the radio in his own voice, and says when he sends a corps back', async () => {
+    const { applyCommand, corpsIn, run } = await import('@riskrts/shared');
+    const { setCs } = await import('../../shared/test/helpers');
+    const { commanderCall, rankSpoken } = await import('../src/audio/dispatches');
+    expect(rankSpoken('Gen. Otto von Albeck')).toBe('General Otto von Albeck');
+    const g = createGame({ seed: 7, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } });
+    for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.port = false; r.deploy = 1; }
+    g.ships = []; g.fleets = [];
+    const A = id('France'), B = id('Germany');
+    for (const n of W.regions[A].adj) g.regions[n].owner = 0;
+    g.regions[A].owner = 0; g.regions[B].owner = 1; g.regions[A].capitalOf = 0; updateSupplyLines(g);
+    g.regions[A].units.inf = 2; g.regions[B].units.inf = 20;
+    for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men;
+    setCs(g, A, [[B, { inf: 2 }]]); setCs(g, B, [[A, { inf: 20 }]]);
+    applyCommand(g, 0, { t: 'army', corps: corpsIn(g.regions[A]).map(c => c.id) });
+    const h = g.hq![0]; h.cmd.tr = ['insp', 'insp']; h.cmd.name = 'Gen. Henri Garnier';
+    run(g, 4);
+    const ev = g.events.find((e): e is Extract<GameEvent, { k: 'request' }> => e.k === 'request' && e.kind === 'men');
+    expect(ev).toBeTruthy();
+    const d = commanderCall(g, ev!, 0)!;
+    expect(d.say).toContain('General Garnier'); expect(d.say).toContain(`${ordinal(h.n)} Army`); expect(d.say).toContain('Germany border');
+    expect(d.who).toBe('front'); expect(d.voice).toBe(200 + h.n);
+    expect(dispatchFor(g, ev!, 1)).toBeNull();
+    const rel = commanderCall(g, { k: 'release', faction: 0, army: h.id, n: 7, region: A, why: 'peace' }, 0)!;
+    expect(rel.say).toContain('Seventh Corps'); expect(rel.say).toContain('at peace');
+  });
+});

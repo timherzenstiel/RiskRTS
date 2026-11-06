@@ -63,10 +63,14 @@ export function armyCorps(g: GameState, h: Hq): { r: RegionState; c: Corps }[] {
   return out;
 }
 
+/** A corps leaving an army goes to the player's own orders; a computer power's goes back to its region's Auto. */
+export const handBack = (g: GameState, f: number) => g.factions[f]?.ai ? undefined : true;
+
 /** Disband an army: its corps go to the player, its requests lapse. */
 export function disbandHq(g: GameState, h: Hq) {
-  for (const { c } of armyCorps(g, h)) { c.army = undefined; c.man = true; }
-  for (const a of g.armies) if (a.ct?.army === h.id) { a.ct.army = undefined; a.ct.man = true; }
+  const man = handBack(g, h.owner);
+  for (const { c } of armyCorps(g, h)) { c.army = undefined; c.man = man; }
+  for (const a of g.armies) if (a.ct?.army === h.id) { a.ct.army = undefined; a.ct.man = man; }
   g.hq = (g.hq ?? []).filter(x => x !== h);
   g.requests = (g.requests ?? []).filter(q => q.army !== h.id);
 }
@@ -349,7 +353,7 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
     case 'release': {
       for (const cid of q.corps ?? []) {
         const x = findCorps(g, f, cid); if (!x || x.c.army !== h.id) continue;
-        x.c.army = undefined; x.c.man = true; x.c.ord = 0;
+        x.c.army = undefined; x.c.man = handBack(g, f); x.c.ord = 0;
         if (x.c.p >= 0) cmdMove(g, x.r, x.c, x.r.id, -1);
         note(h, g, { k: 'release', n: x.c.n, region: x.r.id, post: x.c.p, why: q.why ?? 'safe' });
         emit(g, { k: 'release', faction: f, army: h.id, n: x.c.n, region: x.r.id, why: q.why ?? 'safe' });

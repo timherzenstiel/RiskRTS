@@ -81,6 +81,46 @@ export function tidy(s: string): string {
   return s.replace(/\s+/g, ' ').trim().replace(/(^|[.!?]\s+)([a-z])/g, (_, a: string, c: string) => a + c.toUpperCase());
 }
 
+/** "General von Albeck": a commander's rank spoken in full. */
+export function rankSpoken(name: string): string { return name.replace(/^Gen\.\s/, 'General ').replace(/^Gén\.\s/, 'Général ').replace(/^GdI\s/, 'General '); }
+const surname = (name: string) => { const n = rankSpoken(name); return n.startsWith('General ') || n.startsWith('Général ') ? n.split(' ')[0] + ' ' + n.split(' ').slice(2).join(' ') : n; };
+
+/** A front commander on the line: his requests and the corps he sends back (design-command §2.5). One voice per army. */
+export function commanderCall(g: GameState, e: Extract<GameEvent, { k: 'request' | 'release' }>, me: number): Dispatch | null {
+  const W = world(), R = (i: number) => W.regions[i]?.name ?? 'the front';
+  const h = (g.hq ?? []).find(x => x.id === e.army); if (!h) return null;
+  const army = `${ordinal(h.n)} Army`, who = surname(h.cmd.name), voice = 200 + h.n, over = pick(OVER);
+  const call = `${pick(CALL)}, this is ${who}, ${army}.`;
+  const base = { front: .15, who: 'front' as const, voice, region: e.region };
+  if (e.k === 'release') {
+    const why = e.why === 'peace' ? 'Now that the border is at peace, ' : e.why === 'lost' ? 'With our front gone, ' : '';
+    return { say: `${call} ${why}${ordinal(e.n)} Corps is pulling back to ${R(e.region)} and is at your disposal. ${over}`, pri: 0, ...base, key: 'rel-' + h.id, cool: 20 };
+  }
+  const q = (g.requests ?? []).find(x => x.id === e.req);
+  const border = e.sector >= 0 && e.sector < 1000 ? `the ${R(e.sector)} border` : `the coast at ${R(e.region)}`;
+  const corps = (q?.corps ?? []).map(id => { for (const r of g.regions) { const c = r.cs?.find(x => x.id === id); if (c) return `${ordinal(c.n)} Corps`; } return null; }).filter(Boolean) as string[];
+  const names = corps.length ? corps.length === 1 ? corps[0] : `${corps.slice(0, -1).join(', ')} and ${corps[corps.length - 1]}` : 'the corps';
+  let say: string;
+  switch (e.kind) {
+    case 'men': say = e.urg === 2
+      ? pick([`${call} Urgent. They are massing against ${border}. I need ${q?.n ?? 'more'} battalions or the line will not hold. ${over}`, `${call} ${border} is too thin. Request reinforcements at once, ${q?.n ?? 'several'} battalions. ${over}`])
+      : `${call} Request reinforcements for ${border}, ${q?.n ?? 'a few'} battalions. ${over}`; break;
+    case 'fort': say = pick([`${call} Request permission to dig in on ${border}. ${q?.fort === 'wire' ? 'We want wire out in front.' : 'The men need a proper trench.'} ${over}`, `${call} ${border} has no proper works. Request ${q?.fort === 'wire' ? 'barbed wire' : 'a trench line'}. ${over}`]); break;
+    case 'recon': {
+      const there = R(e.sector);
+      say = q?.by === 'spy' ? `${call} Before we go in, I want an agent inside ${there}. Request a spy from the capital. ${over}`
+        : q?.by === 'recon' ? `${call} Request a reconnaissance flight over ${there}. ${q?.for === 'attack' ? 'I will not send the men in blind.' : 'Our picture of it is out of date.'} ${over}`
+        : `${call} Request a cavalry patrol across to ${there}. ${q?.for === 'attack' ? 'I want to know what is waiting before we attack.' : 'We are blind on that side.'} ${over}`;
+      break;
+    }
+    case 'attack': say = pick([`${call} ${names} ${corps.length > 1 ? 'are' : 'is'} ready on ${border}. Request permission to ${q?.goal === 2 ? 'invade' : 'take their first line'}. ${over}`, `${call} We have the advantage facing ${R(e.sector)}. Request permission to attack. ${over}`]); break;
+    case 'fallback': say = `${call} We cannot hold ${border}. Request permission to fall back to the centre. ${over}`; break;
+    case 'release': say = q?.why === 'peace' ? `${call} With the treaty in force, ${names} ${corps.length > 1 ? 'are' : 'is'} not needed on ${border}. Shall I send ${corps.length > 1 ? 'them' : 'it'} back to you? ${over}` : `${call} The front is quiet. I can spare ${names}. Shall I send ${corps.length > 1 ? 'them' : 'it'} back? ${over}`; break;
+    default: return null;
+  }
+  return { say, pri: e.urg === 2 ? 2 : e.urg === 1 ? 1 : 0, ...base, front: e.urg === 2 ? .6 : .15, morse: e.urg === 2 ? '..- .-. --.' : undefined, key: `rq-${h.id}-${e.kind}`, cool: e.urg === 2 ? 15 : 45 };
+}
+
 /** Decide what (if anything) the radio says about an event, from the point of view of faction `me`. */
 export function dispatchFor(g: GameState, e: GameEvent, me: number): Dispatch | null {
   const d = eventCall(g, e, me);
@@ -95,6 +135,7 @@ function eventCall(g: GameState, e: GameEvent, me: number): Dispatch | null {
   const at = (region: number) => { const b = myBattle(g, region, me); return b ? station(g, b, me) : { name: `the ${R(region)} front`, voice: region + 100 }; };
   const front = (region: number, pri: number, say: string, x: Partial<Dispatch> = {}): Dispatch => { const s = at(region); return { say, pri, front: 1, who: 'front', voice: s.voice, region, ...x }; };
   switch (e.k) {
+    case 'request': case 'release': return e.faction === me ? commanderCall(g, e, me) : null;
     case 'start': return { say: 'All stations, all stations. War has been declared. Open your sealed orders and stand by.', pri: 3, front: 0, who: 'hq', morse: '-.-. --.-', stinger: 'declare' };
     case 'air':
       if (e.faction === me || g.regions[e.to].owner !== me) return null;

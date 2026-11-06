@@ -12,6 +12,7 @@ import { OfferBanner } from './Diplomacy';
 import { Sidebar } from './Sidebar';
 import { Alerts, LeftRail, SituationPanel } from './Situation';
 import { ForcesPanel } from './Forces';
+import { StaffPanel } from './Staff';
 import { Stage } from './Stage';
 import { TopBar } from './TopBar';
 import { Modal } from './Modal';
@@ -94,6 +95,7 @@ export function Game() {
       <LeftRail />
       <SituationPanel />
       <ForcesPanel />
+      <StaffPanel />
       <Alerts />
       <OfferBanner />
       <div id="leftcol"><Feed /></div>

@@ -1,6 +1,6 @@
 # RiskRTS – Design: Command Overhaul (forces, supply, manpower, situation map, menus)
 
-Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26** · Mockups: design canvas "RiskRTS – Command overhaul"
+Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26 · phase 3 in PR #28** · Mockups: design canvas "RiskRTS – Command overhaul"
 
 ## Problem
 
@@ -466,4 +466,18 @@ Each phase with tests, typecheck, a screenshot pass through `dev/harness.ts` and
 - **Saves v7 / protocol 7**: each old border corps becomes corps of its own (split at 20) with the region's men share and morale.
 - **Client**: Forces panel (rail, key **O**: regions → corps with strength, morale, stars, ✋; corps on the move; depot with *Form corps*), corps card (stats, stance, order, Detach, Merge, Hand to Auto, attack goal), corps markers on the map (one per post, "×2", click selects, Shift adds), right-click orders for the selected corps, the Deploy tab lists every corps per post.
 - Not yet: **armies** (2–6 corps under a commander with a front) – they come with the commanders in phase 3; box-select and drag-to-merge on the map; refill toggle (phase 5).
+
+## Implementation notes – phase 3 (branch `command/3-commanders`, on top of phase 2)
+
+- **Armies** (`GameState.hq: Hq[]`, `sim/commanders.ts`): formed from selected corps (*Form army* on the corps card); the front starts with the regions they stand in and grows with the regions the army's corps take. `Corps.army` (also on the corps tag, so it survives marches and battles). Region Auto never touches army corps; corps the player orders by hand (`man`) stay in the army but the commander leaves them alone.
+- **Commanders** have an invented name per nation and two traits (`data/commanders.ts`): Offensive spirit, Methodical, Defensive genius, Cautious, Inspiring, Careless. Logistician waits for supply capacity (phase 5). Experience grows with battles won on the front.
+- Every 3 s a commander looks at the hostile borders of his front with `borderBalance` on his power's fog view. He wants about 1.1× what is across (÷ the works bonus, ×1.5 when they mass, more on an Offensive target, a screen of 3 where nothing is known). **By himself** he moves spare corps along the front: from posts that are no longer hostile, from borders that are safe by 2.5× (Cautious 3.5×) and from the reserve to the borders short of men. He keeps 1 corps in reserve (Methodical 2, Careless 0).
+- **Requests** (`GameState.requests`, at most 3 per army, the same key updates in place, lapse when the reason is gone, a denial rests 3 weeks): *Reinforcements* (recruit now onto that border, or transfer the nearest corps under the player's own orders), *Field works* (trench, then wire), *Reconnaissance* (patrol), *Permission to attack* (Active defence: first line where the ratio ≥ 1.5×, Offensive spirit 1.2×, Methodical 1.8×; Offensive: invade the target; at least 3 battalions), *Permission to fall back*, and **Send corps back** – asked when a treaty makes a border peaceful or when the front can spare corps beyond the reserve. Nothing leaves the front and no attack starts without the player's answer.
+- **Standing approvals** per kind (not attacks) and a **front budget** (0–30 % of weekly income for men, works, patrols) let a commander carry requests out himself.
+- Commands: `army`, `armyAssign`, `armySet` (mandate, target, budget, front, standing), `reply`, `relieve`, `disband`. Events `request` (critical ones reach the feed and the alerts) and `release`. Fog and snapshots carry only a power's own armies and requests. Protocol 8.
+- **Client**: Staff panel (rail, key **G**, badge with open requests, red when one is critical) with the requests per army and what each commander did lately; army card (commander, traits, mandate, target, budget, standing approvals, front, corps, Relieve, Disband); Form army / Assign to / Take out on the corps card; armies in the Forces panel.
+- **Scouting**: a commander asks for a *reconnaissance flight* when an own airfield reaches the region (2 borders), else a *cavalry patrol*; on the target of an Offensive he asks for a *spy*. He watches borders that are not safe when the report is missing or older than 21 days, and he proposes an attack only on a report at most 7 days old (else he asks for one first). New trait *Intelligence officer*: wants a fresh look at every hostile border each week, his patrols and flights are caught half as often.
+- **Radio**: every new request is called in by its commander in his own voice (one per army; urgent ones with morse and higher priority, routine ones with a cooldown), and he reports corps he sends back (`commanderCall` in `audio/dispatches.ts`). The feed and the alerts carry only critical requests.
+- Merged with `main` (sound and radio, unit art, recruit cards) through the whole stack.
+- Not yet: computer powers still play with the old AI (no armies, no war minister); munitions, rail and air-support requests come with phase 5.
 

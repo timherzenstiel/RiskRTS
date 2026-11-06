@@ -25,6 +25,7 @@ import { ASSEMBLE, CORPS_CAP, UNREG, addToGroup, armyNo, autoDeploy, column, col
 import { allied } from './diplomacy';
 import { buildPort, buildShip, coastal, dock, landing, shipTroops, station } from './navy';
 import { breakOff } from './naval';
+import { assignArmy, disband, formArmyHq, hqOf, relieve, reply, setArmy } from './commanders';
 import { carrierAir, embarkAir, landOnCarrier } from './carrier';
 import { isCoast } from '../world/zones';
 import { SHIP_KINDS } from '../data/sea';
@@ -500,6 +501,9 @@ export function shift(g: GameState, fid: number, r: RegionState, bid: number): s
 
 export const armyPos = (a: Army): [number, number] => { let x = a.ax + a.dx * a.t; if (x < -HW) x += 2 * HW; if (x > HW) x -= 2 * HW; return [x, a.az + a.dz * a.t]; };
 
+/** Scouts sent by an Intelligence officer are caught half as often. */
+const sharp = (g: GameState, a: Army) => a.hq !== undefined && hqOf(g, a.hq)?.cmd.tr.includes('intel') ? .5 : 1;
+
 /** A patrol or reconnaissance flight reaches its target: it may be caught, otherwise it files its report. */
 function scoutArrives(g: GameState, a: Army) {
   const t = g.regions[a.to];
@@ -507,12 +511,12 @@ function scoutArrives(g: GameState, a: Army) {
   if (a.scout === 'patrol') {
     const nest = t.defs.filter(d => d.f === t.owner && d.s === a.from && (d.k === 'pill' || d.k === 'bunk')).length;
     const p = Math.min(.8, .05 + .12 * nest + .1 * worksAt(t, a.from).wire);
-    if (rnd(g) < p) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'patrol' }); return; }
+    if (rnd(g) < p * sharp(g, a)) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'patrol' }); return; }
     recordIntel(g, a.owner, t.id, a.from);
   } else {
     const flak = t.defs.filter(d => d.f === t.owner && d.k === 'flak').length;
     const p = Math.min(.85, .05 + .2 * flak);
-    if (!hasDoc(g, a.owner, 'air') && rnd(g) < p) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'recon' }); return; }
+    if (!hasDoc(g, a.owner, 'air') && rnd(g) < p * sharp(g, a)) { emit(g, { k: 'scoutLost', faction: a.owner, region: t.id, by: 'recon' }); return; }
     recordIntel(g, a.owner, t.id);
   }
   emit(g, { k: 'intel', faction: a.owner, region: t.id, by: a.scout! });
@@ -598,12 +602,13 @@ function tagCarrier(b: Battle, a: Army) {
 }
 
 const FORT_KINDS: FortKind[] = ['trench', 'sand', 'wire', 'pill', 'fort', 'flak', 'bunk'];
-const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship', 'a', 'b', 'st'] as const;
+const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship', 'a', 'b', 'st', 'army', 'req', 'mandate', 'target', 'budget'] as const;
 /** Commands arrive from the network: every numeric field must be a finite number. */
 function validCommand(c: Command): boolean {
   if (!c || typeof c !== 'object' || typeof c.t !== 'string') return false;
   const o = c as unknown as Record<string, unknown>;
   for (const k of NUM_FIELDS) if (k in o && o[k] !== undefined && !(typeof o[k] === 'number' && Number.isFinite(o[k]))) return false;
+  for (const k of ['corps', 'front', 'standing'] as const) if (k in o && o[k] !== undefined && !(Array.isArray(o[k]) && (o[k] as unknown[]).length <= 64 && (o[k] as unknown[]).every(v => k === 'standing' ? typeof v === 'string' : typeof v === 'number' && Number.isFinite(v)))) return false;
   if ('u' in o && (typeof o.u !== 'object' || o.u === null || Object.values(o.u as object).some(v => !(typeof v === 'number' && Number.isFinite(v) && v >= 0)))) return false;
   return true;
 }
@@ -644,6 +649,12 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'merge': return mergeCorps(g, fid, c.region, c.a, c.b);
     case 'form': return formCorps(g, fid, c.region, c.u);
     case 'corpsSet': return corpsSet(g, fid, c.region, c.id, c.st, c.man);
+    case 'army': return formArmyHq(g, fid, c.corps);
+    case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);
+    case 'armySet': return setArmy(g, fid, c.army, c);
+    case 'reply': return ['yes', 'recruit', 'transfer', 'deny'].includes(c.opt) ? reply(g, fid, c.req, c.opt, c.n) : 'Invalid order.';
+    case 'relieve': return relieve(g, fid, c.army);
+    case 'disband': return disband(g, fid, c.army);
     case 'deploy': { const r = g.regions[c.region]; if (!r || r.owner !== fid) return 'Select one of your own regions first.'; r.deploy = c.mode === 1 ? 1 : undefined; if (r.deploy !== 1) autoDeploy(g, r); return null; }
     case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail, !!c.factory, c.brk);
     case 'decoy': return decoy(g, fid, c.from, c.to);

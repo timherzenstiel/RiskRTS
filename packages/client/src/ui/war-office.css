@@ -618,6 +618,26 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .tl.cp .n .x{font-style:normal;color:#c9c2a8;margin-left:2px;font-size:10px}
 .tl.cp.on .n{outline:2px solid var(--lcd);outline-offset:1px;background:#25301f}
 
+/* phase 3: commanders – Staff panel, requests, army card */
+.rbadge.calm{background:#6e6a58}
+.st-army{margin:6px 0 10px}.st-army .oob-rh b,.oob-rh b{white-space:nowrap}.st-army .oob-rh small{text-align:right}
+.rq{margin:4px 0;padding:6px 8px;background:var(--well);border:1px solid #0d0e0b;border-left:4px solid var(--khaki);border-radius:2px;display:flex;flex-direction:column;gap:3px}
+.rq.u1{border-left-color:var(--amber)}.rq.u2{border-left-color:var(--alarm)}
+.rq-h{display:flex;gap:6px;align-items:center}.rq-h small{color:#a8a48e;font-size:11px}.rq-h .lnk{margin-left:auto}
+.rq b{font:600 14px/1.2 var(--f-head);color:var(--fg)}
+.rq-w{color:#c9c2a8;font-size:12px;line-height:1.35}
+.rq-a{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.st-log{display:flex;flex-direction:column;gap:1px;padding:3px 6px;border-left:2px solid #3d3f37}.st-log small{color:#a8a48e;font-size:11px}
+.lnk{background:none;border:0;border-bottom:1px dotted currentColor;color:var(--khaki);padding:0;font:inherit;font-size:12px;cursor:pointer}
+.ac-tr{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:0 0 6px}.ac-tr .tag{font-size:11px}
+.ac-st{gap:4px!important}.tgl{background:#1b1c17;border:1px solid #3d3f37;color:#a8a48e;font-size:11px;padding:3px 6px;border-radius:2px;cursor:pointer}.tgl[aria-pressed=true]{background:#25301f;color:var(--lcd);border-color:var(--lcd)}
+.ac-fr{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px}.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:#1b1c17;border:1px solid #3d3f37;border-radius:2px;font-size:12px;color:#eee6cc}.chip .x{width:auto;height:auto;padding:0 2px;font-size:12px}
+.acard .lbl{display:flex;justify-content:space-between;align-items:center}
+.acard input[type=range]{flex:1;min-width:80px}
+.sel{background:#0f100d;color:#eee6cc;border:1px solid #3d3f37;padding:3px 4px;font:inherit;font-size:12px}
+.oob-c.army{border-left-color:var(--brass,#b08d3c)}
+.ac-row{gap:6px}
+
 @media (max-width:760px){
   :root{--rail:0px;--panel:min(360px,100vw)}
   #rail{top:auto;bottom:0;left:0;right:auto;width:auto;height:auto;flex-direction:row;display:none}

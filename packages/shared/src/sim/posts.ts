@@ -99,7 +99,7 @@ export function groupMen(r: RegionState, u: Units): number {
 /** Ground battalions of a corps. */
 export const corpsSize = (c: { u: Units }) => groundUnits(c.u);
 /** What a corps keeps while it is away from its region. */
-export const tagOf = (c: Corps): CorpsTag => ({ id: c.id, n: c.n, p: c.p, xp: c.xp || undefined, man: c.man || undefined, st: c.st });
+export const tagOf = (c: Corps): CorpsTag => ({ id: c.id, n: c.n, p: c.p, xp: c.xp || undefined, man: c.man || undefined, st: c.st, army: c.army });
 
 /** Number of the region's army (the depot's name), raised on first use. */
 export function armyNo(g: GameState, r: RegionState): number {
@@ -113,7 +113,7 @@ export function raiseCorps(g: GameState, r: RegionState, post: number, tag?: Par
   if (id === undefined || id < 0 || corpsById(r, id)) id = g.nextId++;
   if (n === undefined || n < 1 || corpsIn(r).some(c => c.n === n)) n = nextCorpsNo(g, r.owner);
   const c: Corps = { id, n, p: post, u: emptyUnits(), m: emptyUnits(), mor: r.mor, since: g.time };
-  if (tag?.xp) c.xp = tag.xp; if (tag?.man) c.man = true; if (tag?.st !== undefined) c.st = tag.st;
+  if (tag?.xp) c.xp = tag.xp; if (tag?.man) c.man = true; if (tag?.st !== undefined) c.st = tag.st; if (tag?.army !== undefined) c.army = tag.army;
   (r.cs ??= []).push(c);
   return c;
 }
@@ -154,7 +154,7 @@ export function fixPosts(g: GameState, r: RegionState) {
     if (sm > r.men[k] + .5) { const q = Math.max(0, r.men[k]) / sm; for (const c of cs) c.m[k] = Math.floor(c.m[k] * q); }
   }
   for (const c of [...cs]) if (corpsSize(c) <= 0) dropCorps(r, c);
-  for (const c of [...corpsIn(r)]) if (c.p < 0 && !c.man && (c.ord ?? 0) === 0) dissolve(r, c);
+  for (const c of [...corpsIn(r)]) if (c.p < 0 && !c.man && c.army === undefined && (c.ord ?? 0) === 0) dissolve(r, c);
 }
 
 /** Men coming back to a region (returning wounded) fill the gaps of its corps and its depot in proportion. */
@@ -230,14 +230,14 @@ export function addToGroup(g: GameState, r: RegionState, post: number, u: Units,
   for (const k of UNIT_TYPES) { r.units[k] += u[k]; r.men[k] += m[k]; }
   const add = groundUnits(u);
   if (!add) return [];
-  if (post < 0 && !t?.man) {
+  if (post < 0 && !t?.man && t?.army === undefined) {
     const before = groundUnits(depotOf(r).u) - add;
     r.mor = before > 0 ? (r.mor * before + mor * add) / (before + add) : mor;
     return [];
   }
   let c = t && t.id >= 0 ? corpsById(r, t.id) : undefined;
   if (c && c.p !== post) c = undefined;
-  if (!c && !t?.man) c = corpsAtPost(r, post).find(x => !x.man && corpsSize(x) < CORPS_CAP && (t ? x.n === t.n || !t.n : true) && (x.ord ?? 0) === 0);
+  if (!c && !t?.man) c = corpsAtPost(r, post).find(x => !x.man && x.army === t?.army && corpsSize(x) < CORPS_CAP && (t && t.army === undefined ? x.n === t.n || !t.n : true) && (x.ord ?? 0) === 0);
   if (!c) c = raiseCorps(g, r, post, t);
   const touched: Corps[] = [];
   const left = { ...u }, men = { ...m };
@@ -252,7 +252,7 @@ export function addToGroup(g: GameState, r: RegionState, post: number, u: Units,
       }
       if (moved) { c.mor = before > 0 ? (c.mor * before + mor * moved) / (before + moved) : mor; touched.push(c); }
     }
-    if (GROUND_TYPES.some(k => left[k] > 0)) c = raiseCorps(g, r, post, t ? { man: t.man, st: t.st } : undefined);
+    if (GROUND_TYPES.some(k => left[k] > 0)) c = raiseCorps(g, r, post, t ? { man: t.man, st: t.st, army: t.army } : undefined);
   }
   return touched;
 }
@@ -442,7 +442,7 @@ export function autoDeploy(g: GameState, r: RegionState, instant = false) {
   const W = world(), me = r.owner;
   // land borders with foreign powers, and coasts that face a threat from the sea
   const foes = [...W.regions[r.id].land.filter(n => { const o = g.regions[n].owner; return o !== me && !(o >= 0 && allied(g, me, o)); }), ...W.regions[r.id].zones.map(coastKey).filter(k => coastThreat(g, me, zoneOfKey(k)) > 0)];
-  const auto = (c: Corps) => !c.man && (c.ord ?? 0) === 0;
+  const auto = (c: Corps) => !c.man && c.army === undefined && (c.ord ?? 0) === 0;
   // Auto corps on quiet borders come back to the depot
   for (const c of [...corpsIn(r)]) {
     if (!auto(c) || c.p < 0 || foes.includes(c.p)) continue;

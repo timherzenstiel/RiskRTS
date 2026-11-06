@@ -7,6 +7,7 @@ import { Sfx } from '../audio/sfx';
 import { CloseIcon, HandshakeIcon, Icon, SwordsIcon } from './icons';
 import { menOf, menStr } from './format';
 import { rendererRef } from './refs';
+import { reqText, staffBadge } from './Staff';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
@@ -28,10 +29,10 @@ const RailIcon = ({ d }: { d: string }) => <svg viewBox="0 0 24 24" width="22" h
 export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
   const sim = useSim(); if (!sim) return null;
-  const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length;
-  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number) => (
+  const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, staff = staffBadge(sim.g, sim.me);
+  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = 'borders in danger', calm = false) => (
     <button className={'rb' + (panel === k ? ' on' : '')} aria-pressed={panel === k} title={label} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
-      {icon}<span>{label}</span>{badge ? <em className="rbadge" aria-label={`${badge} borders in danger`}>{badge}</em> : null}
+      {icon}<span>{label}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={`${badge} ${what}`}>{badge}</em> : null}
     </button>
   );
   const o = (k: Overlay, label: string, icon: React.ReactNode, title: string) => (
@@ -40,6 +41,7 @@ export function LeftRail() {
   return (
     <nav id="rail" className="plate" aria-label="War Office panels">
       {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
+      {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, 'requests waiting', !staff.crit)}
       {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />)}
       {o('nation', 'Nation', <RailIcon d="M4 20V8l8-5 8 5v12M9 20v-6h6v6" />, 'Nation: manpower, conscription, national strengths and weaknesses')}
       {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
@@ -186,6 +188,7 @@ function alertsOf(g: GameState, me: number): Alert[] {
     key: 'cut' + r.id, level: 1, title: `${W.regions[r.id].name} is cut off`, text: 'No route home: no income or recruits, the garrison wears down', act: 'Show',
     go: () => { useUi.getState().select(r.id); useUi.getState().setMode(3); rendererRef.current?.flyTo(r.id, 30); },
   });
+  for (const q of (g.requests ?? []).filter(q => q.owner === me && q.urg === 2)) { const t = reqText(g, me, q); out.push({ key: 'rq' + q.id, level: 2, title: `Staff: ${t.title}`, text: t.why, act: 'Staff', go: () => useUi.getState().setPanel('staff') }); }
   if ((f.men ?? 0) < 300) out.push({ key: 'men', level: 1, title: 'Manpower nearly gone', text: `${Math.floor(f.men ?? 0)} men left in the pool`, act: 'Nation', go: () => useUi.getState().setOverlay('nation') });
   const inc = income(g, me);
   if (f.supply > Math.max(30, inc * 4)) out.push({ key: 'idle', level: 0, title: `${f.supply} supply unspent`, text: 'Recruit, fortify or build', act: 'Capital', go: () => { const c = g.regions.find(r => r.capitalOf === me && r.owner === me); if (c) { useUi.getState().select(c.id); useUi.getState().setTab('rec'); rendererRef.current?.flyTo(c.id, 30); } } });

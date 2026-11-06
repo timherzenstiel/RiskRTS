@@ -211,8 +211,8 @@ button.lcd:hover{border-color:var(--lcd-dim)}
 .cm-nm{font:600 12px var(--f-head);letter-spacing:.05em;text-transform:uppercase;color:var(--khaki);text-shadow:0 1px 2px #000,0 0 4px #000;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cm-c{font:400 13px var(--f-lcd);color:var(--lcd);text-shadow:0 0 5px rgba(159,224,112,.5),0 1px 2px #000;display:inline-flex;align-items:center;gap:4px}
 .cm-c i.sup{width:9px;height:9px;border-width:1.5px}
-.cm-men{font-size:11px;opacity:.85}
-.cm-men.short{color:#ff8a70;opacity:1;text-shadow:0 0 5px rgba(255,90,60,.6),0 1px 2px #000}
+.cm-g{font:400 11px var(--f-lcd);color:#e8dfc0;text-shadow:0 1px 2px #000,0 0 4px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.cm-g .short{color:#ff8a70;text-shadow:0 0 5px rgba(255,90,60,.6),0 1px 2px #000}
 .cm-k{position:absolute;right:4px;top:4px;z-index:1;margin:0}
 .cm-p{position:absolute;left:5px;top:4px;z-index:1;font-size:9px;letter-spacing:1px;color:var(--brass-hi);text-shadow:0 1px 2px #000}
 .cm-n{position:absolute;left:4px;top:4px;z-index:1;min-width:18px;padding:1px 4px;background:var(--lcd-bg);border:1px solid #000;font:400 11px var(--f-lcd);color:var(--lcd);text-align:center}

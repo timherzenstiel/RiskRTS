@@ -13,7 +13,7 @@ export function CalendarSheet() {
   return (
     <Modal label="War calendar" onClose={close}>
       <div className="kicker">{FACTIONS[me].name} · General Staff</div><h2>War calendar</h2>
-      <p className="muted small">New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {RUSH.cost} supply{f.rushY === y ? ' (used this year)' : ''}.</p>
+      <p className="muted small">New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {RUSH.cost} Production{f.rushY === y ? ' (used this year)' : ''}.</p>
       <div className="cal">
         {TECH.map(t => {
           const d = techDayFor(me, t.key, f.rushed), on = techOn(g, me, t.key);
@@ -21,7 +21,7 @@ export function CalendarSheet() {
             <div key={t.key} className={'cr' + (on ? ' on' : '')}>
               <span className="cd">{on ? 'In service' : monthStr(d)}</span>
               <span className="ct"><b>{t.name}{f.rushed?.includes(t.key) ? ' · rushed' : ''}</b><small>{t.desc}</small></span>
-              {!on && !f.rushed?.includes(t.key) && <button className="buy plain" disabled={!canRush} title={canRush ? 'Bring forward by six months' : f.rushY === y ? 'One rush per war year' : 'Not enough supply'} onClick={() => { click(); ui().order({ t: 'rush', tech: t.key }); }}>Rush <SupplyIcon />{RUSH.cost}</button>}
+              {!on && !f.rushed?.includes(t.key) && <button className="buy plain" disabled={!canRush} title={canRush ? 'Bring forward by six months' : f.rushY === y ? 'One rush per war year' : 'Not enough Production'} onClick={() => { click(); ui().order({ t: 'rush', tech: t.key }); }}>Rush <SupplyIcon />{RUSH.cost}</button>}
             </div>
           );
         })}

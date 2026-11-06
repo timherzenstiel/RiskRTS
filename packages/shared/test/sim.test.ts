@@ -40,10 +40,13 @@ describe('game', () => {
 describe('commands', () => {
   const g = createGame({ seed: 5, humans: [0] });
   const mine = g.regions.find(r => r.owner === 0)!, other = g.regions.find(r => r.owner === 1)!;
-  it('recruits and charges supply', () => {
+  it('recruits and charges Production; the battalions train for a week', () => {
     const s = g.factions[0].supply, n = totalUnits(mine.units);
     expect(applyCommand(g, 0, { t: 'recruit', region: mine.id, unit: 'inf', n: 2 })).toBeNull();
-    expect(g.factions[0].supply).toBe(s - 2); expect(totalUnits(mine.units)).toBe(n + 2);
+    expect(g.factions[0].supply).toBe(s - 2); expect(totalUnits(mine.units)).toBe(n); expect(mine.train?.length).toBe(2);
+    for (const t of mine.train!) t.at = g.time;
+    step(g, .05);
+    expect(totalUnits(mine.units)).toBe(n + 2); expect(mine.train).toBeUndefined();
   });
   it('refuses foreign regions, tanks without factory, and broke players', () => {
     expect(applyCommand(g, 0, { t: 'recruit', region: mine.id, unit: 'tank' })).toMatch(/not available yet/);

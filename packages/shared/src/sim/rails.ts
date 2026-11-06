@@ -77,7 +77,7 @@ export function buildRail(g: GameState, fid: number, a: number, b: number): stri
   if (A.contested >= 0 || B.contested >= 0) return 'Enemy holdouts block the line. Storm them first.';
   if (hasRail(g, a, b)) return 'A railway already runs there.';
   if ((g.railNew ??= []).some(([x, y]) => railKey(x, y) === railKey(a, b))) return 'The line is already being laid.';
-  if (f.supply < RAIL_BUILD.cost) return `Not enough supply: a railway costs ${RAIL_BUILD.cost}.`;
+  if (f.supply < RAIL_BUILD.cost) return `Not enough Production: a railway costs ${RAIL_BUILD.cost}.`;
   f.supply -= RAIL_BUILD.cost; g.railNew.push([a, b, g.day + RAIL_BUILD.days]);
   return null;
 }

@@ -8,7 +8,8 @@ import { click } from './actions';
 import { Sfx } from '../audio/sfx';
 import { CloseIcon, Icon, SupplyIcon } from './icons';
 import { rendererRef } from './refs';
-import { AirSection, AttackBudget, BuildTab, Feints, GoalPicker, ReconSection, RecruitTab, SharePicker, NeighbourRow, knownTroops, reportAge } from './DrawerTabs';
+import { AirSection, AttackBudget, BuildTab, Feints, GoalPicker, ReconSection, RecruitTab, SharePicker, NeighbourRow, TrainingRows, knownTroops, reportAge } from './DrawerTabs';
+import { SupplyBar, cutReason } from './Logistics';
 import { forceOf } from './garrison';
 import { menOf, menStr, strengthOf } from './format';
 import { FrontControls } from './FrontCard';
@@ -89,11 +90,11 @@ export function Drawer() {
       </div>
       {fronts.length > 0 && <Fronts g={g} me={me} fronts={fronts} own={own} />}
       {holdF && (
-        <div className="alert hold"><span><b>Contested</b> · {nHold} {holdF.short} defence{nHold === 1 ? '' : 's'} still hold{nHold === 1 ? 's' : ''} out{own ? '. No supply, recruiting or building until they fall' : r.contested === me ? '. Our men fight on' : ''}.</span>
+        <div className="alert hold"><span><b>Contested</b> · {nHold} {holdF.short} defence{nHold === 1 ? '' : 's'} still hold{nHold === 1 ? 's' : ''} out{own ? '. No Production, recruiting or building until they fall' : r.contested === me ? '. Our men fight on' : ''}.</span>
           {own && r.battle < 0 && <button className="btn sm" onClick={() => { click(); ui().assault(sel); }}>Storm holdouts</button>}</div>
       )}
-      {own && r.strike && <div className="alert hold"><span><b>On strike</b> · the war-weary workers have downed tools. No supply, shells or recruits from here until the war weariness eases.</span></div>}
-      {own && r.cut && <div className="alert hold"><span><b>Cut off</b> · no route through our regions to the capital, a factory or home territory. No income or recruiting; the garrison loses strength and morale every convoy.</span></div>}
+      {own && r.strike && <div className="alert hold"><span><b>On strike</b> · the war-weary workers have downed tools. No Production, shells or recruits from here until the war weariness eases.</span></div>}
+      {own && r.cut && <div className="alert hold"><span><b>Cut off</b> · {cutReason(g, r)}: no route through our regions to the capital, a factory or home territory. No Production, recruiting or replacements; the garrison loses strength and morale every week.</span></div>}
       {!own && (
         <div className={'intel v' + vis}>
           <span><b>{vis >= 3 ? (r.spied ? 'Our agent reports' : 'In full view') : vis === 2 ? 'Reconnaissance report' : vis === 1 ? 'Observed across the border' : 'No intelligence'}</b>
@@ -112,11 +113,12 @@ export function Drawer() {
             <span className={'wk' + (r.airfield ? '' : ' off')}>Airfield</span>
           </>
         ) : <span className="wk off">Buildings unknown</span>}
-        {own && <span className={'wk' + (r.supplyQ === 2 ? '' : ' off')} title="Full supply: an unbroken rail line to the capital, a factory or home territory. Thin supply (land or sea only): shells cost half again, half the wounded return.">{r.cut ? 'Cut off' : r.supplyQ === 1 ? 'Thin supply' : 'Full supply'}</span>}
         {(() => { const rl = railsOf(g, sel); return rl.length ? <span className="wk rail" title={rl.map(([n, o]) => `${W.regions[n].name}${o ? '' : ' (cut)'}`).join(', ')}>Rail · {rl.length}{rl.some(x => !x[1]) ? ` (${rl.filter(x => !x[1]).length} cut)` : ''}</span> : <span className="wk off">No railway</span>; })()}
         <span className={'wk' + (maxTrench(r) ? '' : ' off')}>{maxTrench(r) ? `Trench up to ${roman(maxTrench(r))}` : own || vis >= 3 ? 'No trench' : 'No trench seen'}</span>
         {(() => { const n = r.defs.filter(d => d.f === r.owner).length; return <span className={'wk' + (n ? '' : ' off')}>{n} defence{n === 1 ? '' : 's'}{!own && vis < 3 ? ' known' : ''}</span>; })()}
       </div>
+      {own && <SupplyBar g={g} r={r} />}
+      {own && <TrainingRows region={r} />}
       {(own || known) && (
         <div className="works str-row">
           <span className="str">Men <b>{menStr(menOf(men))}</b></span>
@@ -191,8 +193,8 @@ export function Drawer() {
               <i className="dot" style={{ '--c': FACTIONS[me].color } as React.CSSProperties} />
               <div className="tx"><b>{W.regions[x.id].name}</b><small>{x.units.plane} squadron{x.units.plane === 1 ? '' : 's'} · {hops(x.id, sel)} border{hops(x.id, sel) > 1 ? 's' : ''} away</small></div>
               <button className="buy atk" onClick={() => treatyOf(g, me, r.owner) ? ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, brk: true }) : ui().air(x.id, sel)}>{treatyOf(g, me, r.owner) ? 'Break & strike' : 'Strike'}</button>
-              {r.factory && techOn(g, me, 'bomb') && <button className="buy plain" title="Bomb the factory: no supply, shells or tanks from it for three convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, factory: true })}>Factory</button>}
-              {techOn(g, me, 'railAir') && railsOf(g, sel).some(([n]) => railOpen(g, sel, n)) && <button className="buy plain" title="Bomb the railways of this region: they stay cut for two convoys" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, rail: true })}>Rails</button>}
+              {r.factory && techOn(g, me, 'bomb') && <button className="buy plain" title="Bomb the factory: no Production, shells or tanks from it for three weeks" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, factory: true })}>Factory</button>}
+              {techOn(g, me, 'railAir') && railsOf(g, sel).some(([n]) => railOpen(g, sel, n)) && <button className="buy plain" title="Bomb the railways of this region: they stay cut for two weeks" onClick={() => ui().order({ t: 'air', from: x.id, to: sel, frac: useUi.getState().sendFrac, rail: true })}>Rails</button>}
             </div>
           ))}
           <div className="lbl"><span>Reconnaissance · {reportAge(g, r)}</span></div>
@@ -219,7 +221,7 @@ export function Drawer() {
           {spyHere && activeSpies(g, me).some(s => s.region === sel) && railsOf(g, sel).filter(([, o]) => o).map(([n]) => (
             <div className="it nb" key={'sab' + n}>
               <span className="ic"><Icon k="spy" size={18} /></span>
-              <div className="tx"><b>Sabotage the line to {W.regions[n].name}</b><small>Cut for three convoys · our agent is twice as likely to be caught for a while</small></div>
+              <div className="tx"><b>Sabotage the line to {W.regions[n].name}</b><small>Cut for three weeks · our agent is twice as likely to be caught for a while</small></div>
               <button className="buy atk" onClick={() => ui().order({ t: 'sabotage', region: sel, to: n })}>Blow up</button>
             </div>
           ))}

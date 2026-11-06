@@ -40,9 +40,10 @@ describe('dedicated server', () => {
     await a.wait('start'); const s1 = await a.wait('snap');
     expect(s1.snap.missions[0]).not.toBeNull(); expect(s1.snap.missions[1]).toBeNull();
     const world = server.worlds.get(w.id)!; expect(world.sim.factions[0].ai).toBe(false); expect(world.running).toBe(true);
-    const cap = world.sim.regions.find(r => r.capitalOf === 0)!, n = cap.units.inf;
+    const cap = world.sim.regions.find(r => r.capitalOf === 0)!, n = cap.train?.length ?? 0;
     a.send({ t: 'cmd', cmd: { t: 'recruit', region: cap.id, unit: 'inf' } }); await sleep(150);
-    expect(world.sim.regions[cap.id].units.inf + world.sim.battles.length).toBeGreaterThanOrEqual(n + 1);
+    // the recruits train for a week first
+    expect(world.sim.regions[cap.id].train?.length ?? 0).toBeGreaterThanOrEqual(n + 1);
     a.send({ t: 'cmd', cmd: { t: 'recruit', region: world.sim.regions.find(r => r.owner === 1)!.id, unit: 'inf' } });
     expect((await a.wait('err')).message).toMatch(/own regions/);
     a.close();

@@ -5,7 +5,8 @@ import { FORMATION, GROUND_TYPES, UNIT_TYPES, emptyUnits, groundUnits, type Unit
 import { Rng } from '../rng';
 import { newRegion, world, rnd } from './core';
 import { aiThink } from './ai';
-import { arrive } from './commands';
+import { addUnits, arrive } from './commands';
+import { stepTraining } from './supply';
 import { CORPS_CAP, autoDeploy, fixPosts, raiseCorps, stepPosts } from './posts';
 import { stepCommanders } from './commanders';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
@@ -90,7 +91,7 @@ export function migrateState(s: GameState & { v: number }): GameState | null {
     r.works = {}; if (tr) for (const n of W.regions[r.id].adj) if (!W.seaLane.has(r.id + '|' + n)) r.works[n] = { tr, sand: 0, wire: 0 };
     r.men = fullStrength(r.units); r.mor = 80; r.cut = false; r.home = r.owner;
   }
-  for (const f of s.factions) { f.ww ??= 0; f.wounded ??= 0; }
+  for (const f of s.factions) { f.ww ??= 0; f.wounded ??= 0; if (f.wounded > 0 && !f.wq) f.wq = [[f.wounded, (s.day ?? 0) + 14]]; }
   for (const a of s.armies) { a.men ??= fullStrength(a.units); a.mor ??= 75; }
   for (const b of s.battles) { b.tr ??= 0; b.sand ??= 0; b.wire ??= 0; b.wire0 ??= 0; b.mor ??= {}; b.lost ??= {}; b.lastJoin ??= b.age; }
   s.intel = s.factions.map(() => []); s.spies = [];
@@ -194,6 +195,7 @@ export function step(g: GameState, dt: number) {
     if (a.wait) { a.wait = Math.max(0, a.wait - dt); if (a.wait > 0) continue; delete a.wait; }
     a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); }
   }
+  stepTraining(g, (r, k) => addUnits(g, r, k, 1));
   stepPosts(g);
   stepCommanders(g);
   stepNavy(g, dt);

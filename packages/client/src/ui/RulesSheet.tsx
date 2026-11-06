@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   AIR_RANGE, ASSEMBLE, ATTACK_RATIO, BUDGET_MAX, CORPS_CAP, COST, CUT_MORALE, CUT_WEAR, DENY_WEEKS, DIG_IN, FALLBACK_RATIO, MANPOWER, MAX_REQ, MAX_SPIES, MIN_ATTACK,
-  REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, WORK_MULT, WOUNDED_SHARE, WW_INCOME, XP_DMG, XP_MAX,
+  REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, WORK_MULT, WW_INCOME, XP_DMG, XP_MAX, CAP, DRAW, ECON, LEVY_COST, OVER, REPL, WOUNDED,
 } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { Modal } from './Modal';
@@ -63,24 +63,43 @@ export function RulesSheet() {
         </>}
         {page === 3 && <>
           <table className="ledger"><tbody>
-            <tr><td>Cavalry patrol · one border</td><td>{COST.patrol} supply</td></tr>
-            <tr><td>Reconnaissance flight · up to {AIR_RANGE} borders, needs an airfield</td><td>{COST.recon} supply</td></tr>
-            <tr><td>Spy · anywhere, reports every week until caught (max {MAX_SPIES})</td><td>{COST.spy} supply</td></tr>
-            <tr><td>Decoy march</td><td>{COST.decoy} supply</td></tr>
+            <tr><td>Cavalry patrol · one border</td><td>{COST.patrol} Production</td></tr>
+            <tr><td>Reconnaissance flight · up to {AIR_RANGE} borders, needs an airfield</td><td>{COST.recon} Production</td></tr>
+            <tr><td>Spy · anywhere, reports every week until caught (max {MAX_SPIES})</td><td>{COST.spy} Production</td></tr>
+            <tr><td>Decoy march</td><td>{COST.decoy} Production</td></tr>
           </tbody></table>
           <p>Patrols are caught more often by MG nests, bunkers and wire on the border they cross; flights by anti-air guns. Commanders ask for a look when a border is not safe and the report is older than {REPORT_OLD} days.</p>
         </>}
         {page === 4 && <>
-          <h3>Convoys</h3>
-          <p>Every {TICK_SECONDS} s (a week) supply, shells and new men arrive. Regions pay only with a route home – own land (or a sea lane between own regions) to the capital, a factory or home territory.</p>
+          <h3>The week</h3>
+          <p>Every {TICK_SECONDS} s is a week: Production, shells and new men arrive. Regions pay only with a route home – own land (or a sea lane between own regions) to the capital, a factory or home territory. Rail all the way is a <b>Rail</b> route, otherwise <b>Road</b>; none is <b>Cut off</b>.</p>
+          <h3>Supply capacity</h3>
+          <p>Each region can feed only so many battalions a week. Load is what its battalions draw, those fighting in its battles included.</p>
           <table className="ledger"><tbody>
-            <tr><td>Cut off: strength lost per convoy</td><td>{pct(CUT_WEAR)}</td></tr>
-            <tr><td>Cut off: morale lost per convoy</td><td>{CUT_MORALE}</td></tr>
-            <tr><td>War weariness: income lost per point</td><td>{pct(WW_INCOME / 100)}</td></tr>
-            <tr><td>Shells per supply</td><td>{SHELLS.perSupply}</td></tr>
-            <tr><td>Age class per home region</td><td>{MANPOWER.growth} men</td></tr>
+            <tr><td>Draw · infantry, MG, squadron</td><td>{DRAW.inf}</td></tr>
+            <tr><td>Draw · battery, tank</td><td>{DRAW.art}</td></tr>
+            <tr><td>Capacity · Rail route / Road route / cut off</td><td>{CAP.rail} / {CAP.road} / 0</td></tr>
+            <tr><td>Each depot in the region (capital, factory, harbour)</td><td>+{CAP.depot}</td></tr>
+            <tr><td>Each own rail link into the region, from the 2nd</td><td>+{CAP.link}</td></tr>
+            <tr><td>Mud / winter (Siberians) / heat</td><td>−20 % / −30 % (−15 %) / −15 %</td></tr>
+            <tr><td>Over capacity · morale a week</td><td>−{OVER.morale}, no replacements, shells ×{OVER.shells}</td></tr>
+            <tr><td>Over {pct(OVER.far)} · men lost a week</td><td>{pct(OVER.farWear)}</td></tr>
+            <tr><td>Cut off · strength / morale lost a week</td><td>{pct(CUT_WEAR)} / {CUT_MORALE}</td></tr>
+          </tbody></table>
+          <h3>Men</h3>
+          <p>The manpower pool → training → corps. Casualties partly come back to the pool; under-strength corps are refilled from it.</p>
+          <table className="ledger"><tbody>
+            <tr><td>Age class per home region</td><td>{MANPOWER.growth} men a week</td></tr>
             <tr><td>Each conscription level</td><td>+{pct(MANPOWER.mobGrowth)} men, +{MANPOWER.mobWW} weariness</td></tr>
-            <tr><td>Casualties who come back wounded</td><td>{pct(WOUNDED_SHARE)}</td></tr>
+            <tr><td>Training</td><td>1 week (barracks: to the next week)</td></tr>
+            <tr><td>Emergency levies · only in a region under attack</td><td>at once, {LEVY_COST}× the cost</td></tr>
+            <tr><td>Replacements · a week, per corps, front line first</td><td>up to {pct(REPL.share)} of full strength</td></tr>
+            <tr><td>Casualties back to the pool</td><td>{pct(WOUNDED.share)} after {WOUNDED.days / 7} weeks</td></tr>
+          </tbody></table>
+          <h3>Production and shells</h3>
+          <table className="ledger"><tbody>
+            {ECON.map(e => <tr key={e.name}><td>War economy · {e.name}</td><td>{pct(e.shells)} of factory output to shells</td></tr>)}
+            <tr><td>War weariness: Production lost per point</td><td>{pct(WW_INCOME / 100)}</td></tr>
           </tbody></table>
           <p>The Economy panel shows each of these numbers as a ledger for your nation.</p>
         </>}

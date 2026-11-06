@@ -2,8 +2,10 @@
 import {
   AIR_RANGE, COST, DT, FACTIONS, FORMATION, MAX_SAND, MAX_TRENCH, MAX_WIRE, SHELLS, SLOT_USE, UNIT_TYPES, UT, buildWorld, fortCost, groundUnits, hops, offensives, slotsMax, slotsUsed, worksAt,
   nationalUnit, NATIONS, unitCost, unitName, treatyOf, buildCostOf, RAIL_BUILD, hasRail, isMountain, monthStr, techOn, techDayFor,
+  CAP, LEVY_COST, TICK_SECONDS, underAttack,
   type FortKind, type RegionState, type UnitType,
 } from '@riskrts/shared';
+import { useState } from 'react';
 import { useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { Icon, SupplyIcon } from './icons';
@@ -22,18 +24,44 @@ const UDESC: Record<UnitType, string> = {
 /** Short kit line for the recruit cards: what one formation brings besides its men. */
 const KIT: Record<string, string> = { inf: '100 rifles', mg: '6 MGs', art: '4 guns', tank: '3 tanks', plane: '6 planes' };
 
+/** Recruits in training in a region: one line per type with when the first is ready. */
+export function TrainingRows({ region }: { region: RegionState }) {
+  const sim = useSim(); if (!sim || !region.train?.length) return null;
+  const { g, me } = sim, by = new Map<UnitType, number[]>();
+  for (const t of region.train) (by.get(t.k) ?? by.set(t.k, []).get(t.k)!).push(t.at);
+  return (
+    <div className="training">
+      {[...by].map(([k, ats]) => {
+        const left = Math.max(0, Math.min(...ats) - g.time), share = 1 - left / TICK_SECONDS;
+        return (
+          <div key={k} className="tr-row" title="Recruits train for a week before they join the depot (barracks: until the next week)">
+            <span>In training · {ats.length} {ats.length === 1 ? FORMATION[k].one : FORMATION[k].many}</span>
+            <span className="tr-bar"><i style={{ width: `${Math.round(share * 100)}%` }} /></span>
+            <small>{Math.ceil(left)} s</small>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function RecruitTab({ region, id }: { region: RegionState; id: number }) {
   const sim = useSim(); const recruit = useUi.getState().recruit;
+  const [levy, setLevy] = useState(false);
   if (!sim) return null;
   const { g, me } = sim, supply = g.factions[me].supply, pool = g.factions[me].men ?? 0;
+  const attacked = underAttack(g, region), now = levy && attacked, mult = now ? LEVY_COST : 1;
   return (
     <>
+      {attacked && <label className="levy" title={`Emergency levies are raised at once, at ${LEVY_COST}× the cost, and join the defence straight away`}>
+        <input type="checkbox" checked={levy} onChange={e => { click(); setLevy(e.target.checked); }} /> <b>Emergency levies</b> · under attack: raise at once for {LEVY_COST}× the cost
+      </label>}
       {region.cut && <p className="note budget full">Cut off from supply: no recruiting here until a route home is reopened.</p>}
       {region.strike && <p className="note budget full">On strike: no recruits from here until the war weariness eases.</p>}
       {pool < FORMATION.inf.men && <p className="note budget full">The manpower pool is nearly empty ({Math.floor(pool)} men). Raise conscription on the nation screen, or wait for the next age class.</p>}
-      <CameoGrid label="Recruit" hint="Click to recruit one: it costs the supply shown and takes its men from your manpower pool · 'here': already in this region · keys 1–4">
+      <CameoGrid label="Recruit" hint="Click to recruit one: it costs the Production shown, takes its men from your manpower pool and trains for a week (barracks: until the next week) · 'here': already in this region · keys 1–4">
         {UNIT_TYPES.map((k, i) => {
-          const c = unitCost(g, me, k), men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
+          const c = unitCost(g, me, k) * mult, men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
           const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
           const needs = k === 'tank' && !region.factory ? 'Needs factory' : k === 'plane' && !region.airfield ? 'Needs airfield' : null;
           const locked = !!early || !!needs || region.cut || !!region.strike;
@@ -41,13 +69,14 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
           const lock = early ? monthStr(techDayFor(me, tech!, g.factions[me].rushed)) : needs ?? (region.cut ? 'Cut off' : region.strike ? 'Strike' : undefined);
           return (
             <Cameo key={k} k={k} nation={me} name={unitName(g, me, k)} hotkey={i < 4 ? String(i + 1) : undefined} national={!!nat} count={region.units[k]}
-              cost={<><SupplyIcon />{c} supply</>} gets={<span className={noMen ? 'short' : ''}>{men} men · {KIT[k]}</span>} lock={lock} disabled={supply < c || locked || noMen}
+              cost={<><SupplyIcon />{c}</>} gets={<span className={noMen ? 'short' : ''}>{men} men · {KIT[k]}</span>} lock={lock} disabled={supply < c || locked || noMen}
               title={`${nat ? NATIONS[me].unitDesc : UDESC[k]} · ${men} men${noMen && !locked ? ` · needs ${men} men from the pool` : ''}`}
-              onBuy={() => recruit(id, k, 1)} />
+              onBuy={() => recruit(id, k, 1, now)} />
           );
         })}
       </CameoGrid>
-      <p className="note">Each formation is raised at full strength; its men come from the manpower pool (a battalion is 100 men). New formations join a running defence at once.</p>
+      <TrainingRows region={region} />
+      <p className="note">Each formation is raised at full strength; its men come from the manpower pool (a battalion is 100 men). It trains for a week{region.barracks ? ' – here, with barracks, until the next week –' : ''} and then joins the depot{attacked ? '; emergency levies join the defence at once' : ''}.</p>
     </>
   );
 }
@@ -70,9 +99,9 @@ export function BuildTab({ region, id }: { region: RegionState; id: number }) {
     <>
       <CameoGrid label="Build">
         <Cameo k="factory" name="Factory" done={region.factory} cost={region.factory ? 'Built' : <><SupplyIcon />{buildCostOf(sim.me, 'factory')}</>} disabled={region.factory || supply < buildCostOf(sim.me, 'factory')}
-          title={`+2 supply and +${NATIONS[sim.me].factoryShells} shells per convoy · unlocks tanks · a supply depot`} onBuy={() => build(id, 'factory')} />
+          title={`+2 Production and +${NATIONS[sim.me].factoryShells} shells per week (Balanced war economy) · unlocks tanks · a supply depot: +${CAP.depot} supply capacity`} onBuy={() => build(id, 'factory')} />
         <Cameo k="barracks" name="Barracks" done={region.barracks} cost={region.barracks ? 'Built' : <><SupplyIcon />{COST.barracks}</>} disabled={region.barracks || supply < COST.barracks}
-          title="One volunteer battalion per convoy (stops when the war weariness is high)" onBuy={() => build(id, 'barracks')} />
+          title="One volunteer battalion per week (stops when the war weariness is high); recruits here finish training at the next week" onBuy={() => build(id, 'barracks')} />
         {(() => { const early = !techOn(sim.g, sim.me, 'air'); return <Cameo k="airfield" name="Airfield" done={region.airfield} lock={early && !region.airfield ? monthStr(techDayFor(sim.me, 'air', sim.g.factions[sim.me].rushed)) : undefined} cost={region.airfield ? 'Built' : <><SupplyIcon />{COST.airfield}</>} disabled={region.airfield || early || supply < COST.airfield}
           title="Unlocks squadrons and reconnaissance flights here" onBuy={() => build(id, 'airfield')} />; })()}
       </CameoGrid>
@@ -165,9 +194,9 @@ function Railways({ region, id }: { region: RegionState; id: number }) {
   if (!rows.length) return null;
   return (
     <>
-      <div className="lbl"><span>Railways · rail lines carry troops 3× as fast and give full supply</span></div>
+      <div className="lbl"><span>Railways · rail lines carry troops 3× as fast and raise supply capacity</span></div>
       {rows.map(({ n, job }) => (
-        <BuildRow key={n} icon="factory" name={`Railway to ${W.regions[n].name}`} desc={job && job[2] > g.day ? `Being laid · open in ${monthStr(job[2])}` : `${RAIL_BUILD.days / 7} convoys to lay`}
+        <BuildRow key={n} icon="factory" name={`Railway to ${W.regions[n].name}`} desc={job && job[2] > g.day ? `Being laid · open in ${monthStr(job[2])}` : `${RAIL_BUILD.days / 7} weeks to lay`}
           label={job ? 'Building' : <><SupplyIcon />{RAIL_BUILD.cost}</>} disabled={!!job || supply < RAIL_BUILD.cost || region.contested >= 0} onBuy={() => useUi.getState().order({ t: 'rail', region: id, to: n })} />
       ))}
     </>
@@ -302,7 +331,7 @@ export function Feints({ region, id }: { region: RegionState; id: number }) {
   const adj = W.regions[id].adj;
   return (
     <>
-      <div className="lbl"><span>Deception · a decoy march costs {COST.decoy} supply</span></div>
+      <div className="lbl"><span>Deception · a decoy march costs {COST.decoy} Production</span></div>
       {adj.slice(0, 6).map(n => {
         const own = g.regions[n].owner === me;
         return (

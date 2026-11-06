@@ -5,6 +5,7 @@ import type { DoctrineKey } from '../data/nations';
 import type { TechKey } from '../data/tech';
 import type { ShipKind } from '../data/sea';
 import type { TraitKey } from '../data/commanders';
+import type { Trainee } from './supply';
 
 export type Mission =
   | { type: 'conts' | 'conts1'; conts: ContKey[] }
@@ -16,8 +17,14 @@ export interface FactionState {
   id: number; supply: number; alive: boolean; mission: Mission | null; aiT: number; ai: boolean;
   /** War weariness 0..100: grows with casualties, cuts income and morale, fades in quiet times. */
   ww: number;
-  /** Wounded men who return to under-strength formations with the next convoys. */
+  /** Wounded men on their way back to the manpower pool (the sum of `wq`). */
   wounded: number;
+  /** Wounded coming back: [men, day they rejoin the pool]. */
+  wq?: [number, number][];
+  /** War economy lever 0..2 (Civil, Balanced, Munitions first): the share of factory output that goes to shells. */
+  econ?: number;
+  /** Manpower ledger: last week's [age class, wounded back, raised into training, replacements]; `wk` the week running. */
+  led?: [number, number, number, number]; wk?: [number, number, number, number];
   /** Artillery shells in the national stockpile. */
   shells: number;
   /** Manpower pool: men available for new formations. */
@@ -87,11 +94,13 @@ export interface Corps {
   since?: number;
   /** Attack now without waiting for assembly. */
   now?: boolean;
+  /** No replacements from the pool (refill off). */
+  nr?: boolean;
   /** Fog-of-war views only: estimated men [low, high]. */
   est?: [number, number];
 }
 /** What a corps keeps while it is away from a region (on the march, aboard, in battle): its identity, the post it left, experience. */
-export interface CorpsTag { id: number; n: number; p?: number; xp?: number; man?: boolean; st?: Stance; army?: number }
+export interface CorpsTag { id: number; n: number; p?: number; xp?: number; man?: boolean; st?: Stance; army?: number; nr?: boolean }
 
 /** A fixed defence. `s` is the border sector it covers (a neighbouring region id) or -1 for the interior. */
 export interface Defence { id: number; k: DefKind; s: number; hp: number; f: number }
@@ -132,7 +141,7 @@ export interface RegionState {
   an?: number; deploy?: number;
   /** Shell craters per border sector, left by past battles (visual). */
   cr?: Record<number, number>;
-  /** Strikes: the region pays no supply or shells and cannot recruit until the unrest eases. */
+  /** Strikes: the region pays no Production or shells and cannot recruit until the unrest eases. */
   strike?: boolean;
   /** Supply quality: 2 full (rail to a source), 1 thin (land or sea only), 0 cut off. */
   supplyQ?: number;
@@ -142,6 +151,8 @@ export interface RegionState {
   fake?: { men: number; day: number; until: number };
   /** A harbour (coastal regions only), and the game time it is finished if it is still being built. */
   port?: boolean; portAt?: number;
+  /** Recruits in training (see sim/supply.ts). */
+  train?: Trainee[];
 }
 
 export interface Army {
@@ -511,7 +522,8 @@ export interface GameState {
 
 export type BuildKind = 'factory' | 'barracks' | 'airfield' | 'port';
 export type Command =
-  | { t: 'recruit'; region: number; unit: UnitType; n?: number }
+  /** Recruit battalions: they train for a week (`now`: emergency levies at once and double cost, only in a region under attack). */
+  | { t: 'recruit'; region: number; unit: UnitType; n?: number; now?: boolean }
   | { t: 'build'; region: number; kind: BuildKind }
   /** Lay a railway from one of your regions to a neighbouring one of yours. */
   | { t: 'rail'; region: number; to: number }
@@ -540,7 +552,7 @@ export type Command =
   /** Form a new corps at the region centre from the depot. */
   | { t: 'form'; region: number; u: Partial<Units> }
   /** Corps settings: stance, and whether Auto may manage it (`man` false hands it back to the region). */
-  | { t: 'corpsSet'; region: number; id: number; st?: Stance; man?: boolean }
+  | { t: 'corpsSet'; region: number; id: number; st?: Stance; man?: boolean; refill?: boolean }
   /** Armies: form one from corps (its front starts with their regions), put corps in or out, change its settings, answer a request. */
   | { t: 'army'; corps: number[] }
   | { t: 'armyAssign'; army: number; corps: number[]; on: boolean }
@@ -572,8 +584,10 @@ export type Command =
   | { t: 'stance'; region: number; s: Stance; battle?: number }
   | { t: 'reinforce'; from: number; battle: number; frac: number }
   | { t: 'withdraw'; battle: number }
-  /** Turn supply into shells (1 supply buys SHELLS_PER_SUPPLY shells). */
+  /** Turn Production into shells (kept for old replays; the war economy lever replaces it). */
   | { t: 'produce'; kind: 'shells'; n: number }
+  /** War economy lever 0..2: Civil, Balanced, Munitions first. */
+  | { t: 'econ'; level: number }
   /** Mobilisation level 0..2: each level +50% manpower growth and +0.5 war weariness per convoy. */
   | { t: 'mobilise'; level: number }
   /** The navy: build ships in a port; ship a share of a group over the sea to an own post; an amphibious assault on an enemy coast. */

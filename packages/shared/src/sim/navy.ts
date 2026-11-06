@@ -86,7 +86,7 @@ export function buildShip(g: GameState, fid: number, r: RegionState, kind: ShipK
   if (SHIP[kind].factory && !r.factory) return `A ${SHIP[kind].one} needs a shipyard: a factory in the port region.`;
   if (kind === 'carrier' && g.day < carrierDay(fid)) return `Aircraft carriers are not available yet: they arrive in ${fid === 0 ? 'Jul 1917' : 'Jul 1918'}.`;
   const c = shipCost(fid, kind);
-  if (f.supply < c) return `Not enough supply: a ${SHIP[kind].one} costs ${c}.`;
+  if (f.supply < c) return `Not enough Production: a ${SHIP[kind].one} costs ${c}.`;
   f.supply -= c;
   newShip(g, fid, kind, r.id, g.time + SHIP[kind].convoys * TICK_SECONDS);
   return null;
@@ -97,7 +97,7 @@ export function buildPort(g: GameState, fid: number, r: RegionState): string | n
   const W = world(), f = g.factions[fid];
   if (!coastal(r.id)) return `${W.regions[r.id].name} has no coast.`;
   if (r.port) return 'Already built.';
-  if (f.supply < PORT.cost) return `Not enough supply: a port costs ${PORT.cost}.`;
+  if (f.supply < PORT.cost) return `Not enough Production: a port costs ${PORT.cost}.`;
   f.supply -= PORT.cost; r.port = true; r.portAt = g.time + PORT.convoys * TICK_SECONDS;
   return null;
 }

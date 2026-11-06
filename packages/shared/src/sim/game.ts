@@ -7,6 +7,7 @@ import { newRegion, world, rnd } from './core';
 import { aiThink } from './ai';
 import { arrive } from './commands';
 import { CORPS_CAP, autoDeploy, fixPosts, raiseCorps, stepPosts } from './posts';
+import { stepCommanders } from './commanders';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
@@ -194,6 +195,7 @@ export function step(g: GameState, dt: number) {
     a.t += dt / a.dur; if (a.t >= 1) { g.armies.splice(i, 1); arrive(g, a); }
   }
   stepPosts(g);
+  stepCommanders(g);
   stepNavy(g, dt);
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
   stepSeaBattles(g, dt);

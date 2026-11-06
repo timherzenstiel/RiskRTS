@@ -152,6 +152,8 @@ export function fogView(g: GameState, fid: number): GameState {
     armies: g.armies.filter(seeArmy).map(a => !a.decoy || a.owner === fid ? a : { ...a, decoy: undefined, fake: undefined, units: { ...a.units, inf: a.fake ?? 8 }, men: { ...a.men, inf: (a.fake ?? 8) * 100 } }),
     battles: g.battles.filter(seeBattle),
     intel: g.intel.map((row, i) => i === fid ? row : []),
+    // armies and requests are a power's own business
+    hq: g.over ? g.hq : (g.hq ?? []).filter(h => h.owner === fid), requests: (g.requests ?? []).filter(q => q.owner === fid),
     spies: g.spies.filter(s => s.f === fid),
     reports: (g.reports ?? []).filter(r => g.over || r.sides.some(s => s.f === fid)).slice(-20),
     viewer: fid,

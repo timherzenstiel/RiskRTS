@@ -654,7 +654,7 @@ function evacuate(g: GameState, t: RegionState, f: number) {
   const W = world(), land = W.regions[t.id].adj.filter(j => g.regions[j].owner === f && !W.seaLane.has(t.id + '|' + j));
   const dest = land.sort((a, b) => (g.regions[a].cut ? 1 : 0) - (g.regions[b].cut ? 1 : 0))[0];
   if (dest !== undefined) {
-    for (const c of [...corpsIn(t)]) { const tag = tagOf(c), mor = c.mor, out = takeCorps(t, c); column(g, f, t.id, tag.p ?? -1, dest, -1, out.u, out.m, Math.max(0, mor - 15), { tired: true, ct: tag.man ? tag : undefined, gn: tag.n, gk: 1 }); }
+    for (const c of [...corpsIn(t)]) { const tag = tagOf(c), mor = c.mor, out = takeCorps(t, c); column(g, f, t.id, tag.p ?? -1, dest, -1, out.u, out.m, Math.max(0, mor - 15), { tired: true, ct: tag.man || tag.army !== undefined ? tag : undefined, gn: tag.n, gk: 1 }); }
     const u = { ...t.units, plane: 0 }, m = { ...t.men, plane: 0 };
     if (groundUnits(u) > 0) column(g, f, t.id, -1, dest, -1, u, m, Math.max(0, t.mor - 15), { tired: true, gn: t.an, gk: 0 });
     if (t.units.plane > 0) launch(g, f, t.id, dest, { ...emptyUnits(), plane: t.units.plane }, true, { ...emptyUnits(), plane: t.men.plane });

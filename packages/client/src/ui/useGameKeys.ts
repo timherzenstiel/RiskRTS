@@ -20,6 +20,7 @@ export function useGameKeys() {
         else if (ui.orderMode) ui.cancelOrder();
         else if (ui.scoreOpen) ui.toggleScore();
         else if (ui.corps.length) ui.selectCorps([]);
+        else if (ui.armySel >= 0) ui.selectArmy(-1);
         else if (ui.sel >= 0) ui.select(-1);
         else ui.setOverlay('menu');
       } else if (e.key === ' ' || e.code === 'Space') {
@@ -30,6 +31,9 @@ export function useGameKeys() {
       } else if (MAP_MODES.some(m => m.key === e.key.toLowerCase())) {
         // map modes: P political, F fronts, T forces, B supply, I intel; the same key again goes back to the political map
         const want = MAP_MODES.findIndex(m => m.key === e.key.toLowerCase()) as MapMode; ui.setMode(ui.mode === want ? 0 : want);
+      } else if (e.key === 'g' || e.key === 'G') {
+        // G: the general staff – commanders' requests
+        ui.setPanel(ui.panel === 'staff' ? null : 'staff');
       } else if (e.key === 'o' || e.key === 'O') {
         // O: the Forces panel (order of battle)
         ui.setPanel(ui.panel === 'forces' ? null : 'forces');

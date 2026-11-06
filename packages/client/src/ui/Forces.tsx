@@ -12,6 +12,7 @@ import { CloseIcon } from './icons';
 import { menStr } from './format';
 import { rendererRef } from './refs';
 import { corpsState, unitsLine } from './DeployTab';
+import { CorpsArmyRow, hqName } from './Staff';
 
 // ---------------------------------------------------------------- helpers
 
@@ -71,13 +72,15 @@ function pickCorps(r: RegionState, c: Corps, add: boolean) {
 
 // ---------------------------------------------------------------- forces panel
 
+const armyShort = (g: GameState, id: number) => { const h = (g.hq ?? []).find(x => x.id === id); return h ? hqName(h).split(' ').slice(0, 2).join(' ') : 'army'; };
+
 function CorpsRow({ g, me, r, c, sel }: { g: GameState; me: number; r: RegionState; c: Corps; sel: boolean }) {
   const W = buildWorld(), st = strengthOf(c), fight = c.p >= 0 && frontsOf(g, r.id).some(b => b.from === c.p);
   return (
     <button className={'oob-c' + (sel ? ' on' : '') + ((c.ord ?? 0) >= 1 ? ' att' : '')} aria-pressed={sel}
       title={`${groupName(me, 1, c.n)} · ${unitsLine(c.u)}\nClick to select, Shift-click to add. Right-click the map to give orders.`}
       onClick={e => pickCorps(r, c, e.shiftKey)}>
-      <span className="oc-n"><b>{groupName(me, 1, c.n)}{c.man ? <i className="hand" title="Under your orders: Auto leaves it alone">✋</i> : null}</b><small>{postLabel(W, c.p)} · {fight ? 'in battle' : corpsState(g, c)}</small></span>
+      <span className="oc-n"><b>{groupName(me, 1, c.n)}{c.man ? <i className="hand" title="Under your orders: Auto leaves it alone">✋</i> : null}</b><small>{c.army !== undefined ? `${armyShort(g, c.army)} · ` : ''}{postLabel(W, c.p)} · {fight ? 'in battle' : corpsState(g, c)}</small></span>
       <span className="oc-v"><b className="lcdn">{groundUnits(c.u)}</b><small>btl</small></span>
       <span className="oc-bars" title={`Strength ${pct(st)} · morale ${Math.round(c.mor)}%`}><i style={{ width: pct(st) }} /><i className="mor" style={{ width: `${Math.min(100, c.mor)}%` }} /></span>
       <span className="oc-xp" title={`Experience: ${c.xp ?? 0} of 3 stars (+5 % damage each)`}>{stars(c.xp)}</span>
@@ -106,6 +109,14 @@ export function ForcesPanel() {
           <span><small>Under your orders</small><b className="lcdn">{all.filter(c => c.man).length}</b></span>
           <div className="seg oob-f" role="group" aria-label="Show"><button aria-pressed={!mine} onClick={() => { click(); setMine(false); }}>All</button><button aria-pressed={mine} title="Only the corps under your orders (✋)" onClick={() => { click(); setMine(true); }}>Mine ✋</button></div>
         </div>
+        {(g.hq ?? []).some(h => h.owner === me) && <div className="lbl"><span>Armies</span></div>}
+        {(g.hq ?? []).filter(h => h.owner === me).map(h => (
+          <button key={'h' + h.id} className="oob-c army" onClick={() => { click(); ui().selectArmy(h.id); }}>
+            <span className="oc-n"><b>{hqName(h)}</b><small>{h.cmd.name} · {h.front.map(r => W.regions[r].name).join(', ')}</small></span>
+            <span className="oc-v"><b className="lcdn">{all.filter(c => c.army === h.id).length}</b><small>corps</small></span>
+            <span className="oc-xp">{(g.requests ?? []).some(q => q.army === h.id) ? <em className="rbadge">{(g.requests ?? []).filter(q => q.army === h.id).length}</em> : null}</span>
+          </button>
+        ))}
         {away.length > 0 && <div className="lbl"><span>On the move</span></div>}
         {away.map(a => (
           <div key={'a' + a.tag.id} className="oob-c away"><span className="oc-n"><b>{groupName(me, 1, a.tag.n)}</b><small>{a.where}</small></span><span className="oc-v">{groundUnits(a.u) ? <><b className="lcdn">{groundUnits(a.u)}</b><small>btl</small></> : null}</span><span className="oc-xp">{stars(a.tag.xp)}</span></div>
@@ -226,6 +237,7 @@ export function CorpsCard() {
           <p className="note">Right-click the map to move them all, or right-click an enemy region to attack with each one that borders it.</p>
         </>
       )}
+      <CorpsArmyRow ids={found.map(x => x.c.id)} />
       <div className="lv-row"><span className="lv-l" title="What attacks ordered by right-click aim for">Attack goal</span>
         <div className="seg" role="group" aria-label="Attack goal">
           <button aria-pressed={goal === 1} onClick={() => { click(); ui().setGoal(1); }}>First line</button>

@@ -4,17 +4,18 @@ import * as THREE from 'three';
 import { HH, HW } from '@riskrts/shared';
 import { clamp, lerp } from './util';
 
-export const MIN_DIST = 1.1, MAX_DIST = 260;
+/** Closest zoom: a region and its neighbours' borders fill the view (closer, the painted ground breaks into tiles). */
+export const MIN_DIST = 9, MAX_DIST = 260;
 
 /** Zoom bands (design §2): what the world draws at each distance. `at` is where a band key flies to. */
 export const BANDS = [
   { key: 'z', name: 'Theatre', min: 90, max: MAX_DIST, at: 150 },
   { key: 'x', name: 'Front', min: 30, max: 90, at: 55 },
-  { key: 'c', name: 'Battle', min: 8, max: 30, at: 15 },
-  { key: 'v', name: 'Close', min: MIN_DIST, max: 8, at: 4.5 },
+  { key: 'c', name: 'Battle', min: 13, max: 30, at: 18 },
+  { key: 'v', name: 'Close', min: MIN_DIST, max: 13, at: MIN_DIST },
 ] as const;
 export type Band = 0 | 1 | 2 | 3;
-export const bandOf = (dist: number): Band => dist >= 90 ? 0 : dist >= 30 ? 1 : dist >= 8 ? 2 : 3;
+export const bandOf = (dist: number): Band => dist >= 90 ? 0 : dist >= 30 ? 1 : dist >= 13 ? 2 : 3;
 export const SUN_DIR = new THREE.Vector3(-.62, 1, -.42).normalize();
 /** Camera elevation (radians above the horizon): steep three-quarter top-down view. */
 export const PITCH = .8;

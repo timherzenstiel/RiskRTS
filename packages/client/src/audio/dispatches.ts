@@ -2,7 +2,7 @@
 // - dispatchFor(): a call for one game event, from the point of view of power `me`
 // - sitrep():      a situation report from the most pressing front (or the home front when all is quiet)
 // Text is written the way an officer would say it on the line: corps named by spoken ordinals, numbers rounded.
-import { AS, FACTIONS, FORMATION, SHIP, battleCounts, isDef, world, type Battle, type GameEvent, type GameState, type UnitType } from '@riskrts/shared';
+import { AS, FACTIONS, FORMATION, SHIP, battleCounts, isDef, world, type Battle, type GameEvent, type GameState, type UnitType, corpsAtPost } from '@riskrts/shared';
 import type { Stinger } from './sfx';
 import type { Speaker } from './voice';
 
@@ -66,8 +66,8 @@ const sum = (r: Record<number, number> | undefined, fs: number[]) => fs.reduce((
 export function station(g: GameState, b: Battle, me: number): { name: string; voice: number } {
   const R = (i: number) => world().regions[i]?.name ?? 'the front';
   let n = -1;
-  if (b.def === me) n = b.cn ?? g.regions[b.region]?.fr?.[b.from]?.n ?? -1;
-  else if (b.from >= 0 && b.from < 1000) n = g.regions[b.from]?.fr?.[b.region]?.n ?? -1;
+  if (b.def === me) n = b.cn ?? corpsAtPost(g.regions[b.region], b.from)[0]?.n ?? -1;
+  else if (b.from >= 0 && b.from < 1000) n = corpsAtPost(g.regions[b.from], b.region)[0]?.n ?? -1;
   if (n > 0) return { name: `${ordinal(n)} Corps, ${R(b.region)}`, voice: n };
   return { name: `the ${R(b.region)} front`, voice: b.region + 100 };
 }

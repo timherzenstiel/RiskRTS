@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   AIR_RANGE, ASSEMBLE, ATTACK_RATIO, BUDGET_MAX, CORPS_CAP, COST, CUT_MORALE, CUT_WEAR, DENY_WEEKS, DIG_IN, FALLBACK_RATIO, MANPOWER, MAX_REQ, MAX_SPIES, MIN_ATTACK,
-  REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, WORK_MULT, WW_INCOME, XP_DMG, XP_MAX, CAP, DRAW, ECON, LEVY_COST, OVER, REPL, WOUNDED,
+  REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, GEN, START_GENERALS, FACTIONS, BAD_TRAITS, WORK_MULT, WW_INCOME, XP_DMG, XP_MAX, CAP, DRAW, ECON, LEVY_COST, OVER, REPL, WOUNDED,
 } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { Modal } from './Modal';
@@ -60,8 +60,15 @@ export function RulesSheet() {
             <tr><td>{t('Front budget')}</td><td>{t('up to {0} of income', pct(BUDGET_MAX))}</td></tr>
           </tbody></table>
           <p>{t('No attack starts and no corps leaves the front without your answer. "Approves by himself" (not for attacks) and the budget let him do the small things himself.')}</p>
+          <h3>{t('Generals')}</h3>
+          <p>{t('Every army needs a general, and you have only so many. One more comes with each new war year and another for every {0} battles your armies win. A general whose headquarters region falls is captured; a replacement comes {1} weeks later.', GEN.wins, GEN.lostWeeks)}</p>
+          <table className="ledger"><tbody>
+            <tr><td>{t('Generals at the start')}</td><td>{START_GENERALS.map((n, f) => `${tx(FACTIONS[f].short)} ${n}`).join(' · ')}</td></tr>
+            <tr><td>{t('Stars')}</td><td>{t('one for every 3 battles won on his front; at three he loses a bad trait or gains a new one')}</td></tr>
+            <tr><td>{t('Relieving a general')}</td><td>{t('+{0} war weariness, his corps −{1} morale, morale below {2} % for {3} weeks', GEN.relieveWw, GEN.relieveMor, Math.round(GEN.shakenMor * 100), GEN.shakenWeeks)}</td></tr>
+          </tbody></table>
           <h3>{t('Traits')}</h3>
-          <table className="ledger"><tbody>{TRAIT_KEYS.map(k => <tr key={k}><td>{tx(TRAITS[k].name)}</td><td>{tx(TRAITS[k].desc)}</td></tr>)}</tbody></table>
+          <table className="ledger"><tbody>{TRAIT_KEYS.map(k => <tr key={k}><td>{tx(TRAITS[k].name)}{BAD_TRAITS.includes(k) ? ' ' + t('(bad)') : ''}</td><td>{tx(TRAITS[k].desc)}</td></tr>)}</tbody></table>
         </>}
         {page === 3 && <>
           <table className="ledger"><tbody>

@@ -11,6 +11,7 @@ import { Sfx } from '../audio/sfx';
 import { click } from './actions';
 import { rendererRef } from './refs';
 import { MAND, hqName } from './Staff';
+import { noGeneralText } from './Generals';
 import { nm } from './format';
 import { t, tx } from '../i18n';
 import { tn } from './LangPicker';
@@ -62,7 +63,7 @@ function borderVerbs(g: GameState, me: number, rid: number, sec: number): Verb[]
     off: r.battle >= 0 ? t('A battle is going on here') : groundUnits(r.units) < 2 ? t('Needs 2 battalions') : undefined });
   v.push({
     id: 'cmd', label: army ? tn('Hand to {0}', { raw: hqName(army) }) : t('Hand to a commander'), key: 'l',
-    off: !ours.length ? t('No corps of ours on this border') : army && ours.every(c => c.army === army.id) ? tn('Already under {0}', { raw: hqName(army) }) : undefined,
+    off: !ours.length ? t('No corps of ours on this border') : army && ours.every(c => c.army === army.id) ? tn('Already under {0}', { raw: hqName(army) }) : army ? undefined : noGeneralText(g, me),
     title: t('A commander holds this border with the corps standing on it and asks you for what he needs'),
     run: () => { const ids = ours.map(c => c.id); if (army) ui().order({ t: 'armyAssign', army: army.id, corps: ids, on: true }); else if (ui().order({ t: 'army', corps: ids })) openNewArmy(me); },
   });
@@ -97,7 +98,7 @@ function corpsVerbs(g: GameState, me: number, ids: number[]): Verb[] {
     title: t('Whether these corps take men from the pool each week to make good their losses') });
   v.push(h
     ? { id: 'army', label: tn('Army: {0}', { raw: hqName(h) }), key: 'l', run: () => ui().selectArmy(h.id) }
-    : { id: 'army', label: found.length === 1 ? t('Appoint a commander') : t('Form army'), key: 'l', run: () => { if (ui().order({ t: 'army', corps: found.map(x => x.c.id) })) openNewArmy(me); },
+    : { id: 'army', label: found.length === 1 ? t('Appoint a commander') : t('Form army'), key: 'l', run: () => { if (ui().order({ t: 'army', corps: found.map(x => x.c.id) })) openNewArmy(me); }, off: noGeneralText(g, me),
       title: t('A commander takes these corps and the regions they stand in as his front, and asks you for what he needs') });
   return v;
 }
@@ -110,7 +111,7 @@ function armyVerbs(g: GameState, me: number, id: number): Verb[] {
       title: t(['Hold the line: no attacks', 'Hold, and propose local attacks on the first line', 'Prepare an offensive on the target and ask for the go'][k]) })),
     { id: 'req', label: n ? t('Requests ({0})', n) : t('Requests'), key: 'q', run: () => ui().setPanel('staff') },
     { id: 'sel', label: t('Select its corps'), key: 'j', run: () => { const cs = armyCorps(g, h); if (cs.length) ui().selectCorps(cs.map(x => x.c.id), false, cs[0].r.id); }, off: armyCorps(g, h).length ? undefined : t('No corps') },
-    { id: 'rel', label: t('Relieve'), run: () => ui().order({ t: 'relieve', army: h.id }), title: t('A new commander takes over; his corps lose 5 morale') },
+    { id: 'rel', label: t('Relieve…'), run: () => ui().openRelieve(h.id), title: t('Replace the general. It costs war weariness and shakes his front for 2 weeks.') },
     { id: 'dis', label: t('Disband'), run: () => { if (ui().order({ t: 'disband', army: h.id })) ui().selectArmy(-1); }, title: t('The corps come under your own orders') },
   ];
 }

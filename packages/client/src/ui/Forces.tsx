@@ -1,5 +1,6 @@
 // Corps as objects (design-command §2): the Forces panel (order of battle), the corps card for the selected corps, and the
 // orders the map gives them – right-click an own region or border to move the selected corps there, an enemy region to attack.
+import { GeneralsRoster } from './Generals';
 import {
   ASSEMBLE, CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderBalance, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, findCorps, marchEta, moveK,
   frontsOf, fullMen, groundUnits, groupName, menTotal, sectorPoint, wrapDx, type Army, type Corps, type GameState, type Order, type RegionState, type Stance, type Units, type World,
@@ -142,6 +143,7 @@ export function ForcesPanel() {
           <span><small>{t('Under your orders')}</small><b className="lcdn">{all.filter(c => c.man).length}</b></span>
           <div className="seg oob-f" role="group" aria-label={t('Show')}><button aria-pressed={!mine} onClick={() => { click(); setMine(false); }}>{t('All')}</button><button aria-pressed={mine} title={t('Only the corps under your orders (✋)')} onClick={() => { click(); setMine(true); }}>{t('Mine ✋')}</button></div>
         </div>
+        <GeneralsRoster g={g} me={me} />
         {(g.hq ?? []).some(h => h.owner === me) && <div className="lbl"><span>{t('Armies')}</span></div>}
         {(g.hq ?? []).filter(h => h.owner === me).map(h => (
           <button key={'h' + h.id} className="oob-c army" onClick={() => { click(); ui().selectArmy(h.id); }}>

@@ -9,7 +9,8 @@
 // Corps the player orders by hand (`man`) stay in the army but the commander leaves them alone. Runs inside the simulation, so
 // every client and the server agree.
 import { AIR_RANGE, COST, TICK_SECONDS, groundUnits } from '../data/units';
-import { commanderName, commanderTraits, type TraitKey } from '../data/commanders';
+import { type TraitKey } from '../data/commanders';
+import { GEN, drawGeneral, generalWon, generals, loseGeneral, nextGeneral, returnGeneral, takeGeneral } from './generals';
 import { isCoast, zoneOfKey } from '../world/zones';
 import { emit, frontsOf, hops, rnd, world, worksAt } from './core';
 import { atWar } from './navy';
@@ -22,7 +23,7 @@ import { techOn } from './tech';
 import { unitCost } from './rules';
 import { moraleCap } from './battle';
 import { CORPS_CAP, addToGroup, coastThreat, column, corpsById, corpsIn, corpsSize, findCorps, landRoute, routeColumn, tagOf, takeCorps, takeDepot } from './posts';
-import { STANDING_KINDS, type Corps, type GameState, type Hq, type HqNote, type Mandate, type RegionState, type Req, type ReqKind } from './types';
+import { STANDING_KINDS, type Corps, type GameState, type General, type Hq, type HqNote, type Mandate, type RegionState, type Req, type ReqKind } from './types';
 
 /** Seconds between a commander's looks at his front; open requests per army; days a denied request rests. */
 export const THINK = 3, MAX_REQ = 3, DENY_WEEKS = 3;
@@ -38,23 +39,41 @@ export const MIN_ATTACK = 3;
 const has = (h: Hq, t: TraitKey) => h.cmd.tr.includes(t);
 /** Strength ratio over the enemy from which this commander proposes an attack (his traits shift it). */
 export const attackRatio = (h: Hq) => has(h, 'off') ? 1.2 : has(h, 'care') ? 1.3 : has(h, 'meth') ? 1.8 : ATTACK_RATIO;
+/** What an Engineer saves on works. */
+export const worksDiscount = (h: Hq) => has(h, 'eng') ? .75 : 1;
 const reserveKeep = (h: Hq) => has(h, 'meth') ? 2 : has(h, 'care') ? 0 : 1;
 export const hqOf = (g: GameState, id: number) => (g.hq ?? []).find(h => h.id === id);
 export const requestsOf = (g: GameState, f: number) => (g.requests ?? []).filter(q => q.owner === f);
 
 // ---------------------------------------------------------------- forming and ending armies
 
-/** A new army of power `f` holding `front`, with a commander drawn from the game's random stream. */
-export function newHq(g: GameState, f: number, front: number[]): Hq {
+/** A new army of power `f` holding `front` under general `cmd` (by default the best free one; callers check that one is free). */
+export function newHq(g: GameState, f: number, front: number[], cmd?: General): Hq {
   const F = g.factions[f]; F.nArmy = (F.nArmy ?? 0) + 1;
   const h: Hq = {
     id: g.nextId++, owner: f, n: F.nArmy,
-    cmd: { name: commanderName(f, rnd(g), rnd(g)), tr: commanderTraits(f, () => rnd(g)), xp: 0 },
+    cmd: cmd ?? takeGeneral(g, f) ?? drawGeneral(g, f),
     front: [...new Set(front)], mandate: 1, budget: 0, spent: 0, wk: -1, standing: [], deny: {}, next: g.time + 1,
     rep: (g.reports ?? []).reduce((m, r) => Math.max(m, r.id), 0), notes: [],
   };
   (g.hq ??= []).push(h);
+  h.seat = seatFor(g, h);
   return h;
+}
+
+/** Where an army puts its headquarters: the region of its front with the fewest hostile borders. */
+export function seatFor(g: GameState, h: Hq): number | undefined {
+  const W = world();
+  let best: number | undefined, bn = Infinity;
+  for (const id of h.front) { if (g.regions[id].owner !== h.owner) continue; const n = W.regions[id].sectors.filter(s => hostile(g, h.owner, s)).length; if (n < bn) { bn = n; best = id; } }
+  return best;
+}
+
+/** Can power `f` form another army? Null if a general is free, else why not (for the button). */
+export function noGeneral(g: GameState, f: number): string | null {
+  if ((g.factions[f]?.gen?.pool.length ?? 1) > 0) return null;
+  const n = nextGeneral(g, f), wk = n ? Math.max(1, Math.ceil((n.at - g.time) / TICK_SECONDS)) : 0;
+  return n ? `No general free. The next one comes in ${wk} week${wk === 1 ? '' : 's'}. Relieve or disband an army to free one.` : 'No general free.';
 }
 
 /** Every corps of an army, wherever it stands. */
@@ -67,8 +86,9 @@ export function armyCorps(g: GameState, h: Hq): { r: RegionState; c: Corps }[] {
 /** A corps leaving an army goes to the player's own orders; a computer power's goes back to its region's Auto. */
 export const handBack = (g: GameState, f: number) => g.factions[f]?.ai ? undefined : true;
 
-/** Disband an army: its corps go to the player, its requests lapse. */
-export function disbandHq(g: GameState, h: Hq) {
+/** Disband an army: its corps go to the player, its requests lapse, its general is free again (unless he was captured). */
+export function disbandHq(g: GameState, h: Hq, back = true) {
+  if (back && g.hq?.includes(h)) returnGeneral(g, h.owner, h.cmd);
   const man = handBack(g, h.owner);
   for (const { c } of armyCorps(g, h)) { c.army = undefined; c.man = man; }
   for (const a of g.armies) if (a.ct?.army === h.id) { a.ct.army = undefined; a.ct.man = man; }
@@ -169,12 +189,25 @@ export function think(g: GameState, h: Hq, V: GameState) {
   const f = h.owner, W = world();
   // the front follows the army: regions lost drop out, regions its corps stand in (taken in an offensive) join
   const list0 = armyCorps(g, h);
+  // the enemy took the headquarters: the general is captured; a free general takes over, else the army breaks up
+  if (h.seat !== undefined && g.regions[h.seat].owner !== f) {
+    loseGeneral(g, h, h.seat);
+    const x = takeGeneral(g, f);
+    if (!x) { disbandHq(g, h, false); return; }
+    h.cmd = x; h.seat = undefined; h.deny = {}; g.requests = (g.requests ?? []).filter(q => q.army !== h.id);
+  }
   h.front = [...new Set([...h.front, ...list0.map(x => x.r.id)])].filter(id => g.regions[id].owner === f);
   if (!h.front.length) { for (const { c } of list0) note(h, g, { k: 'release', n: c.n, region: -1, post: -1, why: 'lost' }); disbandHq(g, h); return; }
+  if (h.seat === undefined || !h.front.includes(h.seat)) h.seat = seatFor(g, h);
   const wk = Math.floor(g.time / TICK_SECONDS); if (h.wk !== wk) { h.wk = wk; h.spent = 0; }
   // experience: battles won on his front
-  for (const rep of g.reports ?? []) if (rep.id > h.rep) { if (rep.winner === f && (h.front.includes(rep.region) || rep.sides.some(s => s.f === f) && h.front.includes(rep.from))) h.cmd.xp = Math.min(3, h.cmd.xp + .34); h.rep = Math.max(h.rep, rep.id); }
+  for (const rep of g.reports ?? []) if (rep.id > h.rep) { if (rep.winner === f && (h.front.includes(rep.region) || rep.sides.some(s => s.f === f) && h.front.includes(rep.from))) generalWon(g, h); h.rep = Math.max(h.rep, rep.id); }
   if (has(h, 'insp')) for (const { c } of list0) c.mor = Math.min(moraleCap(g, f), c.mor + .45);
+  // a front whose general was just relieved stays shaken for a while
+  if (h.shaken !== undefined) {
+    if (g.time >= h.shaken) h.shaken = undefined;
+    else { const cap = moraleCap(g, f) * GEN.shakenMor; for (const { c } of list0) c.mor = Math.min(c.mor, cap); }
+  }
 
   const bs = borders(g, V, h), byKey = new Map(bs.map(b => [b.r.id + '|' + b.s, b]));
   const free = (c: Corps) => !c.man && (c.ord ?? 0) === 0;
@@ -244,7 +277,7 @@ export function think(g: GameState, h: Hq, V: GameState) {
     if (!fight && b.bal.danger >= (has(h, 'def') ? 0 : 1) && !isCoast(b.s)) {
       const w = worksAt(b.r, b.s);
       const kind = w.tr < 1 || (w.tr < 2 && techOn(g, f, 'trench2')) ? 'trench' : w.wire < 1 ? 'wire' : null;
-      const cost = kind ? fortCost(b.r, kind, b.s, g) : null;
+      const c0 = kind ? fortCost(b.r, kind, b.s, g) : null, cost = c0 === null ? null : Math.max(1, Math.round(c0 * worksDiscount(h)));
       if (kind && cost !== null) asks.push({ kind: 'fort', key: `fort|${b.r.id}|${b.s}`, urg: 0, region: b.r.id, sector: b.s, fort: kind, cost, ...bal(b) });
     }
     // reconnaissance: where the border is not safe and our report is missing or old (an Intelligence officer wants every border
@@ -318,7 +351,12 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
   const q = (g.requests ?? []).find(x => x.id === id && x.owner === f); if (!q) return 'That request is no longer open.';
   const h = hqOf(g, q.army); if (!h) return 'That army no longer exists.';
   const r = g.regions[q.region], drop = () => { g.requests = (g.requests ?? []).filter(x => x !== q); };
-  if (opt === 'deny') { h.deny[q.key] = g.time + DENY_WEEKS * TICK_SECONDS; drop(); return null; }
+  if (opt === 'deny') {
+    h.deny[q.key] = g.time + DENY_WEEKS * TICK_SECONDS; drop();
+    // a Political general's friends at home make noise
+    if (has(h, 'pol')) { const F = g.factions[f]; F.ww = Math.min(100, F.ww + 1); }
+    return null;
+  }
   if (r.owner !== f) { drop(); return 'That region is no longer ours.'; }
   switch (q.kind) {
     case 'men': {
@@ -336,7 +374,7 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
       if (got < want) { q.n = (q.n ?? want) - got; return err; }
       break;
     }
-    case 'fort': { const e = fortify(g, f, r, q.fort ?? 'trench', q.sector); if (e) return e; break; }
+    case 'fort': { const e = fortify(g, f, r, q.fort ?? 'trench', q.sector, worksDiscount(h)); if (e) return e; break; }
     case 'recon': {
       const e = q.by === 'spy' ? spy(g, f, q.sector) : q.by === 'recon' ? recon(g, f, q.from ?? q.region, q.sector) : patrol(g, f, q.from ?? q.region, q.sector);
       if (e) return e;
@@ -368,10 +406,17 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
 
 // ---------------------------------------------------------------- player commands
 
-export function formArmyHq(g: GameState, f: number, ids: number[]): string | null {
-  const found = [...new Set(ids)].map(id => findCorps(g, f, id)).filter((x): x is NonNullable<typeof x> => !!x);
-  if (!found.length) return 'Select the corps for the new army first.';
-  const h = newHq(g, f, found.map(x => x.r.id));
+/** Form an army from corps, or appoint a commander to a front (`front`: its regions; the corps there not in another army
+ *  join). `gen`: which free general (default the most experienced). */
+export function formArmyHq(g: GameState, f: number, ids: number[], front?: number[], gen?: number): string | null {
+  const fr = (front ?? []).filter(id => g.regions[id]?.owner === f);
+  if (front && !fr.length) return 'That front is no longer ours.';
+  const all = [...ids, ...fr.flatMap(id => corpsIn(g.regions[id]).filter(c => c.army === undefined).map(c => c.id))];
+  const found = [...new Set(all)].map(id => findCorps(g, f, id)).filter((x): x is NonNullable<typeof x> => !!x);
+  if (!found.length && !fr.length) return 'Select the corps for the new army first.';
+  const why = noGeneral(g, f); if (why) return why;
+  const x = takeGeneral(g, f, gen); if (!x) return 'That general is not free.';
+  const h = newHq(g, f, [...fr, ...found.map(y => y.r.id)], x);
   for (const { c } of found) { c.army = h.id; c.man = undefined; }
   return null;
 }
@@ -413,12 +458,21 @@ export function setArmy(g: GameState, f: number, army: number, o: { mandate?: Ma
   return null;
 }
 
-/** Relieve a commander: a new one takes over (no experience), his corps lose some morale. */
-export function relieve(g: GameState, f: number, army: number): string | null {
+/** Relieve a general: he leaves the service and his slot is filled by a new man at once. `gen`: a free general to take
+ *  over instead (the new man then waits among the free ones). It costs war weariness, his corps lose morale and stay shaken
+ *  for GEN.shakenWeeks. */
+export function relieve(g: GameState, f: number, army: number, gen?: number): string | null {
   const h = hqOf(g, army); if (!h || h.owner !== f) return 'That army is not yours.';
-  h.cmd = { name: commanderName(f, rnd(g), rnd(g)), tr: commanderTraits(f, () => rnd(g)), xp: 0 };
-  for (const { c } of armyCorps(g, h)) c.mor = Math.max(0, c.mor - 5);
+  const G = generals(g, f);
+  if (gen !== undefined && !G.pool.some(x => x.id === gen)) return 'That general is not free.';
+  const old = h.cmd;
+  G.pool.push(drawGeneral(g, f));
+  h.cmd = takeGeneral(g, f, gen ?? G.pool[G.pool.length - 1].id)!;
+  const F = g.factions[f]; F.ww = Math.min(100, F.ww + GEN.relieveWw);
+  for (const { c } of armyCorps(g, h)) c.mor = Math.max(0, c.mor - GEN.relieveMor);
+  h.shaken = g.time + GEN.shakenWeeks * TICK_SECONDS;
   g.requests = (g.requests ?? []).filter(q => q.army !== h.id); h.deny = {};
+  emit(g, { k: 'general', faction: f, kind: 'relieved', name: old.name, army: h.id });
   return null;
 }
 
@@ -456,7 +510,7 @@ export function stepCommanders(g: GameState) {
   const views = new Map<number, GameState>();
   for (const h of [...g.hq]) {
     if (g.time < h.next) continue;
-    h.next = g.time + THINK;
+    h.next = g.time + THINK * (has(h, 'slow') ? 2 : 1);
     if (!g.factions[h.owner]?.alive) { disbandHq(g, h); continue; }
     let V = views.get(h.owner); if (!V) { V = fogView(g, h.owner); views.set(h.owner, V); }
     think(g, h, V);

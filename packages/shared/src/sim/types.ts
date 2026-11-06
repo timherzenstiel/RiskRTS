@@ -47,6 +47,8 @@ export interface FactionState {
   away?: boolean;
   /** Armies and corps raised so far (their numbers name the next ones). */
   nArmy?: number; nCorps?: number;
+  /** Generals (design-play §3.2). */
+  gen?: Generals;
 }
 
 export type TreatyKind = 'cease' | 'nap' | 'ally';
@@ -419,6 +421,9 @@ export type GameEvent =
   | { k: 'release'; faction: number; army: number; n: number; region: number; why: HqNote['why'] }
   | { k: 'request'; faction: number; army: number; kind: ReqKind; region: number; sector: number; urg: 0 | 1 | 2; req: number }
   /** A request nobody answered in time: it lapses, and the corps concerned lose morale (`mor`, 0 when it costs nothing). */
+  /** Generals: a new one (a war year, battles won, a replacement), one captured with his headquarters, one relieved, a
+   *  three-star promotion (trait gained, or bad trait `lost` replaced by `tr`). */
+  | { k: 'general'; faction: number; kind: 'new' | 'lost' | 'relieved' | 'star'; name: string; why?: 'year' | 'wins' | 'back'; army?: number; region?: number; tr?: TraitKey; lost?: TraitKey }
   | { k: 'reqExpired'; faction: number; army: number; kind: ReqKind; region: number; sector: number; mor: number; corps: number[] }
   /** Recruits finished training and joined a region's reserve. */
   | { k: 'trained'; faction: number; region: number; n: number }
@@ -466,7 +471,11 @@ export interface Hq {
   id: number; owner: number;
   /** Army number (names, see data/names.ts). */
   n: number;
-  cmd: { name: string; tr: [TraitKey, TraitKey]; xp: number };
+  cmd: General;
+  /** The region the army's headquarters sits in: if the enemy takes it, the general is captured (design-play §3.2). */
+  seat?: number;
+  /** After a general was relieved: until this game time his corps' morale stays below GEN.shakenMor of its ceiling. */
+  shaken?: number;
   /** Own regions the army holds; its commander deploys its corps over their hostile borders. */
   front: number[];
   mandate: Mandate;
@@ -481,6 +490,12 @@ export interface Hq {
   /** Game time of the next look at the front, the last report counted for experience, recent notes. */
   next: number; rep: number; notes: HqNote[];
 }
+/** A general (design-play §3.2): two traits (a third, or a bad one replaced, at three stars), experience 0..3 (stars), and
+ *  whether his three-star promotion has been given. */
+export interface General { id: number; name: string; tr: TraitKey[]; xp: number; up?: boolean }
+/** A power's generals: how many it may have (`slots`), the free ones, battles won by its armies (every GEN.wins brings one
+ *  more), the calendar year counted last, and the game times at which replacements for captured generals arrive. */
+export interface Generals { slots: number; pool: General[]; wins: number; y?: number; due: number[] }
 /** A commander's request. Numbers only; the client words it. */
 export interface Req {
   id: number; owner: number; army: number; kind: ReqKind;
@@ -575,11 +590,11 @@ export type Command =
   /** Corps settings: stance, and whether Auto may manage it (`man` false hands it back to the region). */
   | { t: 'corpsSet'; region: number; id: number; st?: Stance; man?: boolean; refill?: boolean }
   /** Armies: form one from corps (its front starts with their regions), put corps in or out, change its settings, answer a request. */
-  | { t: 'army'; corps: number[] }
+  | { t: 'army'; corps: number[]; front?: number[]; gen?: number }
   | { t: 'armyAssign'; army: number; corps: number[]; on: boolean }
   | { t: 'armySet'; army: number; mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[] }
   | { t: 'reply'; req: number; opt: 'yes' | 'recruit' | 'transfer' | 'deny'; n?: number }
-  | { t: 'relieve'; army: number }
+  | { t: 'relieve'; army: number; gen?: number }
   | { t: 'disband'; army: number }
   /** Deploy mode of a region: 0 the region deploys itself, 1 manual. */
   | { t: 'deploy'; region: number; mode: number }

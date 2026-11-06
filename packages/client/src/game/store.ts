@@ -61,6 +61,9 @@ interface Ui {
   corps: number[];
   /** Army (Hq id) whose card is open, or -1. */
   armySel: number;
+  /** The army whose general the player is about to relieve (the army card shows the costs and a successor), or -1. */
+  relieveFor: number;
+  openRelieve: (army: number) => void;
   /** Alerts the player dismissed (by key) and until which game time. */
   dismissed: Record<string, number>;
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
@@ -167,7 +170,7 @@ Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
 function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') ?? 'null') as Partial<AutoPause> | null; return { ...AP_DEFAULT, ...(v ?? {}) }; } catch { return { ...AP_DEFAULT }; } }
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, relieveFor: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), wwWeek: null,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
@@ -191,7 +194,8 @@ export const useUi = create<Ui>((set, get) => ({
     const cur = get().corps, next = !add ? ids : [...cur.filter(i => !ids.includes(i)), ...ids.filter(i => !cur.includes(i))];
     set({ corps: next, armySel: -1, orderMode: false, fleet: -1, seaSel: -1, border: null, ...(region !== undefined && region >= 0 ? { sel: region } : {}) }); Sfx.click();
   },
-  selectArmy: (armySel) => { set({ armySel, corps: [], border: null }); Sfx.click(); },
+  selectArmy: (armySel) => { set({ armySel, corps: [], border: null, relieveFor: -1 }); Sfx.click(); },
+  openRelieve: (army) => { set({ armySel: army, corps: [], border: null, relieveFor: army }); },
   closeBorder: () => set({ border: null, fortMarker: null, borderTool: '' }),
   setBorderTool: (borderTool) => set({ borderTool }),
   dismiss: (key, until) => set(st => ({ dismissed: { ...st.dismissed, [key]: until } })),

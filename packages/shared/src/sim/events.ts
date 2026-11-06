@@ -1,6 +1,7 @@
 // Turns structured game events into text for a given viewer, so server and clients phrase them identically.
 import { FACTIONS, cap } from '../data/factions';
 import { corpsName } from '../data/names';
+import { TRAITS } from '../data/commanders';
 import { world } from './core';
 import { SHIP } from '../data/sea';
 import { sectorName } from '../world/zones';
@@ -157,6 +158,14 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (!e.mor) return { text: e.kind === 'attack' ? `No answer came: ${who} gave up his attack from ${at}.` : `No answer came: ${who} keeps the corps he offered back at ${at}.`, cls: '', region: e.region };
       const what = e.kind === 'men' ? `No reinforcements for ${who} at ${at}` : e.kind === 'fort' ? `No field works for ${who} at ${at}` : e.kind === 'recon' ? `No reconnaissance for ${who} at ${at}` : `${who} was not allowed to fall back at ${at}`;
       return { text: `${what}: no answer came. The corps there lose ${e.mor} morale.`, cls: 'bad', region: e.region };
+    }
+    case 'general': {
+      if (e.faction !== me) return null;
+      const h = (g.hq ?? []).find(x => x.id === e.army);
+      if (e.kind === 'new') return { text: e.why === 'year' ? `A new war year: ${e.name} is ready to command an army.` : e.why === 'wins' ? `Our victories bring a new general to the fore: ${e.name} is ready to command an army.` : `${e.name} arrives to replace the general we lost. He is ready to command an army.`, cls: 'me' };
+      if (e.kind === 'lost') return { text: h ? `${R(e.region ?? -1)} has fallen with an army headquarters: ${e.name} is captured. ${h.cmd.name} takes over.` : `${R(e.region ?? -1)} has fallen with an army headquarters: ${e.name} is captured. With no general free, his army breaks up.`, cls: 'bad', region: e.region };
+      if (e.kind === 'relieved') return { text: `${e.name} is relieved of his command. ${h ? h.cmd.name : 'A new general'} takes over.`, cls: '' };
+      return { text: e.lost ? `${e.name} earns his third star. He loses the trait ${TRAITS[e.lost].name} and gains ${TRAITS[e.tr!].name}.` : `${e.name} earns his third star and gains the trait ${TRAITS[e.tr!].name}.`, cls: 'good' };
     }
     case 'trained': return e.faction === me ? { text: e.n === 1 ? `1 battalion has finished training in ${R(e.region)}.` : `${e.n} battalions have finished training in ${R(e.region)}.`, cls: '', region: e.region } : null;
     case 'vote': {

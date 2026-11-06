@@ -48,13 +48,13 @@ export function Cameo({ k, name, cost, hotkey, lock, disabled, pips, count, titl
       onPointerEnter={() => say(line)} onPointerLeave={() => say(null)} onFocus={() => say(line)} onBlur={() => say(null)}>
       <button className="cm-b" disabled={disabled} title={title} aria-label={`${name}: ${title}`} onClick={e => onBuy(e.shiftKey)}>
         <span className="cm-art" aria-hidden="true">{url ? <img src={url} alt="" draggable={false} /> : <Icon k={k} />}</span>
-        {hotkey && <kbd className="cm-k">{hotkey}</kbd>}
+        {hotkey && <kbd className="cm-k" title={`Keyboard shortcut: ${hotkey}`}>key {hotkey}</kbd>}
         {pips && <span className="cm-p" aria-hidden="true">{pips}</span>}
-        {count !== undefined && count > 0 && <span className="cm-n">{count}</span>}
+        {count !== undefined && count > 0 && <span className="cm-n" title={`${count} already in this region`}>{count} here</span>}
         {lock && <span className="cm-lock">{lock}</span>}
         <span className="cm-f"><span className="cm-c">{cost}</span><span className="cm-nm">{name}</span></span>
       </button>
-      {five && <button className="cm-5" disabled={fiveDisabled} aria-label={`${name}: buy five`} title="Buy five" onClick={() => onBuy(true)}>×5</button>}
+      {five && <button className="cm-5" disabled={fiveDisabled} aria-label={`${name}: buy five`} title="Buy five at once (or Shift-click)" onClick={() => onBuy(true)}>buy 5</button>}
     </div>
   );
 }

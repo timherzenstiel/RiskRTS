@@ -17,7 +17,7 @@ import { unitCost } from './rules';
 import { paceOf } from './battle';
 import { fogView, guessedUnits } from './fog';
 import { missionWants } from './missions';
-import { navyAi } from './ainavy';
+import { navyAi, navySave } from './ainavy';
 import { enemySea } from './navy';
 import type { Battle, FactionState, GameState, RegionState } from './types';
 
@@ -61,7 +61,9 @@ export function aiThink(g: GameState, f: FactionState) {
   const P = nationOf(f.id).ai, W = world();
   const cap = g.cfg?.attackCap ?? 0;
   let guard = 50;
-  while (f.supply >= 1 && guard-- > 0 && border.length) {
+  // sea powers keep back the price of the next capital ship
+  const save = navySave(g, f, mine);
+  while (f.supply >= 1 + save && guard-- > 0 && border.length) {
     const facs = mine.filter(t => t.factory).length, bars = mine.filter(t => t.barracks).length, airs = mine.filter(t => t.airfield).length;
     const ok = mine.filter(t => t.contested < 0);
     if (f.supply >= COST.factory + 2 && facs < 1 + Math.floor(mine.length / 5) && rnd(g) < .4) { const c = ok.filter(t => !t.factory).sort((a, b) => a._th! - b._th!)[0]; if (c && !build(g, f.id, c, 'factory')) continue; }

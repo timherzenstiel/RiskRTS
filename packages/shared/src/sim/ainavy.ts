@@ -15,6 +15,27 @@ import type { FactionState, GameState, RegionState } from './types';
 
 type R = RegionState & { _th?: number };
 
+/** The capital ship a power wants next (battleship squadrons up to its naval ambition, a carrier for sea powers once available), or null. */
+export function capitalWant(g: GameState, f: FactionState): 'bb' | 'carrier' | null {
+  const P = nationOf(f.id).ai, fid = f.id;
+  if (!g.regions.some(r => r.owner === fid && r.factory && portReady(g, r) && r.contested < 0 && !r.cut)) return null;
+  const bb = g.ships.filter(s => s.owner === fid && s.kind === 'bb').length, cv = g.ships.filter(s => s.owner === fid && s.kind === 'carrier').length;
+  if (g.day >= carrierDay(fid) && P.navy >= 1.4 && cv < 1) return 'carrier';
+  return bb < Math.round(2 + P.navy * 2) ? 'bb' : null;
+}
+
+/**
+ * Supply the computer keeps back from its land spending to lay down the capital ship it wants: the full cost for sea powers
+ * (naval ambition 1 and up) while no region of theirs is in danger, nothing otherwise. Ships it can afford are ordered at once.
+ */
+export function navySave(g: GameState, f: FactionState, mine: R[]): number {
+  const w = capitalWant(g, f); if (!w || !g.ships) return 0;
+  const P = nationOf(f.id).ai, c = shipCost(f.id, w);
+  if (f.supply >= c) { const yard = mine.find(r => r.factory && portReady(g, r) && r.contested < 0 && !r.cut); if (yard && !buildShip(g, f.id, yard, w)) return 0; }
+  const danger = mine.some(r => (r._th ?? 0) > 8 || (r.battle >= 0 && g.battles.some(b => b.id === r.battle && b.def === f.id)));
+  return P.navy >= 1 && !danger ? c : P.navy >= .6 && !danger && rnd(g) < .3 ? c : 0;
+}
+
 export function navyAi(g: GameState, f: FactionState, mine: R[], V: GameState, attacks: () => number, cap: number) {
   if (!g.ships) return;
   const W = world(), P = nationOf(f.id).ai, fid = f.id;
@@ -29,8 +50,9 @@ export function navyAi(g: GameState, f: FactionState, mine: R[], V: GameState, a
     const wantT = Math.min(8, Math.round((2 + far.length * .7) * (.6 + P.navy * .3)));
     if (n('trans') < wantT && f.supply >= SHIP.trans.cost + 4 && rnd(g) < .25) buildShip(g, fid, home, 'trans');
     if (n('land') < Math.round(1 + P.navy) && f.supply >= SHIP.land.cost + 4 && rnd(g) < .15) buildShip(g, fid, home, 'land');
-    if (yard && n('bb') < Math.round(2 + P.navy * 2) && f.supply >= shipCost(fid, 'bb') + 10 && rnd(g) < .025 * P.navy) buildShip(g, fid, yard, 'bb');
-    if (yard && g.day >= carrierDay(fid) && P.navy >= 1.4 && n('carrier') < 1 && f.supply >= shipCost(fid, 'carrier') + 8 && rnd(g) < .06) buildShip(g, fid, yard, 'carrier');
+    // capital ships are laid down from the savings navySave() keeps back
+    const w = capitalWant(g, f);
+    if (w && yard && f.supply >= shipCost(fid, w)) buildShip(g, fid, yard, w);
   }
   // a port for a far coast that has none
   if (f.supply >= 12 && rnd(g) < .02) { const r = far.find(x => !x.port && x.contested < 0); if (r) buildPort(g, fid, r); }

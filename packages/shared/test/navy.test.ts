@@ -109,6 +109,16 @@ describe('sea control and naval battles', () => {
     let battle = false; for (let i = 0; i < 20 * 80; i++) { step(g, .05); if (g.seaBattles.length) battle = true; }
     expect(battle).toBe(true);
   });
+  it('the bigger battle fleet wins, whichever side reaches the zone first', () => {
+    for (const first of [1, 2]) {
+      const g = blank(5); const A = give(g, 1, 'Britain'), B = give(g, 2, 'Germany'); A.port = true; B.port = true; fill(g);
+      for (let i = 0; i < 4; i++) newShip(g, 1, 'bb', A.id); for (let i = 0; i < 2; i++) newShip(g, 2, 'bb', B.id);
+      const st = (f: number) => applyCommand(g, f, { t: 'station', region: f === 1 ? A.id : B.id, zone: 0 });
+      st(first); st(3 - first);
+      let w = -9; for (let i = 0; i < 20 * 500 && w === -9; i++) { step(g, .05); for (const e of drainEvents(g)) if (e.k === 'seaBattle' && !e.start) w = e.sides[e.winner]?.[0] ?? -1; }
+      expect(w).toBe(1);
+    }
+  });
   it('the dreadnoughts of a battle line fire only the turrets that bear', async () => {
     const { turretsBearing } = await import('../src');
     expect(turretsBearing(Math.PI / 2, 5)).toBe(5); expect(turretsBearing(0, 5)).toBe(2); expect(turretsBearing(Math.PI, 5)).toBe(2); expect(turretsBearing(Math.PI / 2, 3)).toBe(3);

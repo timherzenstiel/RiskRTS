@@ -43,7 +43,7 @@ function spawn(g: GameState, b: SeaBattle, fl: Fleet, side: number, gap = 30) {
   let line = 0, scr = 0, back = 0;
   const lineN = ships.filter(s => s.kind === 'bb').length * 2;
   const add = (ship: Ship, kind: ShipAgentKind, hp: number, x: number, z: number, extra: Partial<ShipAgent> = {}) => {
-    b.agents.push({ id: g.nextId++, ship: ship.id, f: ship.owner, kind, x, z, hd: hd + (rnd(g) - .5) * .2, v: 0, hp, hp0: hp, tur: kind === 'dn' ? N.dn.turrets : 0, torps: kind === 'dd' ? N.dd.torps : 0, tgt: -1, cd: rnd(g) * 3, fire: 0, str: 0, aim: 0, fireT: -9, out: false, dead: false, dieT: 0, ...extra });
+    b.agents.push({ id: g.nextId++, ship: ship.id, f: ship.owner, kind, x, z: side ? -z : z, hd: hd + (rnd(g) - .5) * .2, v: 0, hp, hp0: hp, tur: kind === 'dn' ? N.dn.turrets : 0, torps: kind === 'dd' ? N.dd.torps : 0, tgt: -1, cd: rnd(g) * 3, fire: 0, str: 0, aim: 0, fireT: -9, out: false, dead: false, dieT: 0, ...extra });
   };
   const x0 = sgn * gap / 2;
   for (const s of ships) {
@@ -189,8 +189,14 @@ export function stepSeaBattle(g: GameState, b: SeaBattle, dt: number) {
   const power = [0, 1].map(s => A.reduce((p, a) => p + (active(a) && sideOf(b, a.f) === s ? (a.kind === 'dn' ? a.hp * a.tur / N.dn.turrets : a.kind === 'dd' ? a.hp * .5 : a.kind === 'pl' ? 6 : a.kind === 'cv' ? a.hp * .1 : 0) : 0), 0));
   const leaders: number[] = [-1, -1];
   A.forEach((a, i) => { if (a.kind === 'dn' && active(a) && !a.brk && a.hp > a.hp0 * .3) { const s = sideOf(b, a.f); if (leaders[s] < 0) leaders[s] = i; } });
-  const prevOf = new Map<number, number>(); { const last = [-1, -1]; A.forEach((a, i) => { if (a.kind === 'dn' && active(a) && !a.brk && a.hp > a.hp0 * .3) { const s = sideOf(b, a.f); if (last[s] >= 0) prevOf.set(i, last[s]); last[s] = i; } }); }
-  for (let i = 0; i < A.length; i++) {
+  // line ahead in divisions of up to six: each division follows its own leader, the later ones abreast of the first, on the
+  // side away from the enemy, so a big fleet brings all its guns to bear instead of feeding its van in piecemeal
+  const prevOf = new Map<number, number>(), divOf = new Map<number, number>();
+  { const last = [-1, -1], cnt = [0, 0]; A.forEach((a, i) => { if (a.kind === 'dn' && active(a) && !a.brk && a.hp > a.hp0 * .3) { const s = sideOf(b, a.f); if (cnt[s] > 0 && cnt[s] % 6 === 0) divOf.set(i, cnt[s] / 6); else if (last[s] >= 0) prevOf.set(i, last[s]); last[s] = i; cnt[s]++; } }); }
+  // every other step the ships act in reverse order, so neither side gains from moving first
+  const flip = Math.round(b.age / dt) % 2 === 1;
+  for (let n = 0; n < A.length; n++) {
+    const i = flip ? A.length - 1 - n : n;
     const a = A[i]; if (!active(a)) continue;
     const s = sideOf(b, a.f), foe = cen[1 - s], S = statsOf(a.kind);
     a.cd -= dt;
@@ -245,6 +251,12 @@ export function stepSeaBattle(g: GameState, b: SeaBattle, dt: number) {
           want = bearing + side * Math.PI / 2 * (strong ? 1 : 1.25);
           if (!strong && dToFoe < R * .55) want = bearing + side * Math.PI * .8;
         }
+      } else if (divOf.has(i) && leaders[s] >= 0) {
+        const L = A[leaders[s]], k = divOf.get(i)!, px = Math.cos(L.hd), pz = -Math.sin(L.hd);
+        const away = foe && (px * (foe.x - L.x) + pz * (foe.z - L.z)) > 0 ? -1 : 1;
+        const tx = L.x + px * away * 5 * k - Math.sin(L.hd) * 2 * k, tz = L.z + pz * away * 5 * k - Math.cos(L.hd) * 2 * k, dd = Math.hypot(tx - a.x, tz - a.z);
+        want = dd > 1.5 ? Math.atan2(tx - a.x, tz - a.z) : L.hd; v = S.speed * Math.max(.6, Math.min(1.5, .8 + dd * .2));
+        if (L.evade !== undefined && L.evade > b.age) a.evade = L.evade;
       } else if (!lead) {
         // follow the ship ahead in line
         const pi = prevOf.get(i), p = pi !== undefined ? A[pi] : leaders[s] >= 0 ? A[leaders[s]] : null;

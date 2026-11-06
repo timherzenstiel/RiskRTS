@@ -30,6 +30,8 @@ export interface CameoProps {
   count?: number;
   title: string;
   onBuy: (five: boolean) => void;
+  /** What one purchase gives (e.g. "100 men · 100 rifles"), shown above the name. */
+  gets?: ReactNode;
   /** Show a ×5 corner button. */
   five?: boolean;
   fiveDisabled?: boolean;
@@ -41,20 +43,20 @@ export interface CameoProps {
 
 const Info = createContext<(t: string | null) => void>(() => {});
 
-export function Cameo({ k, name, cost, hotkey, lock, disabled, pips, count, title, onBuy, five, fiveDisabled, national, done, nation }: CameoProps) {
+export function Cameo({ k, name, cost, gets, hotkey, lock, disabled, pips, count, title, onBuy, five, fiveDisabled, national, done, nation }: CameoProps) {
   const url = cameoUrl(k, nation); const say = useContext(Info); const line = `${name} · ${title}`;
   return (
     <div className={'cameo' + (lock ? ' locked' : '') + (done ? ' done' : '') + (national ? ' nat' : '')}
       onPointerEnter={() => say(line)} onPointerLeave={() => say(null)} onFocus={() => say(line)} onBlur={() => say(null)}>
       <button className="cm-b" disabled={disabled} title={title} aria-label={`${name}: ${title}`} onClick={e => onBuy(e.shiftKey)}>
         <span className="cm-art" aria-hidden="true">{url ? <img src={url} alt="" draggable={false} /> : <Icon k={k} />}</span>
-        {hotkey && <kbd className="cm-k">{hotkey}</kbd>}
+        {hotkey && <kbd className="cm-k" title={`Keyboard shortcut: ${hotkey}`}>key {hotkey}</kbd>}
         {pips && <span className="cm-p" aria-hidden="true">{pips}</span>}
-        {count !== undefined && count > 0 && <span className="cm-n">{count}</span>}
+        {count !== undefined && count > 0 && <span className="cm-n" title={`${count} already in this region`}>{count} here</span>}
         {lock && <span className="cm-lock">{lock}</span>}
-        <span className="cm-f"><span className="cm-c">{cost}</span><span className="cm-nm">{name}</span></span>
+        <span className="cm-f"><span className="cm-c">{cost}</span>{gets && <span className="cm-g">{gets}</span>}<span className="cm-nm">{name}</span></span>
       </button>
-      {five && <button className="cm-5" disabled={fiveDisabled} aria-label={`${name}: buy five`} title="Buy five" onClick={() => onBuy(true)}>×5</button>}
+      {five && <button className="cm-5" disabled={fiveDisabled} aria-label={`${name}: buy five`} title="Buy five at once (or Shift-click)" onClick={() => onBuy(true)}>buy 5</button>}
     </div>
   );
 }

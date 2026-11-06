@@ -482,7 +482,7 @@ class WorldRenderer implements WorldRendererApi {
     // fine model detail (rivets, faces, spokes, markings) only where it can be seen
     this.models.hi = rig.dist < 7; this.models.hiMesh = rig.dist < 12; this.models.t = T;
     if (g) {
-      this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.war.draw(g, T, this.isClose, sprites);
+      this.dyn.regions(g, rig, T); this.dyn.armies(g, T); this.dyn.fronts(g, T, rig.dist); this.war.draw(g, T, this.isClose, sprites);
       this.navy.me = this.dyn.me; this.navy.zoomK = this.dyn.zoomK; this.navy.fleet = useUi.getState().fleet; this.navy.draw(g, rig, T, this.lastDt);
       this.net.draw(lines, g, this.session?.me ?? -1, rig);
       for (const b of g.battles) {

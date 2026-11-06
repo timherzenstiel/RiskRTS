@@ -196,7 +196,11 @@ export class Labels {
         l.nextText = ctx.now + .25;
         let alive = 0; for (const [, c] of battleCounts(b)) alive += c[0];
         const stage = b.goal === undefined ? '' : [' · 1st line', ' · consolidating', ' · depth', ' · foothold'][b.stage ?? 0];
-        const t = `${rname} · ${alive}${stage}`; if (t !== l.label) { l.label = t; l.text.textContent = t; }
+        // who attacks whom: "Germany → Verdun"; your own fights stand out (red when you defend, gold when you attack)
+        const who = b.attacker === ctx.me ? 'You' : FACTIONS[b.attacker]?.short ?? '?';
+        const t = `${who} → ${rname} · ${alive}${stage}`; if (t !== l.label) { l.label = t; l.text.textContent = t; }
+        const cls = 'bm' + (b.def === ctx.me ? ' def' : b.sides.includes(ctx.me) ? ' atk' : ' oth');
+        if (l.el.className !== cls) { l.el.className = cls; l.el.style.setProperty('--c', FACTIONS[b.attacker]?.color ?? '#888'); }
       }
       const at = battleAnchor(this.world, b);
       this.place(l, ctx, at.x, ctx.groundY(b.region) + 1.2, at.z);

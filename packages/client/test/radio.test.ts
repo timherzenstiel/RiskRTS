@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FORMATION, UNIT_TYPES, buildWorld, createGame, emptyUnits, frontsOf, step, updateSupplyLines, type GameEvent, type GameState } from '@riskrts/shared';
 import { dispatchFor, frontReport, homeReport, menSpoken, ordinal, sitrep, station, urgency, type SitrepMemo } from '../src/audio/dispatches';
 import { strike } from '../../shared/test/helpers';
+import { missing, withLang } from '../src/i18n';
 
 const W = buildWorld();
 const id = (n: string) => W.byName[n].id;
@@ -76,6 +77,36 @@ describe('radio dispatches', () => {
     expect(homeReport(g, 1)).toBeNull();
     g.factions[1].shells = 10;
     expect(homeReport(g, 1)?.say).toMatch(/shell stockpile/);
+  });
+});
+
+describe('radio in German', () => {
+  it('names corps, men and peoples in German', () => {
+    withLang('de', () => {
+      expect(ordinal(7)).toBe('Siebtes');
+      expect(ordinal(23)).toBe('Dreiundzwanzigstes');
+      expect(ordinal(40)).toBe('Vierzigstes');
+      expect(menSpoken(12)).toBe('12 Mann');
+      expect(menSpoken(1183)).toBe('etwa 1.200 Mann');
+    });
+  });
+
+  it('speaks its calls and reports in German', () => {
+    const { g, A, B, b } = battle();
+    withLang('de', () => {
+      missing.clear();
+      expect(station(g, b, 1).name).toMatch(/Korps, /);
+      const def = dispatchFor(g, { k: 'battleStart', region: B, attacker: 1, defender: 3 }, 3)!.say;
+      expect(def).toMatch(/die Franzosen|den Franzosen/i);
+      expect(dispatchFor(g, { k: 'convoyLost', faction: 1, zone: 0, ships: 2, men: 900, by: 'uboat' }, 1)!.say).toMatch(/2 Transporter verloren, mit ihnen etwa 900 Mann\.$/);
+      expect(dispatchFor(g, { k: 'cut', faction: 1, region: A }, 1)!.say).toMatch(/ist abgeschnitten/);
+      const rep = frontReport(g, b, 1, {}).say;
+      expect(rep).toMatch(/Lagebericht/);
+      expect(rep).toMatch(/Kommen\.$/);
+      g.factions[1].shells = 10;
+      expect(homeReport(g, 1)?.say).toMatch(/^Generalstab an alle Kommandos\. Das Granatenlager/);
+      expect([...missing].filter(s => !/^[A-Z][a-z]+$/.test(s))).toEqual([]);
+    });
   });
 });
 

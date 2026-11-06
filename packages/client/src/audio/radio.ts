@@ -3,10 +3,13 @@
 // pressing front sends a situation report (dispatches.ts).
 // Voices: Kokoro in a worker, filtered like a field telephone (voice.ts, sfx.ts radioVoice); the browser's own
 // speech while that loads, when it fails, or on the 'basic' setting.
+// German: Kokoro only speaks English, so in German the radio always uses the browser's speech with a German
+// voice (the 'neural' setting is kept and comes back when the language is English again).
 import { PACES, type GameEvent, type GameState } from '@riskrts/shared';
 import { Sfx } from './sfx';
 import { Neural, defaultVoiceMode, voiceFor, type VoiceMode } from './voice';
 import { dispatchFor, sitrep, type Dispatch, type SitrepMemo } from './dispatches';
+import { getLang, onLang } from '../i18n';
 
 export type { Dispatch } from './dispatches';
 export { dispatchFor } from './dispatches';
@@ -31,10 +34,21 @@ class RadioOperator {
   private nextSit = 25;
   private lastHome = -1e9;
 
+  constructor() {
+    // a new language needs a new browser voice, and English may now want the neural one
+    onLang(() => {
+      this.picked = null; this.choose();
+      if (this.neural && Sfx.ctx) Neural.load();
+    });
+  }
+
+  /** The neural voice is used: set to 'neural' and the language is English (Kokoro speaks only English). */
+  private get neural() { return this.mode === 'neural' && getLang() === 'en'; }
+
   setMode(m: VoiceMode) {
     this.mode = m;
     if (m === 'off') this.reset();
-    if (m === 'neural' && Sfx.ctx) Neural.load();
+    if (this.neural && Sfx.ctx) Neural.load();
   }
 
   /** Call from a user gesture once: iOS only lets speech start after one. Starts loading the neural voice. */
@@ -44,12 +58,26 @@ class RadioOperator {
       try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; s.speak(u); } catch { /* not allowed here */ }
       if (!this.picked) { this.choose(); s.onvoiceschanged = () => this.choose(); }
     }
-    if (this.mode === 'neural') Neural.load();
+    if (this.neural) Neural.load();
   }
 
-  /** A clipped British officer if there is one, else any English voice. */
+  /** A clipped British officer if there is one, else any English voice. In German: a German man, de-DE first. */
   private choose() {
     const vs = this.speech?.getVoices() ?? []; if (!vs.length) return;
+    if (getLang() === 'de') {
+      const score = (v: SpeechSynthesisVoice) => {
+        let s = 0; const n = v.name.toLowerCase(), l = v.lang.replace('_', '-');
+        if (/^de-DE$/i.test(l)) s += 6; else if (/^de\b/i.test(l)) s += 3; else return -1;
+        if (/conrad|killian|stefan|markus|yannick|hans|jonas|ralf|florian|bernd|christoph|kasper|klaus|male|männlich/.test(n)) s += 3;
+        if (/female|weiblich|katja|amala|anna|petra|helena|hedda|marlene|vicki|sabine|elke|louisa|gisela|seraphina|tanja/.test(n)) s -= 1;
+        if (/natural|neural|enhanced|premium|online/.test(n)) s += 2;
+        if (/novelty|whisper|bad news|bubbles|cellos|zarvox|trinoids|bells|boing/.test(n)) s -= 20;
+        return s;
+      };
+      const best = vs.slice().sort((a, b) => score(b) - score(a))[0];
+      this.picked = best && score(best) >= 0 ? best : null;
+      return;
+    }
     const score = (v: SpeechSynthesisVoice) => {
       let s = 0; const n = v.name.toLowerCase();
       if (v.lang === 'en-GB') s += 6; else if (v.lang.startsWith('en')) s += 3; else return -1;
@@ -98,7 +126,7 @@ class RadioOperator {
     if (typeof document !== 'undefined' && document.hidden) return;
     const q: Queued = { ...d, born: performance.now() / 1000 };
     // start synthesising right away, so the voice is ready by the time the stinger and morse are done
-    if (this.mode === 'neural' && Neural.state === 'ready') q.audio = Neural.say(q.say, q.who, q.voice);
+    if (this.neural && Neural.state === 'ready') q.audio = Neural.say(q.say, q.who, q.voice);
     this.queue.push(q); this.queue.sort((a, b) => b.pri - a.pri);
     if (this.queue.length > 3) this.queue.length = 3;
     if (!this.busy) { this.busy = true; setTimeout(() => this.next(), delay); }
@@ -125,7 +153,7 @@ class RadioOperator {
     const t0 = performance.now();
     setTimeout(async () => {
       if (this.mode === 'off') { setTimeout(finish, 900); return; }
-      if (this.mode === 'neural') {
+      if (this.neural) {
         // wait for the neural voice (it was started when queued), but never more than ~5 s of dead air
         const buf = await Promise.race([d.audio ?? Neural.say(d.say, d.who, d.voice), new Promise<null>(r => setTimeout(() => r(null), Math.max(1500, 5000 - (performance.now() - t0))))]);
         if (buf) { const len = Sfx.radioVoice(buf, d.front); setTimeout(finish, len * 1000 + 250); return; }
@@ -139,7 +167,7 @@ class RadioOperator {
     try {
       const s = this.speech, u = new SpeechSynthesisUtterance(d.say), v = voiceFor(d.who, d.voice);
       if (!this.picked) this.choose();
-      if (this.picked) { u.voice = this.picked; u.lang = this.picked.lang; } else u.lang = 'en-GB';
+      if (this.picked) { u.voice = this.picked; u.lang = this.picked.lang; } else u.lang = getLang() === 'de' ? 'de-DE' : 'en-GB';
       u.rate = 1.04 * (v.speed / 1.02); u.pitch = d.who === 'hq' ? .75 : d.who === 'ops' ? .95 : .82 + ((d.voice ?? 0) % 4) * .05; u.volume = 1;
       u.onend = finish; u.onerror = finish;
       s.cancel(); s.speak(u);

@@ -12,6 +12,7 @@ import { Players, Seats } from './Seats';
 import { NationCard } from './Nation';
 import { Shell } from './HostLobby';
 import { RulesPicker } from './Rules';
+import { t, tx } from '../i18n';
 
 /** Connect to a room and wire the guest lobby to the app. Resolves when the welcome handshake has been sent. */
 async function connect(code: string, name: string) {
@@ -39,7 +40,7 @@ export function JoinScreen() {
   const join = async (c = code) => {
     const norm = normaliseCode(c); if (norm.length !== 5 || busy) return;
     setBusy(true); setErr('');
-    try { await connect(norm, name.trim() || 'Guest'); }
+    try { await connect(norm, name.trim() || t('Guest')); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Could not join that room.'); setBusy(false); }
   };
   useEffect(() => {
@@ -48,17 +49,17 @@ export function JoinScreen() {
   }, []);
 
   return (
-    <Shell title="Join a war" kicker="Multiplayer">
+    <Shell title={t('Join a war')} kicker={t('Multiplayer')}>
       <form className="joinform" onSubmit={e => { e.preventDefault(); void join(); }}>
-        <label className="field"><span className="lbl">Room code</span>
-          <input className="codein" value={code} autoFocus inputMode="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={5} placeholder="ABCDE" aria-label="Room code, 5 characters"
+        <label className="field"><span className="lbl">{t('Room code')}</span>
+          <input className="codein" value={code} autoFocus inputMode="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={5} placeholder="ABCDE" aria-label={t('Room code, 5 characters')}
             onChange={e => setCode(normaliseCode(e.target.value))} disabled={busy} /></label>
-        <label className="field"><span className="lbl">Your name</span>
-          <input value={name} maxLength={20} placeholder="Guest" autoComplete="nickname" disabled={busy} onChange={e => { setName(e.target.value); lsSet(NAME_KEY, e.target.value); }} /></label>
-        {err && <p className="notice" role="alert">{err}</p>}
-        {busy && <p className="muted"><span className="spin" aria-hidden="true" /> Connecting to the room… this can take a few seconds.</p>}
-        <div className="row"><button className="btn primary" type="submit" disabled={busy || normaliseCode(code).length !== 5}>Join</button>
-          <button className="btn" type="button" onClick={() => { click(); useUi.getState().setScreen('title'); }}>Back</button></div>
+        <label className="field"><span className="lbl">{t('Your name')}</span>
+          <input value={name} maxLength={20} placeholder={t('Guest')} autoComplete="nickname" disabled={busy} onChange={e => { setName(e.target.value); lsSet(NAME_KEY, e.target.value); }} /></label>
+        {err && <p className="notice" role="alert">{tx(err)}</p>}
+        {busy && <p className="muted"><span className="spin" aria-hidden="true" /> {t('Connecting to the room… this can take a few seconds.')}</p>}
+        <div className="row"><button className="btn primary" type="submit" disabled={busy || normaliseCode(code).length !== 5}>{t('Join')}</button>
+          <button className="btn" type="button" onClick={() => { click(); useUi.getState().setScreen('title'); }}>{t('Back')}</button></div>
       </form>
     </Shell>
   );
@@ -68,18 +69,18 @@ export function GuestLobby() {
   const lobby = useNet(s => s.lobby); const guest = useNet(s => s.guest);
   useEffect(() => { if (!guest) useUi.getState().setScreen('title'); }, [guest]);
   const leave = () => { click(); netSet({ leaving: true }); closeNet(); netSet({ leaving: false }); useUi.getState().setScreen('title'); };
-  if (!guest || !lobby) return <Shell title="Joining…"><p className="lede"><span className="spin" aria-hidden="true" /> Waiting for the host…</p><div className="row"><button className="btn" onClick={leave}>Cancel</button></div></Shell>;
+  if (!guest || !lobby) return <Shell title={t('Joining…')}><p className="lede"><span className="spin" aria-hidden="true" /> {t('Waiting for the host…')}</p><div className="row"><button className="btn" onClick={leave}>{t('Cancel')}</button></div></Shell>;
   return (
-    <Shell title={`Room ${lobby.room}`} kicker="Multiplayer · waiting for the host to start">
-      <div><div className="lbl"><span>Seats · click a computer seat to take it</span></div>
+    <Shell title={`${t('Room')} ${lobby.room}`} kicker={t('Multiplayer · waiting for the host to start')}>
+      <div><div className="lbl"><span>{t('Seats · click a computer seat to take it')}</span></div>
         <Seats lobby={lobby} you={guest.you} onPick={f => { click(); guest.pick(f); }} /></div>
       {(() => { const mine = lobby.seats.find(x => x.player === guest.you); return mine ? <NationCard f={mine.faction} /> : null; })()}
       {lobby.settings && <RulesPicker value={lobby.settings} />}
       <div className="row spread">
-        <div><div className="lbl"><span>Difficulty</span></div><p className="muted" style={{ margin: 0 }}>{DIFFICULTIES[lobby.difficulty]?.name} · {DIFFICULTIES[lobby.difficulty]?.desc}</p></div>
-        <div><div className="lbl"><span>In the room ({lobby.players.length})</span></div><Players lobby={lobby} you={guest.you} /></div>
+        <div><div className="lbl"><span>{t('Difficulty')}</span></div><p className="muted" style={{ margin: 0 }}>{tx(DIFFICULTIES[lobby.difficulty]?.name)} · {tx(DIFFICULTIES[lobby.difficulty]?.desc)}</p></div>
+        <div><div className="lbl"><span>{t('In the room ({0})', lobby.players.length)}</span></div><Players lobby={lobby} you={guest.you} /></div>
       </div>
-      <div className="row"><button className="btn" onClick={leave}>Leave room</button></div>
+      <div className="row"><button className="btn" onClick={leave}>{t('Leave room')}</button></div>
     </Shell>
   );
 }

@@ -17,6 +17,7 @@ import { useGameKeys } from './useGameKeys';
 import { useNet } from './netStore';
 import { quitToTitle } from './actions';
 import { SAVE_KEY, lsDel, writeSave } from './storage';
+import { t, tx, useLang } from '../i18n';
 
 const AUTOSAVE_MS = 45_000;
 
@@ -27,15 +28,15 @@ function Connection() {
   return (
     <>
       {s instanceof GuestSession && !lost && (
-        <div className="conn plate" role="status" title="Round-trip time to the host">
-          <i className={'led' + (s.latency > 250 ? ' slow' : '')} />{s.latency ? `${s.latency} ms` : 'Connected'}
+        <div className="conn plate" role="status" title={t('Round-trip time to the host')}>
+          <i className={'led' + (s.latency > 250 ? ' slow' : '')} />{s.latency ? `${s.latency} ms` : t('Connected')}
         </div>
       )}
       {lost && (
-        <Modal label="Host disconnected" narrow>
-          <div className="kicker">Connection lost</div><h2>Host disconnected</h2>
-          <p className="lede">The host left or lost their connection, so this war has ended.</p>
-          <div className="row"><button className="btn primary" onClick={() => quitToTitle()}>Back to title</button></div>
+        <Modal label={t('Host disconnected')} narrow>
+          <div className="kicker">{t('Connection lost')}</div><h2>{t('Host disconnected')}</h2>
+          <p className="lede">{t('The host left or lost their connection, so this war has ended.')}</p>
+          <div className="row"><button className="btn primary" onClick={() => quitToTitle()}>{t('Back to title')}</button></div>
         </Modal>
       )}
     </>
@@ -48,8 +49,8 @@ function RadioLine() {
   if (!on) return null;
   const go = () => { if (on.region !== undefined) { rendererRef.current?.flyTo(on.region, 16); useUi.getState().select(on.region); } };
   return (
-    <button className="radio-line" onClick={go} aria-live="polite" title="Radio dispatch on air">
-      <i className="onair" aria-hidden="true" /><span>{on.text}</span>
+    <button className="radio-line" onClick={go} aria-live="polite" title={t('Radio dispatch on air')}>
+      <i className="onair" aria-hidden="true" /><span>{tx(on.text)}</span>
     </button>
   );
 }
@@ -60,10 +61,10 @@ function Fatal() {
   return (
     <div className="fatal" role="alert">
       <div className="plate sheet narrow">
-        <div className="kicker">Cannot draw the map</div><h2>The 3D view could not start</h2>
-        <p className="lede small">Your browser or graphics driver refused WebGL. Try reloading, turning on hardware acceleration, or using a recent Chrome, Edge, Firefox or Safari.</p>
+        <div className="kicker">{t('Cannot draw the map')}</div><h2>{t('The 3D view could not start')}</h2>
+        <p className="lede small">{t('Your browser or graphics driver refused WebGL. Try reloading, turning on hardware acceleration, or using a recent Chrome, Edge, Firefox or Safari.')}</p>
         <p className="muted tiny">{fatal}</p>
-        <div className="row"><a className="btn primary" href={location.href.split('#')[0]}>Reload</a><button className="btn" onClick={() => quitToTitle()}>Back to title</button></div>
+        <div className="row"><a className="btn primary" href={location.href.split('#')[0]}>{t('Reload')}</a><button className="btn" onClick={() => quitToTitle()}>{t('Back to title')}</button></div>
       </div>
     </div>
   );
@@ -71,6 +72,7 @@ function Fatal() {
 
 export function Game() {
   useGameKeys();
+  useLang(); // re-render the whole game screen when the language changes
   const hasDrawer = useUi(s => s.sel >= 0); const look = useUi(s => s.look); const session = useUi(s => s.session); const over = useSim()?.g.over ?? false;
 
   // Single-player autosave every 45 s of play (the wall clock only advances while the game is not paused).

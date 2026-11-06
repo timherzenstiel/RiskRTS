@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { COLS, FACTIONS, HH, HW, ROWS, armyPos, buildWorld } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { rendererRef } from './refs';
+import { t } from '../i18n';
 
 const MW = COLS / 2, MH = ROWS / 2; // base raster sampled at stride 2
 const RGB = FACTIONS.map(f => [1, 3, 5].map(i => parseInt(f.color.slice(i, i + 2), 16)));
@@ -73,7 +74,7 @@ export function Minimap() {
   };
   return (
     <div className="mini">
-      <canvas ref={ref} id="mini" width={520} height={204} aria-label="Minimap. Click or drag to move the camera."
+      <canvas ref={ref} id="mini" width={520} height={204} aria-label={t('Minimap. Click or drag to move the camera.')}
         onPointerDown={e => { down.current = true; e.currentTarget.setPointerCapture(e.pointerId); go(e); }}
         onPointerMove={e => { if (down.current) go(e); }}
         onPointerUp={() => { down.current = false; }} onPointerCancel={() => { down.current = false; }} />

@@ -5,6 +5,7 @@ import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
 import { battleAnchor } from '@riskrts/shared';
+import { getLang, langVersion, t, tx } from '../i18n';
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
 function garrisonLabel(r: GameState['regions'][number], merged = false) {
@@ -28,20 +29,29 @@ const SYM: Record<string, string> = {
 /** The symbol of the type a group has most of (infantry when it is empty). */
 function symOf(u: Units) { let best: string = 'inf', n = 0; for (const k of GROUND_TYPES) if (u[k] > n) { n = u[k]; best = k; } return SYM[best]; }
 /** Building badges on the region label: capital, factory, barracks, airfield. */
-const BADGE: Record<string, string> = {
+const BADGE_EN: Record<string, string> = {
   cap: '<i class="b cap" title="Capital"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .8l1.5 3.3 3.6.4-2.7 2.4.8 3.6L6 8.7 2.8 10.5l.8-3.6L.9 4.5l3.6-.4z" fill="currentColor"/></svg></i>',
   fac: '<i class="b fac" title="Factory"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 11V5l3 2V5l3 2V2h2v9z" fill="currentColor"/></svg></i>',
   bar: '<i class="b bar" title="Barracks"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6l5-4 5 4v5H1z M4 11V8h4v3" fill="currentColor"/></svg></i>',
   port: '<i class="b port" title="Port"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6zM5.4 3.8h1.2v5.6c1.4-.2 2.5-1 3-2.2l-1-.4 2-1.4.4 2.4-.9-.4C9.4 9.4 7.9 10.8 6 10.8S2.6 9.4 1.9 7.4l-.9.4.4-2.4 2 1.4-1 .4c.5 1.2 1.6 2 3 2.2z" fill="currentColor"/></svg></i>',
   air: '<i class="b air" title="Airfield"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v4L1 7v1.3l5-1.3v2.5L4.5 10.5V11.5L6 11l1.5.5v-1L6 9.5V7l5 1.3V7L6 5z" fill="currentColor"/></svg></i>',
 };
+let badgeLv = -1, BADGE = BADGE_EN;
+/** The badges with their tooltips in the current language. */
+function badgeSet() {
+  if (badgeLv !== langVersion()) {
+    badgeLv = langVersion();
+    BADGE = Object.fromEntries(Object.entries(BADGE_EN).map(([k, h]) => [k, h.replace(/title="([^"]*)"/, (_, x: string) => `title="${t(x)}"`)]));
+  }
+  return BADGE;
+}
 interface CityLabel { el: HTMLDivElement; shown: boolean; tf: string }
 interface ZoneLabel { el: HTMLDivElement; shown: boolean; tf: string; c: string }
 interface FleetLabel { el: HTMLDivElement; n: HTMLSpanElement; text: string; shown: boolean; tf: string; seen: number }
 /** A ship symbol for fleet markers. */
 const SHIP_SYM = '<svg viewBox="0 0 16 10" aria-hidden="true"><path d="M1 6h14l-2 3H3z M5 3h6v3H5z M7 1h1.6v2H7z" fill="currentColor"/></svg>';
 interface ArmyLabel { el: HTMLDivElement; n: HTMLSpanElement; count: string; shown: boolean; tf: string; seen: number }
-interface BattleLabel { el: HTMLButtonElement; text: HTMLSpanElement; label: string; shown: boolean; tf: string; seen: number; nextText: number }
+interface BattleLabel { el: HTMLButtonElement; text: HTMLSpanElement; label: string; shown: boolean; tf: string; seen: number; nextText: number; aria: () => string }
 
 export interface LabelContext {
   g: GameState | null; cam: CameraRig; w: number; h: number; sel: number; hover: number;
@@ -62,6 +72,7 @@ export class Labels {
   private readonly fleets = new Map<number, FleetLabel>();
   private readonly seas = new Map<number, BattleLabel>();
   private layer = 0;
+  private lv = langVersion();
   private readonly brackets: HTMLDivElement[] = [];
   private band = -1;
   /** Zoom band (camera.ts): the theatre band merges each region's corps into one marker and drops city names. */
@@ -73,14 +84,14 @@ export class Labels {
     private readonly onBattleClick: (regionId: number, battleId: number) => void,
     private readonly onCorpsClick: (regionId: number, post: number) => void = () => {},
     private readonly onFleetClick: (fleet: number) => void = () => {}, private readonly onSeaClick: (id: number) => void = () => {}) {
-    this.zones = world.zones.map(z => { const el = document.createElement('div'); el.className = 'zl'; el.textContent = z.short.toUpperCase(); root.appendChild(el); return { el, shown: true, tf: '', c: '' }; });
+    this.zones = world.zones.map(z => { const el = document.createElement('div'); el.className = 'zl'; el.textContent = tx(z.short).toUpperCase(); root.appendChild(el); return { el, shown: true, tf: '', c: '' }; });
     this.regions = world.regions.map((r) => {
       const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="pp"></span><span class="bd"></span><span class="nm"></span>';
-      const n = el.children[0] as HTMLSpanElement, pp = el.children[1] as HTMLSpanElement, bd = el.children[2] as HTMLSpanElement, nm = el.children[3] as HTMLSpanElement; nm.textContent = r.name; root.appendChild(el);
+      const n = el.children[0] as HTMLSpanElement, pp = el.children[1] as HTMLSpanElement, bd = el.children[2] as HTMLSpanElement, nm = el.children[3] as HTMLSpanElement; nm.textContent = tx(r.name); root.appendChild(el);
       return { el, n, nm, bd, pp, pips: '', badges: '', count: '', color: '', sel: false, tg: false, sm: false, names: true, shown: true, tf: '' };
     });
     this.cityLabels = cities.map((c) => {
-      const el = document.createElement('div'); el.className = 'cl c' + c.size; el.textContent = c.name; root.appendChild(el);
+      const el = document.createElement('div'); el.className = 'cl c' + c.size; el.textContent = tx(c.name); root.appendChild(el);
       return { el, shown: true, tf: '' };
     });
   }
@@ -94,7 +105,19 @@ export class Labels {
   }
   private hide(l: { el: HTMLElement; shown: boolean }) { if (l.shown) { l.el.style.display = 'none'; l.shown = false; } }
 
+  /** The language changed: rewrite the fixed names and make every cached text build anew. */
+  private relabel() {
+    this.zones.forEach((l, z) => { l.el.textContent = tx(this.world.zones[z].short).toUpperCase(); });
+    this.regions.forEach((l, i) => { l.nm.textContent = tx(this.world.regions[i].name); l.badges = ''; l.count = ''; });
+    this.cityLabels.forEach((l, i) => { l.el.textContent = tx(this.cities[i].name); });
+    for (const l of this.armies.values()) l.count = '';
+    for (const l of this.fleets.values()) l.text = '';
+    for (const l of this.corps.values()) { l.key = ''; l.el.title = t('Open the deployment of this region'); }
+    for (const l of [...this.battles.values(), ...this.seas.values()]) { l.label = ''; l.nextText = 0; l.el.setAttribute('aria-label', l.aria()); }
+  }
+
   update(ctx: LabelContext) {
+    if (this.lv !== langVersion()) { this.lv = langVersion(); this.relabel(); }
     const { g, cam } = ctx, dist = cam.dist, showNames = dist < 40, sm = dist > 95;
     this.regions.forEach((l, i) => {
       const def = this.world.regions[i], rs = g?.regions[i];
@@ -109,6 +132,7 @@ export class Labels {
       if (sm !== l.sm) { l.sm = sm; l.el.classList.toggle('sm', sm); }
       const st = !!rs.strike; if (st !== !!l.st) { l.st = st; l.el.classList.toggle('st', st); }
       const known = (rs.vis ?? 3) >= 2;
+      const BADGE = badgeSet();
       const badges = (rs.capitalOf >= 0 ? BADGE.cap : '') + (known && rs.factory ? BADGE.fac : '') + (known && rs.barracks ? BADGE.bar : '') + (known && rs.airfield ? BADGE.air : '') + (rs.port ? BADGE.port : '');
       if (badges !== l.badges) { l.badges = badges; l.bd.innerHTML = badges; }
       // strength and morale pips on your own garrisons when zoomed in (design 3.4): green -> amber -> red
@@ -148,8 +172,8 @@ export class Labels {
         this.root.appendChild(el); l = { el, n: el.firstChild as HTMLSpanElement, text: '', shown: true, tf: '', seen: 0 }; this.fleets.set(fl.id, l);
       }
       l.seen = ctx.frame;
-      const t = fleetText(g, fl, fl.owner === ctx.me);
-      if (t !== l.text) { l.text = t; l.n.innerHTML = SHIP_SYM + t; l.el.classList.toggle('off', fl.state === 'offshore'); l.el.classList.toggle('stn', fl.state === 'stationed'); }
+      const ft = fleetText(g, fl, fl.owner === ctx.me);
+      if (ft !== l.text) { l.text = ft; l.n.innerHTML = SHIP_SYM + ft; l.el.classList.toggle('off', fl.state === 'offshore'); l.el.classList.toggle('stn', fl.state === 'stationed'); }
       const p = fleetPos(fl); this.place(l, ctx, p.x, .7, p.z);
     }
     for (const [id, l] of this.fleets) if (l.seen !== ctx.frame) { l.el.remove(); this.fleets.delete(id); }
@@ -163,7 +187,7 @@ export class Labels {
       if (ctx.now >= l.nextText) {
         l.nextText = ctx.now + .25;
         const n = [0, 1].map(s => b.agents.filter(a => !a.dead && !a.out && a.kind !== 'pl' && b.sides[s].includes(a.f)).length);
-        const t = `${this.world.zones[b.zone].short} · ${n[0]} v ${n[1]}`; if (t !== l.label) { l.label = t; l.text.textContent = t; }
+        const s = `${tx(this.world.zones[b.zone].short)} · ${n[0]} ${getLang() === 'de' ? 'gg.' : 'v'} ${n[1]}`; if (s !== l.label) { l.label = s; l.text.textContent = s; }
       }
       this.place(l, ctx, b.x, 1.1, b.z);
     }
@@ -178,7 +202,7 @@ export class Labels {
       }
       l.seen = ctx.frame;
       // a column forming up for an offensive shows how long it still needs
-      const s = a.scout ? (a.scout === 'patrol' ? 'Pat' : 'Rec') : a.decoy ? 'Feint' : a.wait ? `${totalUnits(a.units)} · ${Math.ceil(a.wait)}s` : a.owner === ctx.me ? `${totalUnits(a.units)} → ${Math.max(1, Math.ceil((1 - a.t) * a.dur))}s` : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.classList.toggle('form', !!a.wait); l.el.classList.toggle('atk', (a.ord ?? 0) >= 1); }
+      const s = a.scout ? (a.scout === 'patrol' ? t('Pat') : t('Rec')) : a.decoy ? t('Feint') : a.wait ? `${totalUnits(a.units)} · ${Math.ceil(a.wait)}s` : a.owner === ctx.me ? `${totalUnits(a.units)} → ${Math.max(1, Math.ceil((1 - a.t) * a.dur))}s` : String(totalUnits(a.units)); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.classList.toggle('form', !!a.wait); l.el.classList.toggle('atk', (a.ord ?? 0) >= 1); }
       const [x, z] = armyPos(a), [y0, y1] = ctx.armyH(a);
       this.place(l, ctx, x, lerp(y0, y1, a.t) + Math.sin(a.t * Math.PI) * .4 + .85, z);
     }
@@ -195,10 +219,10 @@ export class Labels {
       if (ctx.now >= l.nextText) {
         l.nextText = ctx.now + .25;
         let alive = 0; for (const [, c] of battleCounts(b)) alive += c[0];
-        const stage = b.goal === undefined ? '' : [' · 1st line', ' · consolidating', ' · depth', ' · foothold'][b.stage ?? 0];
+        const stage = b.goal === undefined ? '' : ' · ' + t(['1st line', 'consolidating', 'depth', 'foothold'][b.stage ?? 0]);
         // who attacks whom: "Germany → Verdun"; your own fights stand out (red when you defend, gold when you attack)
-        const who = b.attacker === ctx.me ? 'You' : FACTIONS[b.attacker]?.short ?? '?';
-        const t = `${who} → ${rname} · ${alive}${stage}`; if (t !== l.label) { l.label = t; l.text.textContent = t; }
+        const who = b.attacker === ctx.me ? t('You') : FACTIONS[b.attacker] ? t('{0}', FACTIONS[b.attacker].short) : '?';
+        const s = `${who} → ${tx(rname)} · ${alive}${stage}`; if (s !== l.label) { l.label = s; l.text.textContent = s; }
         const cls = 'bm' + (b.def === ctx.me ? ' def' : b.sides.includes(ctx.me) ? ' atk' : ' oth');
         if (l.el.className !== cls) { l.el.className = cls; l.el.style.setProperty('--c', FACTIONS[b.attacker]?.color ?? '#888'); }
       }
@@ -215,7 +239,7 @@ export class Labels {
         let l = this.corps.get(key);
         if (!l) {
           const el = document.createElement('div'); el.className = 'tl cp'; el.innerHTML = '<span class="n"></span><span class="nm"></span>';
-          const rid = r.id; el.style.pointerEvents = 'auto'; el.title = 'Open the deployment of this region';
+          const rid = r.id; el.style.pointerEvents = 'auto'; el.title = t('Open the deployment of this region');
           el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.onCorpsClick(rid, post); });
           this.root.appendChild(el); l = { el, n: el.children[0] as HTMLSpanElement, nm: el.children[1] as HTMLSpanElement, key: '', shown: true, tf: '', seen: 0 }; this.corps.set(key, l);
         }
@@ -261,20 +285,22 @@ export class Labels {
   }
 
   private makeSea(b: SeaBattle): BattleLabel {
-    const el = document.createElement('button'); el.className = 'bm sea'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', `Watch the naval battle in the ${this.world.zones[b.zone].name}`);
+    const aria = () => t('Watch the naval battle in the {0}', this.world.zones[b.zone].name);
+    const el = document.createElement('button'); el.className = 'bm sea'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', aria());
     el.innerHTML = SHIP_SYM + '<span></span>';
     el.addEventListener('click', () => this.onSeaClick(b.id));
     this.root.appendChild(el);
-    const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0 };
+    const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0, aria };
     this.seas.set(b.id, l); return l;
   }
 
   private makeBattle(b: Battle, rname: string): BattleLabel {
-    const el = document.createElement('button'); el.className = 'bm'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', `Watch the battle of ${rname}`);
+    const aria = () => t('Watch the battle of {0}', rname);
+    const el = document.createElement('button'); el.className = 'bm'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', aria());
     el.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 1h2v1h1v1h1v1h1v1h1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1zM13 1h-2v1h-1v1h-1v1h-1v1h-1v1h1v1h1v-1h1v-1h1v-1h1v-1h1zM2 10h2v2h-2zM10 10h2v2h-2zM4 9h1v1h-1zM9 9h1v1h-1z" fill="currentColor"/></svg><span></span>';
     el.addEventListener('click', () => this.onBattleClick(b.region, b.id));
     this.root.appendChild(el);
-    const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0 };
+    const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0, aria };
     this.battles.set(b.id, l); return l;
   }
 
@@ -295,13 +321,13 @@ export class Labels {
 function fleetText(g: GameState, fl: Fleet, own: boolean) {
   const ships = fl.ships.map(id => g.ships.find(s => s.id === id)).filter(Boolean) as { kind: keyof typeof SHIP }[];
   const n = (k: keyof typeof SHIP) => ships.filter(s => s.kind === k).length;
-  const parts = (['bb', 'carrier', 'land', 'trans'] as const).map(k => n(k) ? `${n(k)} ${SHIP[k].short}` : '').filter(Boolean);
+  const parts = (['bb', 'carrier', 'land', 'trans'] as const).map(k => n(k) ? `${n(k)} ${tx(SHIP[k].short)}` : '').filter(Boolean);
   const cargo = groundUnits(fl.cargo);
-  let t = parts.join(' ') + (cargo ? ` · ${own ? '' : '~'}${cargo} btl` : '');
+  let s = parts.join(' ') + (cargo ? ` · ${own ? '' : '~'}${cargo} ${t('btl')}` : '');
   if (own) {
     const left = fl.state === 'sail' ? (fl.len - fl.d) / Math.max(.01, fl.v) : fl.state === 'stationed' ? 0 : fl.t;
-    if (left > 1) t += ` · ${Math.ceil(left)}s`;
+    if (left > 1) s += ` · ${Math.ceil(left)}s`;
   }
-  if (fl.state === 'offshore') t += fl.storm ? ' · storm' : ' · offshore';
-  return t;
+  if (fl.state === 'offshore') s += ' · ' + (fl.storm ? t('storm') : t('offshore'));
+  return s;
 }

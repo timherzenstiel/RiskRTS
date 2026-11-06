@@ -9,6 +9,7 @@ import { useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
 import { click } from './actions';
 import { NationCard } from './Nation';
+import { t, tx } from '../i18n';
 
 export function SoloSetup() {
   const [pick, setPick] = useState(-1); const [diff, setDiff] = useState(1); const [rules, setRules] = useState<GameSettings>({ ...DEFAULT_SETTINGS });
@@ -24,17 +25,17 @@ export function SoloSetup() {
     <main className="screen">
       <div className="bgfx" aria-hidden="true" />
       <div className="sheet glass oob">
-        <div><div className="kicker">Single player · order of battle</div><h2>Choose your power</h2></div>
+        <div><div className="kicker">{t('Single player · order of battle')}</div><h2>{t('Choose your power')}</h2></div>
         <div className="oob-grid">
-          <RadarMap owners={owners} highlight={mine} label="The world in August 1914" />
-          <div className="ncards" role="group" aria-label="Choose your power">
+          <RadarMap owners={owners} highlight={mine} label={t('The world in August 1914')} />
+          <div className="ncards" role="group" aria-label={t('Choose your power')}>
             {FACTIONS.map((f, i) => (
               <button key={f.key} className="ncard" aria-pressed={pick === i} style={{ '--c': f.color } as React.CSSProperties} onClick={() => { Sfx.init(); Sfx.clunk(); setPick(i); }}>
                 <img src={cameoUrl('inf', i) ?? ''} alt="" draggable={false} />
                 <Flag f={i} />
-                <b>{f.name}</b>
-                <span className="stamp good">{NATIONS[i].strengths[0]?.name}</span>
-                <span className="stamp bad">{NATIONS[i].weaknesses[0]?.name}</span>
+                <b>{tx(f.name)}</b>
+                <span className="stamp good">{tx(NATIONS[i].strengths[0]?.name)}</span>
+                <span className="stamp bad">{tx(NATIONS[i].weaknesses[0]?.name)}</span>
               </button>
             ))}
           </div>
@@ -42,12 +43,12 @@ export function SoloSetup() {
         {pick >= 0 && <NationCard f={pick} />}
         <RulesPicker value={rules} onChange={p => setRules(r => ({ ...r, ...p }))} />
         <div className="row spread">
-          <div><div className="lbl"><span>Difficulty · {DIFFICULTIES[diff].desc}</span></div>
-            <div className="seg" role="group" aria-label="Difficulty">
-              {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={diff === i} onClick={() => { click(); setDiff(i); }}>{d.name}</button>)}
+          <div><div className="lbl"><span>{t('Difficulty · {0}', DIFFICULTIES[diff].desc)}</span></div>
+            <div className="seg" role="group" aria-label={t('Difficulty')}>
+              {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={diff === i} onClick={() => { click(); setDiff(i); }}>{tx(d.name)}</button>)}
             </div></div>
-          <div className="row"><button className="btn" onClick={() => { click(); useUi.getState().setScreen('title'); }}>Back</button>
-            <button className="btn primary" disabled={pick < 0} onClick={begin}>Begin the war</button></div>
+          <div className="row"><button className="btn" onClick={() => { click(); useUi.getState().setScreen('title'); }}>{t('Back')}</button>
+            <button className="btn primary" disabled={pick < 0} onClick={begin}>{t('Begin the war')}</button></div>
         </div>
       </div>
     </main>

@@ -148,7 +148,7 @@ export function raid(g: GameState, fid: number, bid: number): string | null {
   (b.raidT ??= {})[fid] = b.age;
   const nests = b.agents.filter(x => x.f !== fid && !x.dead && (x.type === 'pill' || x.type === 'bunk')).length;
   const ok = rnd(g) < Math.max(.3, .8 - .12 * nests);
-  const target = fid === b.def ? b.from : b.region;
+  const target = fid === b.def ? (b.from >= 0 && b.from < g.regions.length ? b.from : -1) : b.region; // a beach front comes from a sea zone (>= 1000)
   if (ok) {
     for (const f of b.sides) if (f !== fid) b.mor[f] = Math.max(0, (b.mor[f] ?? 70) - 5);
     if (target >= 0 && g.regions[target].owner !== fid) recordIntel(g, fid, target);

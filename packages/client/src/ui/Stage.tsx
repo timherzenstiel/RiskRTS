@@ -5,6 +5,7 @@ import { createWorldRenderer } from '../render/WorldRenderer';
 import type { WorldRendererApi } from '../render/api';
 import { useUi } from '../game/store';
 import { rendererRef } from './refs';
+import { t } from '../i18n';
 
 export function Stage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,7 +103,7 @@ export function Stage() {
   return (
     <div className="stage">
       {/* The renderer toggles its own classes on the canvas (smooth / order / drag), so React must not manage className. */}
-      <canvas ref={canvasRef} id="view" aria-label="World map of 1914" />
+      <canvas ref={canvasRef} id="view" aria-label={t('World map of 1914')} />
       <div ref={labelsRef} id="labels" aria-hidden="true" />
     </div>
   );

@@ -1,5 +1,5 @@
 // Battle levers for one front: suppression, wire, shells, barrage level, over the top, stance, reinforcements and retreat.
-import { BARRAGES, SHELLS, STANCES, buildWorld, groundUnits, autoGoIn, moveK, shellsFor, sideSupplied, type Barrage, type Battle, type GameState, type Stance } from '@riskrts/shared';
+import { BARRAGES, SHELLS, STANCES, barrageRate, buildWorld, groundUnits, autoGoIn, moveK, shellsFor, sideSupplied, type Barrage, type Battle, type GameState, type Stance } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { click } from './actions';
 import { Sfx } from '../audio/sfx';
@@ -55,7 +55,7 @@ export function FrontControls({ g, me, b, compact }: { g: GameState; me: number;
   const wire = b.wire0 > 0 ? Math.round(b.wire / b.wire0 * 100) : 0;
   if (!fights) return null;
   const shells = Math.floor(shellsFor(g, b, me)), lvl = (b.bar?.[me] ?? 1) as Barrage, st = (b.st?.[me] ?? 0) as Stance;
-  const local = !sideSupplied(g, b, me);
+  const local = !sideSupplied(g, b, me), rate = barrageRate(g, b, me), lasts = (r: number) => r > 0 ? (shells / r < 10 ? Math.round(shells / r * 10) / 10 : Math.round(shells / r)) : 0;
   const send = (cmd: Parameters<ReturnType<typeof useUi.getState>['order']>[0]) => { click(); ui().order(cmd); };
   const helpers = reinforcers(g, b, me);
   const goIn = Math.ceil(autoGoIn(g, b));
@@ -73,13 +73,14 @@ export function FrontControls({ g, me, b, compact }: { g: GameState; me: number;
         <div className="seg lever" role="group" aria-label={t('Barrage')}>
           {BARRAGES.map((n, i) => (
             <button key={n} aria-pressed={lvl === i} disabled={i === 2 && shells < SHELLS.shot}
-              title={i === 0 ? t('Guns hold fire: saves shells and hides your strength') : i === 1 ? t('Steady fire · about one shell per battery every 10 s') : t('Heavy barrage · 80% more fire and suppression, twice the shells')}
+              title={(i === 0 ? t('Guns hold fire: saves shells and hides your strength') : i === 1 ? t('Steady fire · about one shell per battery every 10 s') : t('Heavy barrage · 80% more fire and suppression, twice the shells')) + (i > 0 && rate[i as Barrage] > 0 ? '\n' + t('~{0} shells a minute here; the stock lasts ~{1} minutes', Math.round(rate[i as Barrage]), lasts(rate[i as Barrage])) : '')}
               onClick={() => { Sfx.ratchet(); useUi.getState().order({ t: 'barrage', battle: b.id, level: i as Barrage }); }}>{i === 0 ? t('Off') : tx(n)}</button>
           ))}
         </div>
         {att && !b.go && <button className="btn sm primary otop" onClick={() => send({ t: 'charge', battle: b.id })} title={t('The attackers leave the start line now')}><span className="cover" aria-hidden="true" /><span className="otop-l">{t('Over the top')}</span>{goIn > 0 ? <small> · {t('auto {0}s', goIn)}</small> : null}</button>}
         {att && b.go && <span className="lv-go">{t('Attack under way')}</span>}
       </div>
+      {rate[2] > 0 && <p className={'lv-fc' + (lvl > 0 && rate[lvl] > 0 && shells / rate[lvl] < 2 ? ' warn' : '')}>{lvl === 0 ? t('Guns silent · light ~{0}/min, heavy ~{1}/min', Math.round(rate[1]), Math.round(rate[2])) : t('{0}: ~{1} shells a minute · the stock lasts ~{2} min', tx(BARRAGES[lvl]), Math.round(rate[lvl]), lasts(rate[lvl]))}</p>}
       <div className="lv-row">
         <span className="lv-l">{t('Stance')}</span>
         <div className="seg" role="group" aria-label={t('Stance')}>

@@ -36,7 +36,8 @@ export const REPORT_OLD = 21, REPORT_FRESH = 7;
 export const MIN_ATTACK = 3;
 
 const has = (h: Hq, t: TraitKey) => h.cmd.tr.includes(t);
-const attackRatio = (h: Hq) => has(h, 'off') ? 1.2 : has(h, 'care') ? 1.3 : has(h, 'meth') ? 1.8 : ATTACK_RATIO;
+/** Strength ratio over the enemy from which this commander proposes an attack (his traits shift it). */
+export const attackRatio = (h: Hq) => has(h, 'off') ? 1.2 : has(h, 'care') ? 1.3 : has(h, 'meth') ? 1.8 : ATTACK_RATIO;
 const reserveKeep = (h: Hq) => has(h, 'meth') ? 2 : has(h, 'care') ? 0 : 1;
 export const hqOf = (g: GameState, id: number) => (g.hq ?? []).find(h => h.id === id);
 export const requestsOf = (g: GameState, f: number) => (g.requests ?? []).filter(q => q.owner === f);

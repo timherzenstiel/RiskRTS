@@ -2,7 +2,7 @@
 // corps), the army row of the corps card, and the words for a request (the simulation keeps only numbers). Requests are answered
 // in the Inbox (Inbox.tsx).
 import {
-  BUDGET_MAX, FACTIONS, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
+  BUDGET_MAX, COST, FACTIONS, attackRatio, unitCost, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
   type GameState, type Hq, type Mandate, type Req, type ReqKind,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -24,6 +24,10 @@ const rng = (a?: [number, number]) => !a ? '?' : a[0] === a[1] ? String(a[0]) : 
 const dec1 = (x: number) => { const s = x.toFixed(1); return getLang() === 'de' ? s.replace('.', ',') : s; };
 
 export const hqName = (h: Hq) => armyName(h.owner, h.n);
+/** What a mandate lets this commander do (design-play §4.2), with the strength he wants before he proposes an attack. */
+const mandateLine = (k: number, ratio: string) => k === 0 ? t('Hold: no attacks. He shifts his corps along the front and asks for men and works.')
+  : k === 1 ? t('Defend: he holds, and proposes a local attack on the first line where he is {0}× stronger. You decide.', ratio)
+    : t('Attack: he prepares an offensive on the target, asks for men and scouting, and asks for the go once he is {0}× stronger.', ratio);
 const hqs = (g: GameState, me: number) => (g.hq ?? []).filter(h => h.owner === me);
 
 interface Opt { label: string; opt: 'yes' | 'recruit' | 'transfer' | 'deny'; n?: number; title?: string; danger?: boolean; off?: boolean }
@@ -75,7 +79,7 @@ export function ArmyCard() {
   const h = (g.hq ?? []).find(x => x.id === id && x.owner === me);
   if (!h) return null;
   const cs = armyCorps(g, h), targets = [...new Set(h.front.flatMap(r => W.regions[r].land))].filter(n => g.regions[n].owner !== me && g.regions[n].owner >= 0);
-  const perWeek = Math.round(income(g, me) * h.budget), set = (o: Record<string, unknown>) => send({ t: 'armySet', army: h.id, ...o } as never);
+  const ratio = dec1(attackRatio(h)), perWeek = Math.round(income(g, me) * h.budget), set = (o: Record<string, unknown>) => send({ t: 'armySet', army: h.id, ...o } as never);
   const own = sel >= 0 && g.regions[sel]?.owner === me;
   return (
     <section className="ccard acard" aria-label={t('Army')} style={{ '--c': FACTIONS[me].color } as React.CSSProperties}>
@@ -86,9 +90,10 @@ export function ArmyCard() {
       <p className="ac-tr">{h.cmd.tr.filter((x, i, a) => a.indexOf(x) === i).map(x => <span key={x} className="tag" title={tx(TRAITS[x].desc)}>{tx(TRAITS[x].name)}</span>)}<span className="oc-xp" title={t('Experience: battles won on his front')}>{stars(Math.floor(h.cmd.xp)) || t('new to command')}</span></p>
       <div className="lv-row"><span className="lv-l" title={t('What the commander may do on his own')}>{t('Mandate')}</span>
         <div className="seg" role="group" aria-label={t('Mandate')}>
-          {MANDATES.map((m, k) => <button key={m} aria-pressed={h.mandate === k} title={t(['Hold the line: no attacks', 'Hold, and propose local attacks on the first line', 'Prepare an offensive on the target and ask for the go'][k])} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{t(MAND[k])}</button>)}
+          {MANDATES.map((m, k) => <button key={m} aria-pressed={h.mandate === k} title={mandateLine(k, ratio)} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{t(MAND[k])}</button>)}
         </div>
       </div>
+      <p className="lv-fc">{mandateLine(h.mandate, ratio)}</p>
       {h.mandate === 2 && (
         <div className="lv-row"><span className="lv-l">{t('Target')}</span>
           <select className="sel" value={h.target ?? -1} onChange={e => set({ target: +e.target.value })}>
@@ -101,6 +106,7 @@ export function ArmyCard() {
         <input type="range" min={0} max={BUDGET_MAX * 100} step={5} value={Math.round(h.budget * 100)} onChange={e => set({ budget: +e.target.value / 100 })} aria-label={t('Front budget')} />
         <small className="lcdn">{t('{0}% · {1}/wk', Math.round(h.budget * 100), perWeek)}</small>
       </div>
+      <p className="lv-fc">{perWeek > 0 ? t('He may spend {0} Production a week without asking you: an infantry battalion costs {1}, a belt of wire {2}.', perWeek, unitCost(g, me, 'inf'), COST.wire) : t('No budget: he asks you for every battalion, trench and patrol.')}</p>
       <div className="lv-row ac-st"><span className="lv-l" title={t('Carried out without asking')}>{t('Approves by himself')}</span>
         {STANDING_KINDS.map(k => { const on = h.standing.includes(k); return <button key={k} className="tgl" aria-pressed={on} onClick={() => { click(); set({ standing: on ? h.standing.filter(x => x !== k) : [...h.standing, k] }); }}>{t(SHORT[k])}</button>; })}
       </div>

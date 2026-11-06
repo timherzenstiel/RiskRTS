@@ -85,6 +85,8 @@ interface Ui {
   inboxFocus: string | null;
   toasts: { key: string; until: number }[];
   autoPause: AutoPause;
+  /** War weariness at the last two weekly convoys, for the home-front trend (design-play §4.1). */
+  wwWeek: [number, number] | null;
 
   setScreen(s: Screen): void;
   clearFatal(): void;
@@ -166,14 +168,14 @@ function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') 
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
-  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(),
+  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), wwWeek: null,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, trained: {}, inboxFocus: null, toasts: [] });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, trained: {}, inboxFocus: null, toasts: [], wwWeek: null });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
   select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], armySel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
@@ -230,7 +232,7 @@ export const useUi = create<Ui>((set, get) => ({
     const s = get().session; if (!s) return;
     const evs: GameEvent[] = s.drainEvents(); const items: FeedItem[] = [];
     for (const e of evs) {
-      if (e.k === 'supply') { Sfx.supply(); continue; }
+      if (e.k === 'supply') { Sfx.supply(); const ww = s.state.factions[s.me]?.ww ?? 0; set({ wwWeek: [get().wwWeek?.[1] ?? ww, ww] }); continue; }
       Radio.event(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       if (e.k === 'battleStart' && (e.attacker === s.me || e.defender === s.me)) get().setMode(1, true);

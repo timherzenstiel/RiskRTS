@@ -49,8 +49,8 @@ function SupplyGauge() {
   const fill = Math.min(1, sup / Math.max(20, inc * 4)), next = Math.max(0, convoyIn(g));
   const state = inc <= 0 ? 'bad' : sup < inc ? 'low' : '';
   return (
-    <div className={'gauge ' + state} role="img" aria-label={`Production ${sup}, +${inc} per week, next week in ${next} seconds`}
-      title={`Production ${sup} · +${inc} per week · next week in ${next} s`}>
+    <div className={'gauge ' + state} role="img" aria-label={t('Production {0}, +{1} per week, next week in {2} seconds', sup, inc, next)}
+      title={t('Production {0} · +{1} per week · next week in {2} s', sup, inc, next)}>
       <i className="g-fill" style={{ height: `${(fill * 100).toFixed(1)}%` }} />
       <i className="g-conv" style={{ bottom: `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` }} />
     </div>
@@ -67,9 +67,9 @@ function Idle() {
   return (
     <section className="idle" aria-label={t('War Office')}>
       <div className="dh" style={{ '--c': F.color } as React.CSSProperties}>
-        <div className="dh-row"><small>War Office · +{income(g, me)} Production per week</small></div>
-        <h2>{F.name}</h2>
-        <div className="owner"><span>{mine.length} regions · {fronts.length} front{fronts.length === 1 ? '' : 's'}</span></div>
+        <div className="dh-row"><small>{t('War Office · +{0} Production per week', income(g, me))}</small></div>
+        <h2>{tx(F.name)}</h2>
+        <div className="owner"><span>{t('{0} regions', mine.length)} · {fronts.length === 1 ? t('{0} front', fronts.length) : t('{0} fronts', fronts.length)}</span></div>
       </div>
       <div className="tb-body">
         {fronts.length > 0 && <div className="lbl"><span>{t('Fronts')}</span></div>}

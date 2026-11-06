@@ -230,4 +230,7 @@ export const AUDIO_RENDER: Record<string, string> = {
   "{0} With the treaty in force, {1} is not needed on {2}. Shall I send it back to you? {3}": "{0} Der Vertrag gilt, {1} wird an {2} nicht gebraucht. Soll ich es zurückschicken? {3}",
   "{0} The front is quiet. I can spare {1}. Shall I send them back? {2}": "{0} Die Front ist ruhig. Ich kann {1} entbehren. Soll ich sie zurückschicken? {2}",
   "{0} The front is quiet. I can spare {1}. Shall I send it back? {2}": "{0} Die Front ist ruhig. Ich kann {1} entbehren. Soll ich es zurückschicken? {2}",
+
+  // ---- map labels, supply mode ----
+  'Cut': 'Abgeschn.',
 };

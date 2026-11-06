@@ -212,6 +212,13 @@ export const UI_MENUS: Record<string, string> = {
   ' when the enemy is pinned down, or they go on their own after a while. Set a stance, reinforce a front straight from a neighbouring region, or withdraw. Every battle files an after-action report.':
     ', sobald der Feind niedergehalten ist – sonst stürmen sie nach einer Weile von selbst los. Wähle eine Haltung, verstärke eine Front direkt aus einer Nachbarregion oder zieh dich zurück. Über jede Schlacht wird ein Gefechtsbericht angelegt.',
 
+  'Map modes: political, fronts (wars, battles and the balance on each of your borders), forces (corps, front lines, columns), supply (load against capacity, buildings, rails), intel (what you know). Press again for the political map.':
+    'Kartenmodi: Politisch, Fronten (Kriege, Schlachten und das Kräfteverhältnis an jeder deiner Grenzen), Truppen (Korps, Frontlinien, Kolonnen), Nachschub (Last gegen Kapazität, Gebäude, Eisenbahn), Aufklärung (was du weißt). Nochmals drücken für die politische Karte.',
+  "Every {0} seconds is a week: Production comes in from every region linked by your own land (or sea lanes between your regions) to your capital, a factory or your home territory, plus continent bonuses and factories. One infantry unit is a battalion of 100 men; recruits train for a week, losses thin formations out, replacements from the manpower pool fill them up again and the wounded return to the pool. Each region can feed only so many battalions: its supply capacity. Battles are fought on the border the attack comes over, against that border's trench, sandbags, wire and defences. You see rivals only across your borders, as an estimate: patrols, reconnaissance flights and spies tell you more. Heavy losses raise war weariness, which cuts income and morale; broken troops surrender.":
+    'Alle {0} Sekunden ist eine Woche um: Produktion kommt aus jeder Region, die über eigenes Land (oder Seewege zwischen deinen Regionen) mit deiner Hauptstadt, einer Fabrik oder deinem Kernland verbunden ist, dazu Kontinentboni und Fabriken. Eine Infanterieeinheit ist ein Bataillon von 100 Mann; Rekruten werden eine Woche ausgebildet, Verluste dünnen Verbände aus, Ersatz aus den Wehrpflichtigen füllt sie wieder auf, und die Verwundeten kehren zu den Wehrpflichtigen zurück. Jede Region kann nur eine bestimmte Zahl Bataillone versorgen: ihre Versorgungskapazität. Gekämpft wird an der Grenze, über die der Angriff kommt, gegen deren Schützengraben, Sandsäcke, Stacheldraht und Verteidigungsanlagen. Gegner siehst du nur jenseits deiner Grenzen, und nur als Schätzung: Patrouillen, Aufklärungsflüge und Spione verraten mehr. Schwere Verluste steigern die Kriegsmüdigkeit, die Einkommen und Moral senkt; gebrochene Truppen ergeben sich.',
+  'Every front has its own levers. Your guns fire light, heavy or not at all; each shot uses shells from the national stockpile (factories and the capital make more; the war economy lever in the Economy panel decides how much). Shells landing on a trench <b>suppress</b> it: suppressed troops fire less and their machine guns fall silent. Attackers wait at the start line while the guns work; send them <b>over the top</b> when the enemy is pinned down, or they go on their own after a while. Set a stance, reinforce a front straight from a neighbouring region, or withdraw. Every battle files an after-action report.':
+    'Jede Front hat ihre eigenen Hebel. Deine Geschütze feuern leicht, schwer oder gar nicht; jeder Schuss verbraucht Granaten aus dem nationalen Vorrat (Fabriken und Hauptstadt stellen neue her; wie viele, bestimmt der Hebel Kriegswirtschaft im Wirtschaftsfenster). Granaten, die in einem Schützengraben einschlagen, <b>halten ihn nieder</b>: Niedergehaltene Truppen feuern seltener, und ihre Maschinengewehre verstummen. Die Angreifer warten an der Ausgangslinie, während die Geschütze arbeiten; schick sie <b>raus aus den Gräben</b>, sobald der Feind niedergehalten ist – sonst stürmen sie nach einer Weile von selbst los. Wähle eine Haltung, verstärke eine Front direkt aus einer Nachbarregion oder zieh dich zurück. Über jede Schlacht wird ein Gefechtsbericht angelegt.',
+
   // ---- menu ----
   'On': 'An',
   'Off': 'Aus',
@@ -421,4 +428,23 @@ export const UI_MENUS: Record<string, string> = {
   'Accept': 'Annehmen',
   'Decline': 'Ablehnen',
   'Ready to play offline.': 'Bereit zum Offline-Spielen.',
+
+  // ---- phase 5: Production and weeks ----
+  '+{0} per week': '+{0} je Woche',
+  'Each level adds {0}% to the manpower growth and {1} war weariness per week; under total conscription the weariness no longer fades. Above {2}% for {3} weeks, remote home regions go on strike; {4} points higher they may rise.':
+    'Jede Stufe erhöht den Zuwachs an Wehrpflichtigen um {0} % und die Kriegsmüdigkeit um {1} je Woche; bei totaler Wehrpflicht klingt die Müdigkeit nicht mehr ab. Liegt sie {3} Wochen lang über {2} %, streiken entlegene Kernregionen; {4} Punkte darüber droht der Aufstand.',
+  'On strike: {0}. No Production, shells or recruits from there until the weariness eases.': 'Im Streik: {0}. Von dort kommen weder Produktion noch Granaten noch Rekruten, bis die Müdigkeit nachlässt.',
+  'Unrest is brewing: 1 week above the threshold.': 'Es gärt im Land: seit 1 Woche über der Schwelle.',
+  'Unrest is brewing: {0} weeks above the threshold.': 'Es gärt im Land: seit {0} Wochen über der Schwelle.',
+  'New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {0} Production (used this year).':
+    'Neue Waffen und Verfahren kommen mit dem Kalender. Einmal je Kriegsjahr kannst du eine Entwicklung für {0} Produktion um sechs Monate vorziehen (dieses Jahr schon genutzt).',
+  'New weapons and methods arrive with the calendar. Once a war year you can rush one development by six months for {0} Production.':
+    'Neue Waffen und Verfahren kommen mit dem Kalender. Einmal je Kriegsjahr kannst du eine Entwicklung für {0} Produktion um sechs Monate vorziehen.',
+  'Not enough Production': 'Nicht genug Produktion',
+  'Spend Production in the <b>Recruit</b> tab · keys <kbd>1</kbd>–<kbd>4</kbd>': 'Gib Produktion im Reiter <b>Ausheben</b> aus · Tasten <kbd>1</kbd>–<kbd>4</kbd>',
+  'Six empires, one map. Each week reaches every power at the same instant, so everybody builds and marches at once. Claim regions, dig in, and finish your sealed orders before anyone else finishes theirs. Battles fight themselves. Zoom in and watch.':
+    'Sechs Imperien, eine Karte. Jede Woche bricht für alle Mächte im selben Augenblick an, also rüsten und marschieren alle gleichzeitig. Besetze Regionen, grab dich ein und erfülle deine versiegelten Befehle, bevor es ein anderer schafft. Die Schlachten schlagen sich selbst. Zoom hinein und sieh zu.',
+  'No attacks for ten weeks; running battles between you stop.': 'Zehn Wochen lang keine Angriffe; laufende Schlachten zwischen euch enden.',
+  "No attacks until one side gives three weeks' notice.": 'Keine Angriffe, bis eine Seite mit drei Wochen Frist kündigt.',
+  'Supply lines and load against capacity, factories, barracks, airfields, rails': 'Nachschubwege und Last gegen Kapazität, Fabriken, Kasernen, Flugplätze, Bahnen',
 };

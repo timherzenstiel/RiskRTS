@@ -390,7 +390,7 @@ function fleetText(g: GameState, fl: Fleet, own: boolean) {
 
 /** Supply mode: "18/34" and how full the region is (ok, near, over, far, cut). */
 function supplyLabel(g: GameState, r: GameState['regions'][number]): [string, string] {
-  if (r.cut) return ['Cut', 'cut'];
+  if (r.cut) return [t('Cut'), 'cut'];
   const l = load(g, r), c = capacity(g, r), x = c > 0 ? l / c : l > 0 ? 9 : 0;
   return [`${l}/${c}`, x > OVER.far ? 'far' : x > 1 ? 'over' : x > .8 ? 'near' : 'ok'];
 }

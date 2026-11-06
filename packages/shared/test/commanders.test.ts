@@ -149,7 +149,7 @@ describe('front commanders', () => {
   it('a whole war with every corps of one power under commanders runs without trouble', () => {
     const g = createGame({ seed: 13, humans: [3] });
     for (const r of g.regions) if (r.owner === 3 && r.cs?.length) applyCommand(g, 3, { t: 'army', corps: r.cs.map(c => c.id) });
-    const n = g.hq!.length; expect(n).toBeGreaterThan(3);
+    const n = g.hq!.length; expect(n).toBe(g.factions[3].gen!.slots); expect(g.factions[3].gen!.pool.length).toBe(0);
     for (let t = 0; t < 600; t += 20) {
       run(g, 20);
       for (const h of g.hq ?? []) expect((g.requests ?? []).filter(q => q.army === h.id).length).toBeLessThanOrEqual(3);

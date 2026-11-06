@@ -3,7 +3,7 @@ import { FACTIONS } from '../data/factions';
 import { AGENT_TYPES, DEF_KINDS, UNIT_TYPES, type AgentType } from '../data/units';
 import { newRegion, world } from './core';
 import { fogView } from './fog';
-import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Hq, type Req, type Vote } from './types';
+import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Generals, type Hq, type Req, type Vote } from './types';
 import { humansOf } from './vote';
 
 /** [agent type index, faction, x, z, face, flags(1 dead,2 moving,4 trench,8 left the field), seconds since last shot] */
@@ -56,7 +56,7 @@ export interface Snapshot {
   /** Pause by vote: the open vote, the host's real-time clock, the human powers, the recipient's recent pause calls. */
   vt?: Vote; wl?: number; hum?: number[]; pc?: number[];
   /** The recipient's own logistics: war economy lever, wounded coming back, last week's manpower ledger, recruits in training [region, unit index, seconds left, post (-1), army (-1)]. */
-  me?: { id: number; econ: number; wq: [number, number][]; led?: [number, number, number, number]; tr: number[][] };
+  me?: { id: number; econ: number; wq: [number, number][]; led?: [number, number, number, number]; tr: number[][]; gen?: Generals };
 }
 /** A naval battle; agents as [kind index, faction, x, z, heading, hp share, flags(1 dead, 2 out, 4 burning, 8 breaking off), turret bearing, seconds since firing, ship id]. */
 export interface SeaBattleSnap { id: number; zone: number; x: number; z: number; ax: number; az: number; sides: number[][]; age: number; ended: boolean; night: number; hp0: number[]; hp: number[]; brk: boolean[]; sunk: Record<string, number>[]; winner?: number; fleets: number[]; ag: number[][]; tp: number[][] }
@@ -95,6 +95,7 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
     me: recipient >= 0 && g.factions[recipient] ? {
       id: recipient, econ: g.factions[recipient].econ ?? 1, wq: (g.factions[recipient].wq ?? []).map(([m, d]) => [Math.round(m), d]), led: g.factions[recipient].led,
       tr: g.regions.flatMap(r => r.owner === recipient ? (r.train ?? []).map(t => [r.id, UNIT_TYPES.indexOf(t.k), q2(Math.max(0, t.at - g.time)), t.p ?? -1, t.army ?? -1]) : []),
+      gen: g.factions[recipient].gen,
     } : undefined,
     sh: g.ships, fl: (g.fleets ?? []).map(f => ({ ...f, path: f.path.map(q2) })),
     sb: (g.seaBattles ?? []).map(x => ({
@@ -155,7 +156,7 @@ export function applySnapshot(m: GameState, s: Snapshot) {
   if (s.me) {
     const f = m.factions[s.me.id];
     for (const [ri, k, left, p, army] of s.me.tr) { const r = m.regions[ri]; (r.train ??= []).push({ f: r.owner, k: UNIT_TYPES[k], at: s.time + left, p: p >= 0 ? p : undefined, army: army >= 0 ? army : undefined }); }
-    if (f) { f.econ = s.me.econ; f.wq = s.me.wq; f.led = s.me.led; f.pc = s.pc; }
+    if (f) { f.econ = s.me.econ; f.wq = s.me.wq; f.led = s.me.led; f.pc = s.pc; f.gen = s.me.gen; }
   }
   m.armies = s.a;
   const keep = new Set<number>();

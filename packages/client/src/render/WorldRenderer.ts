@@ -147,7 +147,8 @@ class WorldRenderer implements WorldRendererApi {
         cb.onSelect(id);
       },
       (fleet) => useUi.getState().selectFleet(fleet), (sea) => { useUi.getState().selectSea(sea); this.flyToSea(sea); },
-      (id, sector) => { cb.onSelect(id); useUi.getState().selectBorder(id, sector); });
+      (id, sector) => { cb.onSelect(id); useUi.getState().selectBorder(id, sector); },
+      (hq, id) => { const u = useUi.getState(); if (hq >= 0) u.selectArmy(hq); else { this.flyTo(id, 34); u.setPanel('situation'); } });
     this.labelCtx = {
       g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, corps: [], frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],

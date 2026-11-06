@@ -12,6 +12,7 @@ import { rendererRef } from './refs';
 import { inboxOf } from './Inbox';
 import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
+import { FrontsList } from './Generals';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
@@ -103,6 +104,7 @@ export function SituationPanel() {
       <div className="pn-h"><h2>{t('Situation')}</h2><button className="x" aria-label={t('Close panel')} onClick={() => ui().setPanel(null)}><CloseIcon /></button></div>
       <p className="pn-sub">{t('Your wars and the borders that need you. Click a row to go there.')}</p>
       <div className="pn-body">
+        <FrontsList g={g} me={me} />
         <div className="lbl"><span>{t('Our wars')}</span><small>{t('{0} at war · {1} battles', wars.filter(w => !w.treaty).length, g.battles.filter(b => !b.ended && b.sides.includes(me)).length)}</small></div>
         {wars.map(w => (
           <div key={w.f} className={'war' + (w.treaty ? ' peace' : '')} style={{ '--c': FACTIONS[w.f].color } as React.CSSProperties}>

@@ -4,7 +4,7 @@ import { FACTIONS, FORMATION, UNIT_TYPES, GROUND_TYPES, SHIP, armyPos, battleCou
 import type { CameraRig } from './camera';
 import type { CityInfo } from './terrain';
 import { lerp } from './util';
-import { battleAnchor, hostileBorders, OVER, capacity, load, type Balance } from '@riskrts/shared';
+import { battleAnchor, frontLevels, hostileBorders, OVER, capacity, load, type Balance, type FrontInfo } from '@riskrts/shared';
 import { getLang, langVersion, t, tx } from '../i18n';
 import { pins } from '../game/pins';
 
@@ -95,6 +95,8 @@ export class Labels {
   private readonly chips = new Map<string, ChipLabel>();
   private readonly pinEls = new Map<string, ChipLabel>();
   private balances: Balance[] = []; private nextBal = 0;
+  private readonly banners = new Map<string, ChipLabel>();
+  private fronts: FrontInfo[] = []; private nextFront = 0;
   /** Map mode (store.ts MapMode), set as a class md0..md4 on the label layer. */
   setMode(m: number) { if (m === this.mode) return; this.mode = m; for (let k = 0; k < 5; k++) this.root.classList.toggle('md' + k, k === m); this.nextBal = 0; }
   private readonly brackets: HTMLDivElement[] = [];
@@ -108,7 +110,8 @@ export class Labels {
     private readonly onBattleClick: (regionId: number, battleId: number) => void,
     private readonly onCorpsClick: (regionId: number, post: number, how: 'add' | 'set' | 'order') => void = () => {},
     private readonly onFleetClick: (fleet: number) => void = () => {}, private readonly onSeaClick: (id: number) => void = () => {},
-    private readonly onChipClick: (regionId: number, sector: number) => void = () => {}) {
+    private readonly onChipClick: (regionId: number, sector: number) => void = () => {},
+    private readonly onFrontClick: (hq: number, regionId: number) => void = () => {}) {
     root.classList.add('md0');
     this.zones = world.zones.map(z => { const el = document.createElement('div'); el.className = 'zl'; el.textContent = tx(z.short).toUpperCase(); root.appendChild(el); return { el, shown: true, tf: '', c: '' }; });
     this.regions = world.regions.map((r) => {
@@ -141,6 +144,7 @@ export class Labels {
     // corps markers (their tooltip depends on the owner) and balance chips are rebuilt in the new language
     for (const l of this.corps.values()) l.el.remove(); this.corps.clear();
     for (const l of this.chips.values()) l.el.remove(); this.chips.clear();
+    for (const l of this.banners.values()) l.el.remove(); this.banners.clear();
     for (const l of [...this.battles.values(), ...this.seas.values()]) { l.label = ''; l.nextText = 0; l.el.setAttribute('aria-label', l.aria()); }
   }
 
@@ -311,6 +315,33 @@ export class Labels {
     }
     for (const [k, l] of this.chips) if (l.seen !== ctx.frame) { l.el.remove(); this.chips.delete(k); }
 
+    // Fronts mode: a banner on each of the viewer's fronts saying who runs it (design-play §3.1)
+    if (ctx.me >= 0 && this.mode === 1 && dist >= 20 && dist < 240) {
+      if (ctx.now >= this.nextFront) { this.nextFront = ctx.now + .5; this.fronts = frontLevels(g, ctx.me); }
+      for (const fr of this.fronts) {
+        const key = String(fr.regions[0]);
+        // the region nearest the middle of the front carries the banner
+        let mx = 0, mz = 0; for (const id of fr.regions) { mx += this.world.regions[id].cx; mz += this.world.regions[id].cz; } mx /= fr.regions.length; mz /= fr.regions.length;
+        let at = fr.regions[0], bd = Infinity; for (const id of fr.regions) { const R = this.world.regions[id], d = Math.hypot(R.cx - mx, R.cz - mz); if (d < bd) { bd = d; at = id; } }
+        let l = this.banners.get(key);
+        if (!l) {
+          const el = document.createElement('button'); el.type = 'button'; el.style.pointerEvents = 'auto';
+          el.addEventListener('pointerdown', (e) => { e.stopPropagation(); const f = this.fronts.find(x => String(x.regions[0]) === key); if (f) this.onFrontClick(f.hq ?? -1, f.regions[0]); });
+          this.root.appendChild(el); l = { el, key: '', shown: true, tf: '', seen: 0 }; this.banners.set(key, l);
+        }
+        l.seen = ctx.frame;
+        const h = fr.hq !== undefined ? (g.hq ?? []).find(x => x.id === fr.hq) : undefined;
+        const text = h ? `⚑ ${h.cmd.name.split(' ').slice(-1)[0]} · ${t(['Hold', 'Defend', 'Attack'][h.mandate])}` : `${fr.level === 'you' ? '✋ ' + t('You') : t('Auto')} · ${t('Appoint a commander')}`;
+        const k2 = fr.level + '|' + text;
+        if (l.key !== k2) {
+          l.key = k2; l.el.className = 'fbn ' + fr.level; l.el.textContent = text;
+          l.el.title = h ? `${h.cmd.name}: ${t('his army runs this front. Click to open the army.')}` : fr.level === 'you' ? t('You run this front corps by corps. Click to appoint a commander.') : t('The regions run this front by themselves. Click to appoint a commander.');
+        }
+        this.place(l, ctx, this.world.regions[at].cx, ctx.anchorH(at) + 1.9, this.world.regions[at].cz);
+      }
+    }
+    for (const [k, l] of this.banners) if (l.seen !== ctx.frame) { l.el.remove(); this.banners.delete(k); }
+
     // Inbox: an envelope pin where a decision waits, in every map mode (design-play §2); pins on one spot fan out a little
     if (ctx.me >= 0 && dist < 260) {
       const at = new Map<string, number>();
@@ -394,6 +425,7 @@ export class Labels {
     for (const l of this.fleets.values()) l.el.remove();
     for (const l of this.seas.values()) l.el.remove();
     for (const l of this.chips.values()) l.el.remove(); this.chips.clear();
+    for (const l of this.banners.values()) l.el.remove(); this.banners.clear();
     for (const l of this.pinEls.values()) l.el.remove(); this.pinEls.clear();
     this.armies.clear(); this.battles.clear(); this.corps.clear(); this.fleets.clear(); this.seas.clear();
   }

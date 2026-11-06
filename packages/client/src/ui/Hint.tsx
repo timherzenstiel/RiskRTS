@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { FACTIONS } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
 import { t } from '../i18n';
-import { rich } from './LangPicker';
+import { rich, tn } from './LangPicker';
+import { frontName, frontsOf } from './Generals';
 
 export function Hint() {
   const sim = useSim(); const { tips, tut, orderMode, orderKind, sel, overlay } = useUi();
@@ -25,6 +26,7 @@ export function Hint() {
   else if (tut < 2) text = own ? rich(t('Spend Production in the <b>Recruit</b> tab · keys <kbd>1</kbd>–<kbd>4</kbd>')) : t('Select one of your own regions to recruit');
   else if (tut < 3) text = own ? (touch ? rich(t('Use <b>Pick a target on the map</b> in the Overview to send troops to a neighbour')) : rich(t('Now <b>right-click</b> a neighbouring region to march, or select a corps and right-click'))) : (touch ? t('Select your region, then pick a target from its Overview') : t('Select your region, then right-click a neighbour to attack'));
   else if (tut < 4) text = rich(touch ? t('Pinch in on a <b>red battle marker</b> to watch the fight') : t('Scroll in on a <b>red battle marker</b> to watch the fight'));
+  else { const fr = frontsOf(g, me).find(x => x.level === 'you' && x.manual >= 3); if (fr) text = rich(tn('You run {0} corps by hand on the <b>{1}</b> front. Open <b>Situation</b> and <b>appoint a commander</b>: he holds it while you look elsewhere.', fr.manual, { raw: frontName(fr) })); }
   if (!text) return null;
   return (
     <div id="hint" className="glass" role="status">

@@ -9,6 +9,7 @@ import { addUnits, arrive } from './commands';
 import { stepTraining } from './supply';
 import { CORPS_CAP, autoDeploy, fixPosts, raiseCorps, stepPosts } from './posts';
 import { stepCommanders } from './commanders';
+import { generals, stepGenerals } from './generals';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
@@ -66,6 +67,7 @@ export function createGame(opt: GameOptions): GameState {
   // every region starts with its troops placed: a main army in the middle and corps on the borders facing foreign powers
   for (const t of g.regions) autoDeploy(g, t, true);
   g.events.push({ k: 'start' });
+  for (const f of g.factions) generals(g, f.id);
   return g;
 }
 
@@ -197,6 +199,7 @@ export function step(g: GameState, dt: number) {
   }
   stepTraining(g, (r, k) => addUnits(g, r, k, 1));
   stepPosts(g);
+  stepGenerals(g);
   stepCommanders(g);
   stepNavy(g, dt);
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);

@@ -2,7 +2,7 @@
 // corps), the army row of the corps card, and the words for a request (the simulation keeps only numbers). Requests are answered
 // in the Inbox (Inbox.tsx).
 import {
-  BUDGET_MAX, COST, FACTIONS, attackRatio, unitCost, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
+  BUDGET_MAX, COST, FACTIONS, GEN, TICK_SECONDS, attackRatio, unitCost, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
   type GameState, type Hq, type Mandate, type Req, type ReqKind,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -14,6 +14,7 @@ import { stars } from './Forces';
 import { nm } from './format';
 import { getLang, t, tx } from '../i18n';
 import { rich, tn } from './LangPicker';
+import { GenTags, Portrait, RelieveBox, noGeneralText, openNewest } from './Generals';
 
 export const KIND: Record<ReqKind, string> = { men: 'Reinforcements', fort: 'Field works', recon: 'Reconnaissance', attack: 'Permission to attack', fallback: 'Permission to fall back', release: 'Send corps back' };
 /** Mandates in short words (design-play §4.3); the simulation's names are MANDATES. */
@@ -73,7 +74,7 @@ function send(cmd: Parameters<ReturnType<typeof useUi.getState>['order']>[0]) { 
 // ---------------------------------------------------------------- army card
 
 export function ArmyCard() {
-  const id = useUi(s => s.armySel); const sel = useUi(s => s.sel); const sim = useSim();
+  const id = useUi(s => s.armySel); const sel = useUi(s => s.sel); const rel = useUi(s => s.relieveFor); const sim = useSim();
   if (!sim || id < 0) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState;
   const h = (g.hq ?? []).find(x => x.id === id && x.owner === me);
@@ -84,10 +85,13 @@ export function ArmyCard() {
   return (
     <section className="ccard acard" aria-label={t('Army')} style={{ '--c': FACTIONS[me].color } as React.CSSProperties}>
       <div className="bc-h">
-        <div><small>{hqName(h)} · {t('{0} corps', cs.length)} · {t('{0} btl', cs.reduce((s, x) => s + groundUnits(x.c.u), 0))}</small><h3>{h.cmd.name}</h3></div>
+        <div className="ac-who"><Portrait x={h.cmd} f={me} /><div><small>{hqName(h)} · {t('{0} corps', cs.length)} · {t('{0} btl', cs.reduce((s, x) => s + groundUnits(x.c.u), 0))}</small><h3>{h.cmd.name}</h3></div></div>
         <button className="x" aria-label={t('Close army')} onClick={() => ui().selectArmy(-1)}><CloseIcon /></button>
       </div>
-      <p className="ac-tr">{h.cmd.tr.filter((x, i, a) => a.indexOf(x) === i).map(x => <span key={x} className="tag" title={tx(TRAITS[x].desc)}>{tx(TRAITS[x].name)}</span>)}<span className="oc-xp" title={t('Experience: battles won on his front')}>{stars(Math.floor(h.cmd.xp)) || t('new to command')}</span></p>
+      <p className="ac-tr"><GenTags x={h.cmd} /></p>
+      {rel === h.id && <RelieveBox g={g} me={me} h={h} onDone={() => useUi.setState({ relieveFor: -1 })} />}
+      {h.seat !== undefined && <p className="lv-fc" title={t('If the enemy takes this region, the general is captured. A free general takes over, or the army breaks up.')}>{tn('Headquarters in {0}.', { raw: nm(W.regions[h.seat].name) })}</p>}
+      {h.shaken !== undefined && h.shaken > g.time && <p className="lv-fc warn">{t('Shaken after the change of command: morale stays below {0} % for {1} more days.', Math.round(GEN.shakenMor * 100), Math.ceil((h.shaken - g.time) / TICK_SECONDS * 7))}</p>}
       <div className="lv-row"><span className="lv-l" title={t('What the commander may do on his own')}>{t('Mandate')}</span>
         <div className="seg" role="group" aria-label={t('Mandate')}>
           {MANDATES.map((m, k) => <button key={m} aria-pressed={h.mandate === k} title={mandateLine(k, ratio)} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{t(MAND[k])}</button>)}
@@ -120,7 +124,7 @@ export function ArmyCard() {
         </button>
       ))}
       <div className="cc-acts">
-        <button className="btn sm" title={t('A new commander takes over; his corps lose 5 morale')} onClick={() => { click(); send({ t: 'relieve', army: h.id }); }}>{t('Relieve')}</button>
+        <button className="btn sm" aria-pressed={rel === h.id} title={t('Replace the general. It costs war weariness and shakes his front for 2 weeks.')} onClick={() => { click(); useUi.setState({ relieveFor: rel === h.id ? -1 : h.id }); }}>{t('Relieve…')}</button>
         <button className="btn sm" title={t('The corps come under your own orders')} onClick={() => { click(); if (send({ t: 'disband', army: h.id })) ui().selectArmy(-1); }}>{t('Disband')}</button>
         <button className="btn sm" onClick={() => { Sfx.clunk(); ui().setPanel('staff'); }}>{t('Inbox…')}</button>
       </div>
@@ -138,7 +142,7 @@ export function CorpsArmyRow({ ids }: { ids: number[] }) {
     <div className="lv-row ac-row"><span className="lv-l">{t('Army')}</span>
       {h ? <><button className="lnk" onClick={() => { click(); ui().selectArmy(h.id); }}>{hqName(h)} · {h.cmd.name}</button><button className="btn sm" title={t('Take out of the army: the corps come under your own orders')} onClick={() => { click(); send({ t: 'armyAssign', army: h.id, corps: ids, on: false }); }}>{t('Take out')}</button></> : (
         <>
-          <button className="btn sm" title={t('A commander takes these corps and the regions they stand in as his front')} onClick={() => { click(); if (send({ t: 'army', corps: ids })) { const a = (useUi.getState().session?.state.hq ?? []).filter(x => x.owner === me).slice(-1)[0]; if (a) ui().selectArmy(a.id); } }}>{ids.length === 1 ? t('Appoint a commander') : t('Form army')}</button>
+          <button className="btn sm" disabled={!!noGeneralText(g, me)} title={noGeneralText(g, me) ?? t('A commander takes these corps and the regions they stand in as his front')} onClick={() => { click(); if (send({ t: 'army', corps: ids })) openNewest(me); }}>{ids.length === 1 ? t('Appoint a commander') : t('Form army')}</button>
           {armies.length > 0 && <select className="sel" value="" aria-label={t('Assign to army')} onChange={e => { if (e.target.value) send({ t: 'armyAssign', army: +e.target.value, corps: ids, on: true }); }}>
             <option value="">{t('Assign to…')}</option>{armies.map(a => <option key={a.id} value={a.id}>{hqName(a)}</option>)}
           </select>}

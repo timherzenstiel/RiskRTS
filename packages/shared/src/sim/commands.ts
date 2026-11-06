@@ -115,7 +115,7 @@ export function fortCost(r: RegionState, kind: FortKind, sector: number, g?: Gam
 }
 
 /** Place a defence or field work on a border sector (`sector` = neighbouring region id), or a defence in the interior (-1). */
-export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKind, sector: number): string | null {
+export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKind, sector: number, mult = 1): string | null {
   const f = g.factions[fid], W = world();
   if (r.owner !== fid) return 'You can only fortify your own regions.';
   if (r.contested >= 0) return contestedMsg(r);
@@ -126,7 +126,7 @@ export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKin
   if (kind === 'trench' && worksAt(r, sector).tr >= 2 && !techOn(g, fid, 'trench3')) return locked(g, fid, 'trench3', 'Trench III systems');
   if (kind === 'bunk' && !techOn(g, fid, 'trench3')) return locked(g, fid, 'trench3', 'Bunkers');
   if (kind === 'flak' && !techOn(g, fid, 'air')) return locked(g, fid, 'air', 'Anti-air guns');
-  const c = fortCost(r, kind, sector, g);
+  const c0 = fortCost(r, kind, sector, g), c = c0 === null ? null : mult === 1 ? c0 : Math.max(1, Math.round(c0 * mult));
   if (c === null) return kind === 'trench' ? 'The trench on this border is already at full depth.' : kind === 'sand' ? 'This border already has every sandbag row it can hold.' : 'This border already has every wire belt it can hold.';
   if (kind !== 'trench') {
     const use = SLOT_USE[kind], max = slotsMax(r.id, sector), now = slotsUsed(r, sector);
@@ -624,7 +624,7 @@ function tagCarrier(b: Battle, a: Army) {
 }
 
 const FORT_KINDS: FortKind[] = ['trench', 'sand', 'wire', 'pill', 'fort', 'flak', 'bunk'];
-const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship', 'a', 'b', 'st', 'army', 'req', 'mandate', 'target', 'budget'] as const;
+const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship', 'a', 'b', 'st', 'army', 'req', 'mandate', 'target', 'budget', 'gen'] as const;
 /** Commands arrive from the network: every numeric field must be a finite number. */
 function validCommand(c: Command): boolean {
   if (!c || typeof c !== 'object' || typeof c.t !== 'string') return false;
@@ -673,11 +673,11 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'pauseCall': return callPause(g, fid);
     case 'pauseVote': return votePause(g, fid, !!c.yes);
     case 'corpsSet': return corpsSet(g, fid, c.region, c.id, c.st, c.man, typeof c.refill === 'boolean' ? c.refill : undefined);
-    case 'army': return formArmyHq(g, fid, c.corps);
+    case 'army': return formArmyHq(g, fid, c.corps, c.front, c.gen);
     case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);
     case 'armySet': return setArmy(g, fid, c.army, c);
     case 'reply': return ['yes', 'recruit', 'transfer', 'deny'].includes(c.opt) ? reply(g, fid, c.req, c.opt, c.n) : 'Invalid order.';
-    case 'relieve': return relieve(g, fid, c.army);
+    case 'relieve': return relieve(g, fid, c.army, c.gen);
     case 'disband': return disband(g, fid, c.army);
     case 'deploy': { const r = g.regions[c.region]; if (!r || r.owner !== fid) return 'Select one of your own regions first.'; r.deploy = c.mode === 1 ? 1 : undefined; if (r.deploy !== 1) autoDeploy(g, r); return null; }
     case 'air': return sendAir(g, fid, c.from, c.to, c.frac, !!c.rail, !!c.factory, c.brk);

@@ -1,6 +1,6 @@
 # RiskRTS – Design: Command Overhaul (forces, supply, manpower, situation map, menus)
 
-Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26 · phase 3 in PR #28 · phase 4 in PR #29** · Mockups: design canvas "RiskRTS – Command overhaul"
+Status: 6 Nov 2026 · Base: `main` @ ae8521a (navy + globe merged; the small `clarity` branch is folded in) · Status: **Approved · phase 1 in PR #24 · phase 2 in PR #26 · phase 3 in PR #28 · phase 4 in PR #30** · Mockups: design canvas "RiskRTS – Command overhaul"
 
 ## Problem
 

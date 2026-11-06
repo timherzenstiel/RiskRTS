@@ -16,10 +16,10 @@ import { getLang, t, tx } from '../i18n';
 import { rich, tn } from './LangPicker';
 import { GenTags, Portrait, RelieveBox, noGeneralText, openNewest } from './Generals';
 
-export const KIND: Record<ReqKind, string> = { men: 'Reinforcements', fort: 'Field works', recon: 'Reconnaissance', attack: 'Permission to attack', fallback: 'Permission to fall back', release: 'Send corps back' };
+export const KIND: Record<ReqKind, string> = { men: 'Reinforcements', fort: 'Field works', recon: 'Reconnaissance', attack: 'Permission to attack', fallback: 'Permission to fall back', release: 'Send corps back', op: 'Operation' };
 /** Mandates in short words (design-play §4.3); the simulation's names are MANDATES. */
 export const MAND = ['Hold', 'Defend', 'Attack'] as const;
-const SHORT: Record<ReqKind, string> = { men: 'Men', fort: 'Works', recon: 'Patrols', attack: 'Attacks', fallback: 'Falling back', release: 'Sending back' };
+const SHORT: Record<ReqKind, string> = { men: 'Men', fort: 'Works', recon: 'Patrols', attack: 'Attacks', fallback: 'Falling back', release: 'Sending back', op: 'Operations' };
 const rng = (a?: [number, number]) => !a ? '?' : a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
 /** One decimal, with a German decimal comma when German is on. */
 const dec1 = (x: number) => { const s = x.toFixed(1); return getLang() === 'de' ? s.replace('.', ',') : s; };
@@ -31,9 +31,10 @@ const mandateLine = (k: number, ratio: string) => k === 0 ? t('Hold: no attacks.
     : t('Attack: he prepares an offensive on the target, asks for men and scouting, and asks for the go once he is {0}× stronger.', ratio);
 const hqs = (g: GameState, me: number) => (g.hq ?? []).filter(h => h.owner === me);
 
-interface Opt { label: string; opt: 'yes' | 'recruit' | 'transfer' | 'deny'; n?: number; title?: string; danger?: boolean; off?: boolean }
-/** Title, one line of reasons and the answers of a request. */
-export function reqText(g: GameState, me: number, q: Req, n?: number): { title: string; why: string; opts: Opt[] } {
+interface Opt { label: string; opt: 'yes' | 'recruit' | 'transfer' | 'deny' | 'more' | 'later'; n?: number; title?: string; danger?: boolean; off?: boolean }
+const pct = (p: number) => `${Math.round(p * 100)} %`;
+/** Title, one line of reasons, the answers of a request, and for an operation plan its table. */
+export function reqText(g: GameState, me: number, q: Req, n?: number): { title: string; why: string; opts: Opt[]; rows?: [string, string][] } {
   const W = buildWorld(), R = (i: number) => W.regions[i].name, where = { raw: q.sector >= 0 ? `${nm(R(q.region))} · ${tx(borderLabel(W, q.sector))}` : nm(R(q.region)) };
   const bal = { raw: q.own !== undefined ? `${tn('ours {0} : theirs {1}', q.own, { raw: rng(q.their) })}${q.massing ? ' · ' + t('massing') : ''}` : '' };
   const sup = g.factions[me]?.supply ?? 0, names = (q.corps ?? []).map(id => { for (const r of g.regions) { const c = r.cs?.find(x => x.id === id); if (c) return groupName(me, 1, c.n); } return null; }).filter(Boolean).join(', ');
@@ -55,6 +56,24 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
     }
     case 'attack': return { title: t(q.goal === 2 ? 'Invade {0}' : 'Take the first line of {0}', R(q.sector)), why: tn('{0} on {1} · {2} · ratio {3}×.', { raw: names || t('His corps') }, where, bal, { raw: dec1(q.ratio ?? 0) }), opts: [{ label: t('Attack'), opt: 'yes', danger: true, title: t('The corps assemble on the border and go over') }, { label: t('Deny'), opt: 'deny' }] };
     case 'fallback': return { title: tn('Fall back from {0}', where), why: tn('The border cannot be held: {0}. {1} would fall back to the centre.', bal, { raw: names }), opts: [{ label: t('Fall back'), opt: 'yes', danger: true }, { label: t('Hold on'), opt: 'deny' }] };
+    case 'op': {
+      const P = q.op!, nc = (q.corps ?? []).length, h = (g.hq ?? []).find(x => x.id === q.army);
+      const rows: [string, string][] = [
+        [t('Objective'), `${nm(R(q.region))} → ${nm(R(q.sector))}`],
+        [t('Forces'), t('{0} corps · {1} btl', nc, P.btl) + (P.more ? ' · ' + t('{0} more nearby (+{1} btl)', P.more, P.moreBtl) : '')],
+        [t('Enemy'), tn('{0} btl', { raw: rng(P.their) })],
+        [t('Barrage'), t(P.heavy ? '{0} days heavy · {1} shells' : '{0} days light · {1} shells (not enough for heavy)', P.days, P.shells)],
+        [t('Expected'), t('success {0} · losses ~{1} men', pct(P.p), P.loss) + (P.more ? ' · ' + t('with the extra corps {0}', pct(P.pMore)) : '')],
+      ];
+      return { title: tn('Operation {0}: {1}', { raw: q.name ?? '' }, { raw: nm(R(q.sector)) }), rows,
+        why: h ? tn('{0} offers a plan: he gathers the corps, fires the barrage and attacks by himself. You can take over the battle at any moment.', { raw: h.cmd.name }) : '',
+        opts: [
+          { label: t('Approve'), opt: 'yes', danger: true, title: t('The army gathers, fires the barrage and goes in by itself') },
+          ...(P.more ? [{ label: t('Approve with {0} more corps', P.more), opt: 'more' as const, danger: true, title: t('Your nearest free corps join the army and the attack waits for them (up to {0} weeks)', 2) }] : []),
+          { label: t('Postpone'), opt: 'later', title: t('He offers the plan again in a week') },
+          { label: t('Deny'), opt: 'deny' },
+        ] };
+    }
     case 'release': {
       const across = q.sector >= 0 && q.sector < 1000 ? g.regions[q.sector]?.owner ?? -1 : -1, tr = across >= 0 ? treatyOf(g, me, across) : undefined;
       const rest = q.why !== 'peace' ? t('The front is safe without them. They would wait at the centre of their region, under your orders.')
@@ -89,6 +108,7 @@ export function ArmyCard() {
         <button className="x" aria-label={t('Close army')} onClick={() => ui().selectArmy(-1)}><CloseIcon /></button>
       </div>
       <p className="ac-tr"><GenTags x={h.cmd} /></p>
+      {h.op && <p className="lv-fc op-st">{tn(h.op.status === 'gather' ? 'Operation {0}: gathering the corps for the attack on {1}.' : h.op.status === 'go' ? 'Operation {0}: the corps assemble on the border of {1}.' : 'Operation {0}: fighting for {1}.', { raw: h.op.name }, { raw: nm(W.regions[h.op.target].name) })}</p>}
       {rel === h.id && <RelieveBox g={g} me={me} h={h} onDone={() => useUi.setState({ relieveFor: -1 })} />}
       {h.seat !== undefined && <p className="lv-fc" title={t('If the enemy takes this region, the general is captured. A free general takes over, or the army breaks up.')}>{tn('Headquarters in {0}.', { raw: nm(W.regions[h.seat].name) })}</p>}
       {h.shaken !== undefined && h.shaken > g.time && <p className="lv-fc warn">{t('Shaken after the change of command: morale stays below {0} % for {1} more days.', Math.round(GEN.shakenMor * 100), Math.ceil((h.shaken - g.time) / TICK_SECONDS * 7))}</p>}

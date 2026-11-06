@@ -107,6 +107,13 @@ export function warMinister(g: GameState, f: FactionState) {
         else if (odds < want * .8) reply(g, f.id, q.id, 'deny');
         break;
       }
+      // an operation plan: approved when the odds suit the nation and the power is not running too many attacks, else put off
+      case 'op': {
+        const room = attacks < 2 + (cap ? 0 : 1) && (!cap || attacks < cap), want = Math.min(.6, .35 * P.aggr);
+        if (room && (q.op?.p ?? 0) >= want && !reply(g, f.id, q.id, 'yes')) attacks++;
+        else reply(g, f.id, q.id, 'later');
+        break;
+      }
       case 'fallback':
         if (rnd(g) < .35 + .3 * P.retreat) reply(g, f.id, q.id, 'yes'); else reply(g, f.id, q.id, 'deny');
         break;

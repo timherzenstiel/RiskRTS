@@ -10,6 +10,7 @@
 // every client and the server agree.
 import { AIR_RANGE, COST, TICK_SECONDS, groundUnits } from '../data/units';
 import { type TraitKey } from '../data/commanders';
+import { OP, approveOp, inOp, opName, planOp, regionStrength, stepOp } from './operations';
 import { GEN, drawGeneral, generalWon, generals, loseGeneral, nextGeneral, returnGeneral, takeGeneral } from './generals';
 import { isCoast, zoneOfKey } from '../world/zones';
 import { emit, frontsOf, hops, rnd, world, worksAt } from './core';
@@ -208,9 +209,10 @@ export function think(g: GameState, h: Hq, V: GameState) {
     if (g.time >= h.shaken) h.shaken = undefined;
     else { const cap = moraleCap(g, f) * GEN.shakenMor; for (const { c } of list0) c.mor = Math.min(c.mor, cap); }
   }
+  stepOp(g, h);
 
   const bs = borders(g, V, h), byKey = new Map(bs.map(b => [b.r.id + '|' + b.s, b]));
-  const free = (c: Corps) => !c.man && (c.ord ?? 0) === 0;
+  const free = (c: Corps) => !c.man && (c.ord ?? 0) === 0 && !inOp(h, c.id);
   const fighting = (r: RegionState, p: number) => p >= 0 && frontsOf(g, r.id).some(b => b.from === p);
   type Spare = { r: RegionState; c: Corps; why: 'peace' | 'safe' | 'quiet' | 'reserve' };
   const spare: Spare[] = [];
@@ -290,8 +292,12 @@ export function think(g: GameState, h: Hq, V: GameState) {
     const could = aim && !isCoast(b.s) && !fight && going >= Math.max(MIN_ATTACK, Math.ceil(b.theirs * 1.5)) && b.bal.know >= 1 && b.bal.ratio !== null && b.bal.ratio >= attackRatio(h) && b.have >= b.want && !frontsOf(g, b.s).length && !capCheck(g, f, b.s);
     // he proposes an attack only on a fresh report; first he asks for one
     if (could && !fresh(b.s, REPORT_FRESH)) scout(b, 1, 'attack');
-    if (could && fresh(b.s, REPORT_FRESH))
-      asks.push({ kind: 'attack', key: `atk|${b.r.id}|${b.s}`, urg: 1, region: b.r.id, sector: b.s, corps: idle.map(c => c.id), goal: aim === 2 ? 2 : 1, ...bal(b) });
+    // on the Attack mandate he offers an operation plan for the target instead (design-play §3.3), one at a time
+    if (could && fresh(b.s, REPORT_FRESH) && aim === 2 && !h.op) {
+      const B = bal(b);
+      asks.push({ kind: 'op', key: `op|${b.r.id}|${b.s}`, urg: 1, region: b.r.id, sector: b.s, corps: idle.map(c => c.id), goal: 2, name: opName(g, f, h.n + (g.ops ?? []).filter(x => x.army === h.id).length), op: planOp(g, h, b.r.id, b.s, idle, B.their, b.bal.ratio ?? 0, regionStrength(V, b.s)), ...B });
+    } else if (could && fresh(b.s, REPORT_FRESH) && aim === 1)
+      asks.push({ kind: 'attack', key: `atk|${b.r.id}|${b.s}`, urg: 1, region: b.r.id, sector: b.s, corps: idle.map(c => c.id), goal: 1, ...bal(b) });
     // permission to fall back from a border that cannot be held
     if (!has(h, 'care') && !fight && b.bal.danger === 3 && b.bal.ratio !== null && b.bal.ratio < (has(h, 'caut') ? .7 : FALLBACK_RATIO) && mineHere.length && !spare.length)
       asks.push({ kind: 'fallback', key: `fb|${b.r.id}|${b.s}`, urg: 2, region: b.r.id, sector: b.s, corps: mineHere.map(c => c.id), ...bal(b) });
@@ -347,7 +353,7 @@ function autoAnswer(g: GameState, h: Hq) {
 // ---------------------------------------------------------------- answers
 
 /** Answer a request. `n`: how many of the battalions asked for (men). Returns an error text, or null. */
-export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit' | 'transfer' | 'deny', n?: number): string | null {
+export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit' | 'transfer' | 'deny' | 'more' | 'later', n?: number): string | null {
   const q = (g.requests ?? []).find(x => x.id === id && x.owner === f); if (!q) return 'That request is no longer open.';
   const h = hqOf(g, q.army); if (!h) return 'That army no longer exists.';
   const r = g.regions[q.region], drop = () => { g.requests = (g.requests ?? []).filter(x => x !== q); };
@@ -357,6 +363,7 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
     if (has(h, 'pol')) { const F = g.factions[f]; F.ww = Math.min(100, F.ww + 1); }
     return null;
   }
+  if (opt === 'later') { h.deny[q.key] = g.time + OP.laterWeeks * TICK_SECONDS; drop(); return null; }
   if (r.owner !== f) { drop(); return 'That region is no longer ours.'; }
   switch (q.kind) {
     case 'men': {
@@ -388,6 +395,7 @@ export function reply(g: GameState, f: number, id: number, opt: 'yes' | 'recruit
       if (!ok) { drop(); return err ?? 'Those corps are no longer on that border.'; }
       break;
     }
+    case 'op': { const e = approveOp(g, f, h, q, opt === 'more'); if (e) { drop(); return e; } break; }
     case 'fallback': for (const cid of q.corps ?? []) { const c = corpsById(r, cid); if (c) cmdMove(g, r, c, r.id, -1); } break;
     case 'release': {
       for (const cid of q.corps ?? []) {
@@ -494,7 +502,7 @@ function expire(g: GameState) {
     const h = hqOf(g, q.army); g.requests = (g.requests ?? []).filter(x => x !== q);
     if (!h) continue;
     h.deny[q.key] = g.time + DENY_WEEKS * TICK_SECONDS;
-    const cost = q.kind === 'attack' || q.kind === 'release' ? 0 : EXPIRE.mor, hit: number[] = [];
+    const cost = q.kind === 'attack' || q.kind === 'release' || q.kind === 'op' ? 0 : EXPIRE.mor, hit: number[] = [];
     if (cost) for (const { r, c } of armyCorps(g, h)) {
       if (q.corps?.length ? !q.corps.includes(c.id) : r.id !== q.region || (q.sector >= 0 && c.p !== q.sector)) continue;
       c.mor = Math.max(0, c.mor - cost); hit.push(c.id);

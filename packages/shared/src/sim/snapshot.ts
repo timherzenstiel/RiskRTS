@@ -3,7 +3,7 @@ import { FACTIONS } from '../data/factions';
 import { AGENT_TYPES, DEF_KINDS, UNIT_TYPES, type AgentType } from '../data/units';
 import { newRegion, world } from './core';
 import { fogView } from './fog';
-import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Generals, type Hq, type Req, type Vote } from './types';
+import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Generals, type Hq, type OpResult, type Req, type Vote } from './types';
 import { humansOf } from './vote';
 
 /** [agent type index, faction, x, z, face, flags(1 dead,2 moving,4 trench,8 left the field), seconds since last shot] */
@@ -53,6 +53,8 @@ export interface Snapshot {
   sh?: Ship[]; fl?: Fleet[]; sb?: SeaBattleSnap[];
   /** The recipient's armies and its commanders' requests. */
   hq?: Hq[]; rq?: Req[];
+  /** The recipient's operation results. */
+  ops?: OpResult[];
   /** Pause by vote: the open vote, the host's real-time clock, the human powers, the recipient's recent pause calls. */
   vt?: Vote; wl?: number; hum?: number[]; pc?: number[];
   /** The recipient's own logistics: war economy lever, wounded coming back, last week's manpower ledger, recruits in training [region, unit index, seconds left, post (-1), army (-1)]. */
@@ -90,7 +92,7 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
     spies: g.spies,
     d: g.regions.flatMap(r => r.defs.map(d => [r.id, d.id, DEF_KINDS.indexOf(d.k), d.s, Math.round(d.hp), d.f])), cfg: g.cfg,
     a: g.armies, b, stats: g.stats, fx,
-    hq: g.hq, rq: g.requests,
+    hq: g.hq, rq: g.requests, ops: (full.ops ?? []).filter(o => o.owner === recipient),
     vt: full.vote, wl: q2(full.wall ?? 0), hum: humansOf(full), pc: full.factions[recipient]?.pc,
     me: recipient >= 0 && g.factions[recipient] ? {
       id: recipient, econ: g.factions[recipient].econ ?? 1, wq: (g.factions[recipient].wq ?? []).map(([m, d]) => [Math.round(m), d]), led: g.factions[recipient].led,
@@ -149,7 +151,7 @@ export function applySnapshot(m: GameState, s: Snapshot) {
     (m.regions[ri].cs ??= []).push(c);
   }
   for (const [ri, id, k, sec, hp, f] of s.d ?? []) m.regions[ri].defs.push({ id, k: DEF_KINDS[k], s: sec, hp, f });
-  m.spies = s.spies ?? []; m.viewer = undefined; m.hq = s.hq ?? []; m.requests = s.rq ?? [];
+  m.spies = s.spies ?? []; m.viewer = undefined; m.hq = s.hq ?? []; m.requests = s.rq ?? []; m.ops = s.ops ?? [];
   m.vote = s.vt; m.wall = s.wl ?? m.wall;
   if (s.hum) for (const f of m.factions) f.ai = !s.hum.includes(f.id);
   for (const r of m.regions) r.train = undefined;

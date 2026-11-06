@@ -785,3 +785,9 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .fbn{position:absolute;left:0;top:0;padding:3px 8px;border-radius:2px;font:600 12px/1.1 var(--f-head);letter-spacing:.04em;white-space:nowrap;cursor:pointer;will-change:transform;box-shadow:0 2px 6px rgba(0,0,0,.5);border:2px solid #77786e;background:rgba(20,21,17,.92);color:#eee6cc}
 .fbn.cmd{border-color:#5f8d44;color:#d8f2c4}.fbn.you{border-color:var(--amber);color:#fbe3b0}.fbn.auto{border-style:dashed}
 .gtags .tag{padding:1px 6px;border-radius:2px;background:#4a4b44;color:var(--khaki);font:600 10px var(--f-head);letter-spacing:.05em}
+
+/* ---------------------------------------------------------------- operations (design-play §3.3) */
+.ib-tab{width:100%;border-collapse:collapse;margin:4px 0 2px;font:400 12px/1.35 var(--f-head)}
+.ib-tab th{width:30%;text-align:left;font-weight:600;color:var(--mute);padding:1px 6px 1px 0;vertical-align:top;letter-spacing:.04em}
+.ib-tab td{color:var(--fg);padding:1px 0}
+.op-st{color:#d8f2c4}

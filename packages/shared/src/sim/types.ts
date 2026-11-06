@@ -424,6 +424,8 @@ export type GameEvent =
   /** Generals: a new one (a war year, battles won, a replacement), one captured with his headquarters, one relieved, a
    *  three-star promotion (trait gained, or bad trait `lost` replaced by `tr`). */
   | { k: 'general'; faction: number; kind: 'new' | 'lost' | 'relieved' | 'star'; name: string; why?: 'year' | 'wins' | 'back'; army?: number; region?: number; tr?: TraitKey; lost?: TraitKey }
+  /** Operations: approved, the attack goes in, ended (with the result id), called off. */
+  | { k: 'op'; faction: number; army: number; name: string; what: 'approved' | 'begins' | 'ended' | 'off'; region: number; ok?: boolean; res?: number }
   | { k: 'reqExpired'; faction: number; army: number; kind: ReqKind; region: number; sector: number; mor: number; corps: number[] }
   /** Recruits finished training and joined a region's reserve. */
   | { k: 'trained'; faction: number; region: number; n: number }
@@ -461,7 +463,7 @@ export interface Intel {
 export type Mandate = 0 | 1 | 2;
 export const MANDATES = ['Hold', 'Active defence', 'Offensive'] as const;
 /** Requests a commander files: more men, field works, a patrol, permission to attack, to fall back, to send corps back to you. */
-export type ReqKind = 'men' | 'fort' | 'recon' | 'attack' | 'fallback' | 'release';
+export type ReqKind = 'men' | 'fort' | 'recon' | 'attack' | 'fallback' | 'release' | 'op';
 /** Kinds a standing approval may cover (an attack is always asked). */
 export const STANDING_KINDS: ReqKind[] = ['men', 'fort', 'recon', 'fallback', 'release'];
 /** A note in an army's log: a corps sent back to the player or moved along the front, and why. */
@@ -474,6 +476,8 @@ export interface Hq {
   cmd: General;
   /** The region the army's headquarters sits in: if the enemy takes it, the general is captured (design-play §3.2). */
   seat?: number;
+  /** The operation the army is carrying out (design-play §3.3). */
+  op?: Operation;
   /** After a general was relieved: until this game time his corps' morale stays below GEN.shakenMor of its ceiling. */
   shaken?: number;
   /** Own regions the army holds; its commander deploys its corps over their hostile borders. */
@@ -489,6 +493,23 @@ export interface Hq {
   deny: Record<string, number>;
   /** Game time of the next look at the front, the last report counted for experience, recent notes. */
   next: number; rep: number; notes: HqNote[];
+}
+/** An operation plan (design-play §3.3): expected success 0..1, men lost, shells and days of barrage, the battalions going and
+ *  the enemy's (range), and the corps of the player's that would raise the odds (`more` corps, `moreBtl` battalions, `pMore`). */
+export interface OpPlan { p: number; /** The strength ratio behind it. */ r: number; loss: number; shells: number; days: number; heavy: boolean; btl: number; their: [number, number]; more: number; moreBtl: number; pMore: number }
+/** An approved operation: gathering its corps, waiting for the battle, fighting it. */
+export interface Operation {
+  id: number; name: string; target: number; region: number; sector: number; corps: number[]; plan: OpPlan;
+  status: 'gather' | 'go' | 'fight';
+  /** When it was approved, when gathering ends at the latest, when the corps were sent in; reports from this id on count. */
+  at: number; until: number; t0?: number; rep: number; battle?: number;
+}
+/** The result card of an operation: plan against outcome, and the star the general won or lost. */
+export interface OpResult {
+  id: number; owner: number; army: number; gen: string; name: string; target: number; region: number; plan: OpPlan;
+  ok: boolean; taken: boolean; lost: number; shells: number; day: number; star: -1 | 0 | 1;
+  /** Called off before a battle started. */
+  off?: boolean;
 }
 /** A general (design-play §3.2): two traits (a third, or a bad one replaced, at three stars), experience 0..3 (stars), and
  *  whether his three-star promotion has been given. */
@@ -509,6 +530,8 @@ export interface Req {
   n?: number; cost?: number; corps?: number[]; goal?: Order; fort?: 'trench' | 'wire';
   /** The balance behind it: ours, theirs (range), ratio, massing. */
   own?: number; their?: [number, number]; ratio?: number | null; massing?: boolean;
+  /** Operation: its code name and plan. */
+  name?: string; op?: OpPlan;
   /** Release: why the corps are not needed (a treaty with the power across, or the border is safe). */
   why?: 'peace' | 'safe';
   /** Reconnaissance: by cavalry patrol, flight or spy, from which region (patrol: the border region; flight: an airfield), and what for. */
@@ -547,6 +570,8 @@ export interface GameState {
   /** Fog-of-war views only: the faction this view was made for. */
   viewer?: number;
   over: boolean; winner: number | null;
+  /** Results of operations (design-play §3.3), the last OPS_KEEP. */
+  ops?: OpResult[];
   nextId: number;
   stats: GameStats;
   events: GameEvent[];
@@ -593,7 +618,7 @@ export type Command =
   | { t: 'army'; corps: number[]; front?: number[]; gen?: number }
   | { t: 'armyAssign'; army: number; corps: number[]; on: boolean }
   | { t: 'armySet'; army: number; mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[] }
-  | { t: 'reply'; req: number; opt: 'yes' | 'recruit' | 'transfer' | 'deny'; n?: number }
+  | { t: 'reply'; req: number; opt: 'yes' | 'recruit' | 'transfer' | 'deny' | 'more' | 'later'; n?: number }
   | { t: 'relieve'; army: number; gen?: number }
   | { t: 'disband'; army: number }
   /** Deploy mode of a region: 0 the region deploys itself, 1 manual. */

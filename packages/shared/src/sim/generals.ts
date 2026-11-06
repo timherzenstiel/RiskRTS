@@ -85,6 +85,12 @@ export function generalWon(g: GameState, h: Hq) {
   if (stars(h.cmd) >= 3 && !h.cmd.up) promote(g, h);
 }
 
+/** An operation won or lost: a star more or less (design-play §3.3). */
+export function adjustStars(g: GameState, h: Hq, d: number) {
+  h.cmd.xp = Math.max(0, Math.min(3, h.cmd.xp + d));
+  if (stars(h.cmd) >= 3 && !h.cmd.up) promote(g, h);
+}
+
 /** Three stars: a bad trait is replaced by a good one, else a third good trait. */
 function promote(g: GameState, h: Hq) {
   const x = h.cmd; x.up = true;

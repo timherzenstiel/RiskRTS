@@ -676,7 +676,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'army': return formArmyHq(g, fid, c.corps, c.front, c.gen);
     case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);
     case 'armySet': return setArmy(g, fid, c.army, c);
-    case 'reply': return ['yes', 'recruit', 'transfer', 'deny'].includes(c.opt) ? reply(g, fid, c.req, c.opt, c.n) : 'Invalid order.';
+    case 'reply': return ['yes', 'recruit', 'transfer', 'deny', 'more', 'later'].includes(c.opt) ? reply(g, fid, c.req, c.opt, c.n) : 'Invalid order.';
     case 'relieve': return relieve(g, fid, c.army, c.gen);
     case 'disband': return disband(g, fid, c.army);
     case 'deploy': { const r = g.regions[c.region]; if (!r || r.owner !== fid) return 'Select one of your own regions first.'; r.deploy = c.mode === 1 ? 1 : undefined; if (r.deploy !== 1) autoDeploy(g, r); return null; }

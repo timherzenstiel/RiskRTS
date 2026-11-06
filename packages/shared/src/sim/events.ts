@@ -159,6 +159,14 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       const what = e.kind === 'men' ? `No reinforcements for ${who} at ${at}` : e.kind === 'fort' ? `No field works for ${who} at ${at}` : e.kind === 'recon' ? `No reconnaissance for ${who} at ${at}` : `${who} was not allowed to fall back at ${at}`;
       return { text: `${what}: no answer came. The corps there lose ${e.mor} morale.`, cls: 'bad', region: e.region };
     }
+    case 'op': {
+      if (e.faction !== me) return null;
+      const h = (g.hq ?? []).find(x => x.id === e.army), who = h ? h.cmd.name : 'The commander';
+      if (e.what === 'approved') return { text: `Operation ${e.name} approved: ${who} prepares the attack on ${R(e.region)}.`, cls: 'me', region: e.region };
+      if (e.what === 'begins') return { text: `Operation ${e.name}: the corps assemble on the border of ${R(e.region)}. The guns will open up when the attack begins.`, cls: 'me', region: e.region };
+      if (e.what === 'off') return { text: `Operation ${e.name} against ${R(e.region)} is called off before it began.`, cls: '', region: e.region };
+      return { text: e.ok ? `Operation ${e.name} has succeeded: ${R(e.region)} is ours. See the Inbox for the result.` : `Operation ${e.name} against ${R(e.region)} has failed. See the Inbox for the result.`, cls: e.ok ? 'good' : 'bad', region: e.region };
+    }
     case 'general': {
       if (e.faction !== me) return null;
       const h = (g.hq ?? []).find(x => x.id === e.army);

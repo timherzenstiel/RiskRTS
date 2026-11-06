@@ -31,12 +31,14 @@ export interface InboxItem {
   region?: number; sector?: number; who?: string;
   /** Game time it lapses, and when it came (for the countdown bar). */
   exp?: number; from?: number;
+  /** A small table (an operation plan or result). */
+  rows?: [string, string][];
   /** Answers: `y` is what Y does, `n` what N does. */
   opts: Opt[]; y?: number; n?: number;
 }
 
 const SRC: Record<Src, string> = { cmd: 'Commander', train: 'Training', econ: 'Economy', diplo: 'Diplomacy', cal: 'General Staff' };
-const SHORT_KIND: Record<ReqKind, string> = { men: 'Always approve men for this army', fort: 'Always approve works for this army', recon: 'Always approve patrols for this army', attack: '', fallback: 'Always approve falling back for this army', release: 'Always approve sending corps back for this army' };
+const SHORT_KIND: Record<ReqKind, string> = { men: 'Always approve men for this army', fort: 'Always approve works for this army', recon: 'Always approve patrols for this army', attack: '', fallback: 'Always approve falling back for this army', release: 'Always approve sending corps back for this army', op: '' };
 const ui = useUi.getState;
 const send = (cmd: Parameters<ReturnType<typeof ui>['order']>[0]) => ui().order(cmd);
 const clearTrained = (rid: number) => useUi.setState(s => { const tr = { ...s.trained }; delete tr[rid]; return { trained: tr }; });
@@ -54,8 +56,23 @@ export function inboxOf(g: GameState, me: number): InboxItem[] {
       opts.splice(opts.length - 1, 0, { label: t(SHORT_KIND[q.kind]), off: first.off, title: t('Approve this one, and let him carry out the same kind of request by himself from now on'),
         run: () => send({ t: 'reply', req: q.id, opt: first.opt, n: first.n }) && send({ t: 'armySet', army: h.id, standing: [...h.standing, q.kind] }) });
     }
-    out.push({ key: 'rq' + q.id, src: 'cmd', tag: KIND[q.kind], urg: q.urg, title: rt.title, why: rt.why, at: q.at, region: q.region, sector: q.sector, who: h ? `${h.cmd.name} · ${hqName(h)}` : undefined,
+    out.push({ key: 'rq' + q.id, src: 'cmd', tag: KIND[q.kind], urg: q.urg, title: rt.title, why: rt.why, rows: rt.rows, at: q.at, region: q.region, sector: q.sector, who: h ? `${h.cmd.name} · ${hqName(h)}` : undefined,
       exp: reqExpiry(q), from: q.at, opts, y: opts.findIndex(o => o.primary && !o.off), n: opts.length - 1 });
+  }
+  // result cards of operations (design-play §3.3): plan against outcome, until read
+  for (const o of (g.ops ?? []).filter(o => o.owner === me && g.day - o.day <= 120)) {
+    const P = o.plan, pc = (p: number) => `${Math.round(p * 100)} %`;
+    out.push({ key: 'op' + o.id, src: 'cmd', tag: 'Operation', urg: 0, at: g.time - (g.day - o.day) / 7 * 20, region: o.target, who: o.gen,
+      title: o.off ? tn('Operation {0} was called off', { raw: o.name }) : o.ok ? tn('Operation {0} succeeded', { raw: o.name }) : tn('Operation {0} failed', { raw: o.name }),
+      why: o.off ? t('The attack never started: the corps were gone or the border was lost.') : o.ok ? t('{0} is ours.', W.regions[o.target].name) : t('{0} is still in enemy hands.', W.regions[o.target].name),
+      rows: o.off ? undefined : [
+        ['', t('Plan → outcome')],
+        [t('Success'), `${pc(P.p)} → ${o.ok ? t('taken') : t('not taken')}`],
+        [t('Losses'), `~${P.loss} → ${o.lost} ${t('men')}`],
+        [t('Shells'), `${P.shells} → ${o.shells}`],
+        [t('General'), o.star > 0 ? t('+1 star') : o.star < 0 ? t('−1 star') : t('no change')],
+      ],
+      opts: [{ label: t('OK'), primary: true, run: () => ui().dropInbox('op' + o.id, 9e9) }], y: 0, n: 0 });
   }
   // recruits that finished training and still wait in the reserve
   for (const [k, v] of Object.entries(st.trained)) {
@@ -110,6 +127,7 @@ function Card({ g, x, toast, onClose }: { g: GameState; x: InboxItem; toast?: bo
       </div>
       <b className="ib-t">{x.title}</b>
       <small className="ib-w">{x.why}</small>
+      {x.rows && <table className="ib-tab"><tbody>{x.rows.map(([a, b], i) => <tr key={i}><th>{a}</th><td>{b}</td></tr>)}</tbody></table>}
       {left !== null && <div className="ib-exp" title={x.src === 'cmd' ? t('Unanswered, the request lapses and his corps lose morale') : t('Time left to answer')}><i style={{ width: `${(left * 100).toFixed(1)}%` }} /></div>}
       <div className="ib-a">
         {x.opts.map((o, i) => (

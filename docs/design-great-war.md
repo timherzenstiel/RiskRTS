@@ -234,7 +234,7 @@ Chat already exists in multiplayer lobbies; in-game it gets quick phrases. The A
 - **Front card** (BattleCard): suppression bar, wire left, shells left in the local dump, barrage level buttons, *Over the top*, stance, *Reinforce*, *Withdraw*, *Raid*.
 - **Staff briefing** before an attack: estimated enemy strength from fog, expected shell use for a 2-minute heavy barrage, rough loss forecast. Clearly labelled as an estimate.
 - **After-action report** when a battle ends: men lost by type on both sides, shells spent, how far the attackers got (from agent positions), morale change. Stored for the last 20 battles; radio dispatch links to it.
-- **Top bar:** date, weather, supply, shells, men in the pool, war weariness, speed 1×/2×/4× (host/single player; multiplayer follows the host).
+- **Top bar:** date, weather, supply, shells, men in the pool, war weariness, pause (host/single player) and speed 1×/2×/4× – 2× and 4× only when every other power is a computer; with human rivals the war runs at 1×.
 - **Nation screen** in the lobby: each power's national unit, strengths and weaknesses, so the choice of power matters.
 - **Battlefield:** persistent craters and churned mud per border (stored as a crater count per sector, not as fx), collapsed trench sections after heavy barrages, rain/snow, national unit models. Night is cosmetic: battles fought in mud months get dusk lighting for variety.
 - **Map:** rails, mountain borders, unrest markers, ceasefire lines, decoy estimates looking like real ones.

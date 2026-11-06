@@ -28,7 +28,7 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
       {region.cut && <p className="note budget full">Cut off from supply: no recruiting here until a route home is reopened.</p>}
       {region.strike && <p className="note budget full">On strike: no recruits from here until the war weariness eases.</p>}
       {pool < FORMATION.inf.men && <p className="note budget full">The manpower pool is nearly empty ({Math.floor(pool)} men). Raise conscription on the nation screen, or wait for the next age class.</p>}
-      <CameoGrid label="Recruit" hint="Click raises one formation · Shift-click or ×5 raises five · keys 1–4">
+      <CameoGrid label="Recruit" hint="Price: supply and men from the pool · 'here': already in this region · click buys one, 'buy 5' five · keys 1–4">
         {UNIT_TYPES.map((k, i) => {
           const c = unitCost(g, me, k), men = FORMATION[k].men, nat = nationalUnit(me, k, g.day);
           const tech = k === 'tank' ? 'tank' : k === 'plane' ? 'air' : null, early = tech && !techOn(g, me, tech);
@@ -38,7 +38,7 @@ export function RecruitTab({ region, id }: { region: RegionState; id: number }) 
           const lock = early ? monthStr(techDayFor(me, tech!, g.factions[me].rushed)) : needs ?? (region.cut ? 'Cut off' : region.strike ? 'Strike' : undefined);
           return (
             <Cameo key={k} k={k} nation={me} name={unitName(g, me, k)} hotkey={i < 4 ? String(i + 1) : undefined} national={!!nat} count={region.units[k]}
-              cost={<><SupplyIcon />{c}</>} lock={lock} disabled={supply < c || locked || noMen}
+              cost={<><SupplyIcon />{c}<span className={'cm-men' + (noMen ? ' short' : '')}>· {men} men</span></>} lock={lock} disabled={supply < c || locked || noMen}
               title={`${nat ? NATIONS[me].unitDesc : UDESC[k]} · ${men} men${noMen && !locked ? ` · needs ${men} men from the pool` : ''}`}
               onBuy={five => recruit(id, k, five ? 5 : 1)} five fiveDisabled={supply < c * 5 || locked || pool < men * 5} />
           );

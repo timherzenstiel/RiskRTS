@@ -149,9 +149,28 @@ export function formArmy(g: GameState, fid: number, fromId: number, toId: number
   if (A.battle >= 0 && !frontsOf(g, A.id).every(b => b.goal)) return `${WA.name} is under attack. Its troops cannot leave.`;
   if (!WA.land.includes(toId)) return WA.seaAdj.includes(toId) ? `${WB.name} lies across the sea from ${WA.name}. Troops cross it by ship.` : `${WB.name} does not border ${WA.name}. Infantry and tanks can only attack across a direct border; aircraft reach two borders.`;
   const tot = groundUnits(A.units); if (tot < 2) return `${WA.name} needs at least 2 ground formations to march. One always stays behind.`;
-  const main = mainOf(A); if (groundUnits(main) < 1) return `The main army of ${WA.name} is empty: its troops stand on the borders. Move some back to the centre, or give the corps on the border its orders.`;
-  const n = shareOf(main, frac, groundUnits(main) >= tot);
-  const out = takeGroup(A, -1, 0, n);
+  const main = mainOf(A);
+  let out: { u: Units; m: Units };
+  if (B.owner === fid) {
+    // a move into your own region takes its share of every idle formation, main army first, then the corps on the borders
+    // (corps with attack orders stay); otherwise a region on Auto, with most of its troops on the borders, could hardly move
+    const idle = { ...main }, posts = Object.entries(A.fr ?? {}).filter(([, c]) => !(c.ord ?? 0)).map(([p]) => +p);
+    for (const p of posts) for (const k of GROUND_TYPES) idle[k] += A.fr![p].u[k];
+    if (groundUnits(idle) < 1) return `Every formation in ${WA.name} is committed to an attack.`;
+    const want = shareOf(idle, frac, groundUnits(idle) >= tot) as Units;
+    out = takeGroup(A, -1, 0, want);
+    for (const p of posts) {
+      const left: Partial<Units> = {}; let any = 0;
+      for (const k of GROUND_TYPES) { left[k] = Math.max(0, (want[k] ?? 0) - out.u[k]); any += left[k]!; }
+      if (!any) break;
+      const t = takeGroup(A, p, 0, left); for (const k of GROUND_TYPES) { out.u[k] += t.u[k]; out.m[k] += t.m[k]; }
+    }
+    fixPosts(g, A);
+  } else {
+    if (groundUnits(main) < 1) return `The main army of ${WA.name} is empty: its troops stand on the borders. Move some back to the centre, or give the corps on the border its orders.`;
+    out = takeGroup(A, -1, 0, shareOf(main, frac, groundUnits(main) >= tot));
+  }
+  if (groundUnits(out.u) < 1) return 'No troops to move.';
   const legs = (A.arrT !== undefined && g.time - A.arrT < FORCED_MARCH ? (A.legs ?? 1) : 0) + 1;
   const tired = A.foughtT !== undefined && g.time - A.foughtT < BATTLE_REST;
   return column(g, fid, fromId, -1, toId, toPost ?? (B.owner === fid ? -1 : fromId), out.u, out.m, A.mor, { stance: A.stance ?? 0, legs, tired, gn: armyNo(g, A), gk: 0 });
@@ -178,6 +197,8 @@ export function sendArmy(g: GameState, fid: number, fromId: number, toId: number
   if (B.owner === fid || (B.owner >= 0 && allied(g, fid, B.owner))) {
     if (B.owner !== fid) return 'Your troops do not garrison allied regions.';
     // over the sea by transport
+    // further inside your own land: march along your own roads and rails
+    if (!W.regions[fromId].land.includes(toId) && A.owner === fid && landRoute(g, fid, fromId, toId)) return moveGroup(g, fid, fromId, -1, toId, -1, frac);
     if (!W.regions[fromId].land.includes(toId) && coastal(fromId) && coastal(toId)) return shipTroops(g, fid, fromId, -1, toId, post !== undefined && W.regions[toId].sectors.includes(post) ? post : -1, frac);
     const a = formArmy(g, fid, fromId, toId, frac, post !== undefined && W.regions[toId].sectors.includes(post) ? post : -1); if (typeof a === 'string') return a;
     emit(g, { k: 'march', faction: fid, from: fromId, to: toId, units: groundUnits(a.units) });

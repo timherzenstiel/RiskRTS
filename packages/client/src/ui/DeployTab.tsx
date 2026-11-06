@@ -44,6 +44,13 @@ function ColumnRow({ g, a, id }: { g: GameState; a: Army; id: number }) {
   );
 }
 
+/** A hand-placed move would be undone by Auto at the next convoy, so moving troops by hand switches the region to Manual. */
+function manual(r: RegionState) {
+  if (r.deploy === 1) return;
+  const ui = useUi.getState(); ui.order({ t: 'deploy', region: r.id, mode: 1 });
+  ui.say(`${buildWorld().regions[r.id].name} is now on Manual deployment, so your troops stay where you put them. Switch back to Auto at the top of this tab.`);
+}
+
 function BorderRow({ g, me, r, n }: { g: GameState; me: number; r: RegionState; n: number }) {
   const W = buildWorld(), ui = useUi.getState, coast = n >= 1000, nb = coast ? null : g.regions[n], F = nb ? FACTIONS[nb.owner] : { short: 'Sea', color: '#7fb4d8' };
   const c = r.fr?.[n], foreign = coast ? coastThreat(g, me, n - 1000) > 0 : nb!.owner !== me, peace = !coast && foreign && !!treatyOf(g, me, nb!.owner);
@@ -51,8 +58,8 @@ function BorderRow({ g, me, r, n }: { g: GameState; me: number; r: RegionState; 
   const foothold = frontsOf(g, n).find(b => b.from === r.id && b.attacker === me && b.stage === 3);
   const t = Math.round(legDist(r.id, -1, r.id, n) / POST_SPEED * moveK(g));
   const frac = useUi.getState().sendFrac;
-  const send = () => { click(); ui().order({ t: 'move', region: r.id, post: -1, to: r.id, toPost: n, frac }); };
-  const back = () => { click(); ui().order({ t: 'move', region: r.id, post: n, to: r.id, toPost: -1, frac }); };
+  const send = () => { click(); manual(r); ui().order({ t: 'move', region: r.id, post: -1, to: r.id, toPost: n, frac }); };
+  const back = () => { click(); manual(r); ui().order({ t: 'move', region: r.id, post: n, to: r.id, toPost: -1, frac }); };
   const order = (k: Order, now = false) => { click(); ui().order({ t: 'order', region: r.id, post: n, k, now, brk: peace || undefined }); };
   return (
     <div className={'post' + (fb ? ' fight' : '')} style={{ '--c': F.color } as React.CSSProperties}>

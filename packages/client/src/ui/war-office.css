@@ -269,6 +269,13 @@ button.lcd:hover{border-color:var(--lcd-dim)}
 .tl .bd .b{border-radius:1px;background:#24261f;box-shadow:0 0 0 1px #000}
 .cl{font:400 11px/1 var(--f-stencil);letter-spacing:.12em;color:#e8dfc0;text-transform:uppercase}
 .bm{border-radius:2px;background:linear-gradient(180deg,#7a2a1c,#4e170e);border:1px solid #1d0603;color:#ffd6c6;font:600 12px var(--f-head);letter-spacing:.08em;text-transform:uppercase;box-shadow:0 0 0 1px #c8402e}
+.bm{border-left:5px solid var(--c,#c8402e)}
+/* battles of others: quiet, so the ones that concern you stand out */
+.bm.oth{background:linear-gradient(180deg,#3a3c36,#262823);color:#d6d2c2;box-shadow:0 0 0 1px #55574e;animation:none;opacity:.88;font-size:11px}
+/* you attack: brass */
+.bm.atk{background:linear-gradient(180deg,#6b5a22,#40350f);color:#ffe9a8;box-shadow:0 0 0 1px #d6b04a;animation:none}
+/* you defend: red, pulsing */
+.bm.def{box-shadow:0 0 0 1px #ff5a40}
 
 /* ---------- modals and screens ---------- */
 .scrim{background:radial-gradient(ellipse at center,rgba(8,9,6,.45),rgba(8,9,6,.86));-webkit-backdrop-filter:none;backdrop-filter:none}

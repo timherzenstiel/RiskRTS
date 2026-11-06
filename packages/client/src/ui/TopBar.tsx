@@ -24,7 +24,7 @@ function Lcd({ label, value, plus, cls, title, onClick }: { label: string; value
 function Needle({ v, unrest }: { v: number; unrest: number }) {
   const a = -60 + Math.min(100, Math.max(0, v)) * 1.2;
   return (
-    <div className={'needle' + (v >= unrest || v >= 60 ? ' hi' : v >= 30 ? ' mid' : '')} title="War weariness: casualties wear down the nation. It cuts income by up to 30%, lowers morale and, above 60%, stops volunteers. It fades in quiet times." role="img" aria-label={`War weariness ${Math.round(v)}%`}>
+    <div className={'needle' + (v >= unrest || v >= 60 ? ' hi' : v >= 30 ? ' mid' : '')} title={`War weariness: how tired your nation is of the war. Losses, conscription and broken treaties raise it; quiet times let it fade. It cuts supply income by up to 30% and lowers morale; above 60% the barracks stop sending volunteers, and above ${unrest} strikes and uprisings begin.`} role="img" aria-label={`War weariness ${Math.round(v)}%`}>
       <svg viewBox="0 0 44 26" aria-hidden="true"><path d="M4 24A18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeOpacity=".35" strokeWidth="3" /><path d="M29 8.4A18 18 0 0 1 40 24" fill="none" stroke="#c8402e" strokeWidth="3" /><line x1="22" y1="24" x2="22" y2="9" stroke="#e8e0c4" strokeWidth="2" strokeLinecap="round" style={{ transform: `rotate(${a}deg)`, transformOrigin: '22px 24px' }} /></svg>
       <span><small>Weariness</small><b>{Math.round(v)}%</b></span>
     </div>
@@ -71,13 +71,13 @@ export function TopBar() {
       <Ticker />
 
       <div className="counters">
-        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title="Supply arrives for every power at the same moment">
+        <div key={pulse} className={'lcd sup' + (pulse ? ' pulse' : '')} title={`Supply: the money of the war. Recruiting, building, fortifying and scouting all cost supply. +${income(g, me)} arrives with every convoy (the ring counts down to it): more for more regions, factories and whole continents, less with high war weariness. Cut-off or contested regions pay nothing.`}>
           <div className="ring" style={{ '--p': `${(g.supplyT / TICK_SECONDS * 100).toFixed(1)}%` } as React.CSSProperties} role="img" aria-label={`Next convoy in ${convoyIn(g)} seconds`}><span>{Math.max(0, convoyIn(g))}</span></div>
           <small>Supply</small><span className="lcd-w"><b key={f.supply}>{f.supply}</b><i>+{income(g, me)}</i></span>
         </div>
-        <Lcd label="Shells" value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls="sh" title="Artillery shells in the national stockpile, and what factories and the capital make per convoy. Buy more in the Build tab." />
+        <Lcd label="Shells" value={Math.floor(f.shells ?? 0)} plus={shellIncome(g, me)} cls="sh" title="Shells: ammunition for artillery and gun emplacements. Every gun shot in a battle uses some; with none left the guns fall silent. Factories and the capital make more each convoy, and the Build tab turns supply into shells." />
         <Lcd label="Men" value={men >= 10000 ? `${Math.round(men / 1000)}k` : Math.floor(men).toLocaleString('en-GB')} plus={poolGrowth(g, me)} cls={'men' + (men < 300 ? ' hi' : '')}
-          title="Manpower pool: men for new formations, and the new age class per convoy. Open the nation screen for conscription." onClick={() => { click(); ui().setOverlay('nation'); }} />
+          title={`Men: the manpower pool. Every new formation takes men from it (an infantry battalion needs 100). +${poolGrowth(g, me)} come in each convoy, a new age class from every home region you still hold, so losing home regions or a long war makes recruits scarce. Raise conscription on the nation screen (click) for more, at the cost of war weariness.`} onClick={() => { click(); ui().setOverlay('nation'); }} />
         <Needle v={f.ww} unrest={NATIONS[me].unrest} />
         <div className="pills" role="group" aria-label="Powers">
           {FACTIONS.map((x, i) => (

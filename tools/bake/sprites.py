@@ -49,7 +49,7 @@ def main():
     atlas = Image.new('RGBA', (CELL * 8 * len(FRAMES), CELL * len(fac)), (0, 0, 0, 0))
     tmp = os.path.join(OUT, '_cell.png')
     for f in range(len(fac)):
-        U = cam_mod.tint_material(f'u{f}', uni[f])
+        U = (f'u{f}', uni[f], cam_mod.lin(cam_mod.DRESS_UNI[f]))
         for k in range(8):
             for j, frame in enumerate(FRAMES):
                 body = cam_mod.place(lib[frame], 0, 0, k * math.pi / 4, 1, U)

@@ -1,4 +1,5 @@
 import { FACTIONS } from '@riskrts/shared';
+import * as THREE from 'three';
 import { col } from './util';
 
 /** Shared colour constants for models, particles and props. */
@@ -29,6 +30,18 @@ export const HELM = facCol.map((c) => c.clone().multiplyScalar(0.55));
 export const TANKC = facCol.map((c) => c.clone().lerp(col('#6b6a52'), 0.3));
 export const TANKD = TANKC.map((c) => c.clone().multiplyScalar(0.66));
 export const TANKL = TANKC.map((c) => c.clone().lerp(col('#e8e2cc'), 0.22));
+/**
+ * Nation dress (keep in sync with tools/bake/cameos.py DRESS): the real colour of uniforms, vehicle paint and aircraft dope. On the
+ * baked models only accents (armbands, helmet bands, recognition panels) take the team colour; dress parts take these.
+ * GB khaki serge, FR horizon blue, RU khaki-grey, DE field grey, AH pike grey, OT khaki, US olive drab.
+ */
+export const DRESS_UNI = ['#8b7d55', '#7f93a8', '#8d8a66', '#727866', '#8a9697', '#9a8658', '#6e6a48'].map(col);
+export const DRESS_VEH = ['#6e6247', '#7b7656', '#5f6448', '#717268', '#6c7066', '#8a7b55', '#5d5b40'].map(col);
+export const DRESS_AIR = ['#6b6444', '#b9b49c', '#a8a68e', '#9a9a86', '#a09c86', '#a89a76', '#757052'].map(col);
+/** Dress for a team tint passed to the mesh pools (looked up by identity: the UNI / TANKC entries). */
+export const dressOf = new Map<THREE.Color, THREE.Color>();
+UNI.forEach((c, f) => dressOf.set(c, DRESS_UNI[f]));
+TANKC.forEach((c, f) => dressOf.set(c, DRESS_VEH[f]));
 export const DEADC = facCol.map((c) => c.clone().multiplyScalar(0.35));
 export const FLAGD = facCol.map((c) => c.clone().multiplyScalar(0.85));
 export { mix };

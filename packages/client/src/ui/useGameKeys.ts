@@ -27,7 +27,7 @@ export function useGameKeys() {
         if (t && t.closest('[role=dialog]') && t.tagName === 'BUTTON') return; // dialog buttons keep Space for activation
         e.preventDefault();
         if (!s.canControlTime || ui.overlay) return;
-        if (s.speed > 0) { lastSpeed = s.speed; ui.setSpeed(0); } else ui.setSpeed(lastSpeed || 1);
+        if (s.speed > 0) { lastSpeed = s.speed; ui.setSpeed(0); } else ui.setSpeed(s.canChangeSpeed ? lastSpeed || 1 : 1);
       } else if (MAP_MODES.some(m => m.key === e.key.toLowerCase())) {
         // map modes: P political, F fronts, T forces, B supply, I intel; the same key again goes back to the political map
         const want = MAP_MODES.findIndex(m => m.key === e.key.toLowerCase()) as MapMode; ui.setMode(ui.mode === want ? 0 : want);

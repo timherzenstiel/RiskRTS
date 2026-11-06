@@ -172,7 +172,8 @@ vec3 groundPaint(vec3 wp, vec3 wn){
       }
       // owner line where powers meet, a faint dotted line between regions of one power
       float nbO=bOwner(nbR), lw=mix(.035,.09,1.-uNear);
-      if(nbO!=myO){ if(myO>=0.&&bd<lw) c=mix(fcm,vec3(1.),.2)*(bd<lw*.5?1.:.7); }
+      // soft-edged, so the line does not break into tile steps up close (pale national colours would read as water otherwise)
+      if(nbO!=myO){ if(myO>=0.){ float a=1.-smoothstep(lw*.55,lw,bd); c=mix(c,mix(fcm*.78,vec3(.9),.1)*(bd<lw*.45?1.:.75),a*mix(.85,.55,uNear)); } }
       else if(bd<lw*.45&&fract(dot(p,tg)*14.)<.5) c=mix(c,vec3(.02),.4);
       // barbed wire belt between the border and the trench: pickets with shadows and criss-cross strands
       if(wire>.5&&bd>.13&&bd<.13+.07*wire){

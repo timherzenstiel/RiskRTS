@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { BANDS, CameraRig, MAX_DIST, MIN_DIST } from './camera';
 import { clamp } from './util';
+import { wrapDx } from '@riskrts/shared';
 
 export interface InputHost {
   canvas: HTMLCanvasElement;
@@ -50,7 +51,7 @@ export class Input {
       e.preventDefault();
       const rig = h.rig, f = Math.exp(clamp(e.deltaY, -120, 120) * .0018), ok = rig.screenToWorld(e.clientX, e.clientY, c.getBoundingClientRect(), this.a);
       const nd = clamp(rig.gdist * f, MIN_DIST, MAX_DIST), ff = nd / rig.gdist; rig.gdist = nd;
-      if (ok) { rig.gx = this.a.x + (rig.gx - this.a.x) * ff; rig.gz = this.a.z + (rig.gz - this.a.z) * ff; }
+      if (ok && (ff < 1 || (rig.k < .05 && nd < 80))) { rig.gx += wrapDx(rig.gx, this.a.x) * (1 - ff); rig.gz = this.a.z + (rig.gz - this.a.z) * ff; }
     }, { passive: false });
     onWin('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || this.typing()) return;
@@ -71,8 +72,8 @@ export class Input {
   /** Fly to a zoom band, keeping the point under the cursor (or the screen centre) in place. */
   zoomBand(b: number) {
     const rig = this.h.rig, nd = BANDS[b].at, ff = nd / rig.gdist;
-    if (this.hoverAt && rig.screenToWorld(this.hoverAt.x, this.hoverAt.y, this.h.canvas.getBoundingClientRect(), this.b)) {
-      rig.gx = this.b.x + (rig.gx - this.b.x) * ff; rig.gz = this.b.z + (rig.gz - this.b.z) * ff;
+    if (this.hoverAt && (ff < 1 || (rig.k < .05 && nd < 80)) && rig.screenToWorld(this.hoverAt.x, this.hoverAt.y, this.h.canvas.getBoundingClientRect(), this.b)) {
+      rig.gx += wrapDx(rig.gx, this.b.x) * (1 - ff); rig.gz = this.b.z + (rig.gz - this.b.z) * ff;
     }
     rig.gdist = nd;
   }
@@ -102,7 +103,7 @@ export class Input {
       if (this.dragging) {
         const r = c.getBoundingClientRect();
         if (h.rig.screenToWorld(prev.x, prev.y, r, this.a) && h.rig.screenToWorld(cur.x, cur.y, r, this.b)) {
-          const dx = this.a.x - this.b.x, dz = this.a.z - this.b.z; h.rig.gx += dx; h.rig.gz += dz; h.rig.tx += dx; h.rig.tz += dz;
+          const dx = wrapDx(this.b.x, this.a.x), dz = this.a.z - this.b.z; h.rig.gx += dx; h.rig.gz += dz; h.rig.tx += dx; h.rig.tz += dz;
         }
       }
     }

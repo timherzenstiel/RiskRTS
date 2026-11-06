@@ -11,14 +11,15 @@ export const COAST_OFFSET = 40, COAST_SCALE = 12;
 export const COAST_GLSL = `float coastSd(sampler2D tex, vec2 t){ return (texture2D(tex, t).r * 255. - ${COAST_OFFSET.toFixed(1)}) / ${COAST_SCALE.toFixed(1)}; }`;
 
 export function coastTexture(world: World): THREE.DataTexture {
-  const S = COAST_SS, W = COLS * S, H = ROWS * S, n = W * H;
+  // the world wraps east-west (and closes on the globe): work on a strip padded with the far side's columns, then crop
+  const S = COAST_SS, P = 24 * S, W0 = COLS * S, W = W0 + 2 * P, H = ROWS * S, n = W * H;
   const L = (c: number, r: number) => (r >= 0 && r < ROWS && world.land[r * COLS + ((c + COLS) % COLS)]) ? 1 : 0;
   // bilinear upsample of the tile mask
   let f = new Float32Array(n);
   for (let y = 0; y < H; y++) {
     const fy = (y + .5) / S - .5, r0 = Math.floor(fy), ty = fy - r0;
     for (let x = 0; x < W; x++) {
-      const fx = (x + .5) / S - .5, c0 = Math.floor(fx), tx = fx - c0;
+      const fx = (x - P + .5) / S - .5, c0 = Math.floor(fx), tx = fx - c0;
       f[y * W + x] = (L(c0, r0) * (1 - tx) + L(c0 + 1, r0) * tx) * (1 - ty) + (L(c0, r0 + 1) * (1 - tx) + L(c0 + 1, r0 + 1) * tx) * ty;
     }
   }
@@ -49,13 +50,14 @@ export function coastTexture(world: World): THREE.DataTexture {
     }
   };
   chamfer(out); chamfer(inn);
-  const data = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
+  const data = new Uint8Array(W0 * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W0; x++) {
+    const i = y * W + x + P;
     // sub-pixel accurate zero crossing: blend in the blurred field's slope near the contour
     const sd = (out[i] > 0 ? out[i] - .5 : -(inn[i] - .5)) / S;
-    data[i] = Math.max(0, Math.min(255, Math.round(COAST_OFFSET + sd * COAST_SCALE)));
+    data[y * W0 + x] = Math.max(0, Math.min(255, Math.round(COAST_OFFSET + sd * COAST_SCALE)));
   }
-  const tex = new THREE.DataTexture(data, W, H, THREE.RedFormat, THREE.UnsignedByteType);
-  tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  const tex = new THREE.DataTexture(data, W0, H, THREE.RedFormat, THREE.UnsignedByteType);
+  tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.wrapS = THREE.RepeatWrapping; tex.needsUpdate = true;
   return tex;
 }

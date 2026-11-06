@@ -3,7 +3,7 @@
 import { FORMATION, GROUND_TYPES, SHELLS, TICK_SECONDS, UNIT_TYPES, UT, emptyUnits, isDef, type UnitType, type Units } from '../data/units';
 import { nationOf } from '../data/nations';
 import { weatherAt } from '../data/terrain';
-import { world } from './core';
+import { emit, world } from './core';
 import { addToGroup, corpsIn, depotOf, fixPosts, refill, takeDepot } from './posts';
 import { hasRail, linkQuality } from './rails';
 import { seaLinks } from './navy';
@@ -137,15 +137,16 @@ export function inTraining(r: RegionState, post?: number): Units {
 export function stepTraining(g: GameState, add: (r: RegionState, k: UnitType) => void) {
   for (const r of g.regions) {
     if (!r.train?.length) continue;
-    const keep: Trainee[] = [];
+    const keep: Trainee[] = []; let ready = 0;
     for (const t of r.train) {
       if (t.f !== r.owner) continue;
       if (t.at > g.time) { keep.push(t); continue; }
-      add(r, t.k);
+      add(r, t.k); if (t.p === undefined && t.k !== 'plane') ready++;
       // for a commander: onto the border that asked, in his army (unless the region is fighting – then they stay with the depot)
       if (t.p !== undefined && r.battle < 0 && depotOf(r).u[t.k] > 0) { const out = takeDepot(r, { [t.k]: 1 }); addToGroup(g, r, t.p, out.u, out.m, r.mor, { id: -1, n: 0, army: t.army }); }
     }
     r.train = keep.length ? keep : undefined;
+    if (ready) emit(g, { k: 'trained', faction: r.owner, region: r.id, n: ready });
   }
 }
 

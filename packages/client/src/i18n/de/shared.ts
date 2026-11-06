@@ -680,12 +680,12 @@ const S: Record<string, string> = {
   '{0} sends {1} back to you: the border is at peace. It waits in {2}.': '{0} schickt dir das {1} zurück: An der Grenze herrscht Frieden. Es wartet in {2}.',
   '{0} sends {1} back to you: the front is lost. It waits in {2}.': '{0} schickt dir das {1} zurück: Die Front ist verloren. Es wartet in {2}.',
   '{0} sends {1} back to you: the front can spare it. It waits in {2}.': '{0} schickt dir das {1} zurück: Die Front kann es entbehren. Es wartet in {2}.',
-  '{0} urgently asks for men at {1}. See the Staff panel.': '{0} bittet dringend um Verstärkung bei {1}. Siehe Stab.',
-  '{0} urgently asks for men at {1} ({2} border). See the Staff panel.': '{0} bittet dringend um Verstärkung bei {1} (Grenze zu {2}). Siehe Stab.',
-  '{0} asks permission to fall back at {1}. See the Staff panel.': '{0} bittet um Erlaubnis, bei {1} zurückzuweichen. Siehe Stab.',
-  '{0} asks permission to fall back at {1} ({2} border). See the Staff panel.': '{0} bittet um Erlaubnis, bei {1} (Grenze zu {2}) zurückzuweichen. Siehe Stab.',
-  '{0} needs an answer at {1}. See the Staff panel.': '{0} braucht bei {1} eine Antwort. Siehe Stab.',
-  '{0} needs an answer at {1} ({2} border). See the Staff panel.': '{0} braucht bei {1} (Grenze zu {2}) eine Antwort. Siehe Stab.',
+  '{0} urgently asks for men at {1}. See the Inbox.': '{0} bittet dringend um Verstärkung bei {1}. Siehe Posteingang.',
+  '{0} urgently asks for men at {1} ({2} border). See the Inbox.': '{0} bittet dringend um Verstärkung bei {1} (Grenze zu {2}). Siehe Posteingang.',
+  '{0} asks permission to fall back at {1}. See the Inbox.': '{0} bittet um Erlaubnis, bei {1} zurückzuweichen. Siehe Posteingang.',
+  '{0} asks permission to fall back at {1} ({2} border). See the Inbox.': '{0} bittet um Erlaubnis, bei {1} (Grenze zu {2}) zurückzuweichen. Siehe Posteingang.',
+  '{0} needs an answer at {1}. See the Inbox.': '{0} braucht bei {1} eine Antwort. Siehe Posteingang.',
+  '{0} needs an answer at {1} ({2} border). See the Inbox.': '{0} braucht bei {1} (Grenze zu {2}) eine Antwort. Siehe Posteingang.',
 
   // ---------------------------------------------------------------- breakdowns of the national numbers (sim/terms.ts)
   'Land · {0} paying region': 'Land · {0} zahlende Region',

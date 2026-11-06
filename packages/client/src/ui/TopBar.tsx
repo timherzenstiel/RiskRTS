@@ -12,6 +12,7 @@ import { Sfx } from '../audio/sfx';
 import { Scoreboard } from './Scoreboard';
 import { rendererRef } from './refs';
 import { HandshakeIcon, MenuIcon, PauseIcon } from './icons';
+import { PauseCall } from './Vote';
 import { t, tx } from '../i18n';
 import { menStr } from './format';
 
@@ -111,6 +112,7 @@ export function TopBar() {
         ) : (
           <span className="speedro" title={session instanceof GuestSession && session.spectator ? t('Watching with full vision, a little delayed') : t('The host controls the game speed')}>{session instanceof GuestSession && session.spectator ? t('Spectating') : speed === 0 ? t('Paused') : `${speed}×`}{session instanceof GuestSession && session.ranked ? ' · ' + t('ranked') : ''}</span>
         )}
+        <PauseCall />
         <button className="ico" aria-label={t('Diplomacy')} title={t('Diplomacy: treaties and messages')} onClick={() => { click(); ui().setOverlay('diplomacy'); }}><HandshakeIcon /></button>
         <button className="ico" aria-label={t('Menu')} title={t('Menu')} onClick={() => { click(); ui().setOverlay('menu'); }}><MenuIcon /></button>
       </div>

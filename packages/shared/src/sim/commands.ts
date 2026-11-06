@@ -9,6 +9,7 @@ import { MARCH_MIN, MARCH_SPEED, addForce, approachSector, emit, frontsOf, hops,
 import { joinBattle, launch, startAssault, startBattle, transferAgents } from './battle';
 import { charge, mobilise, produce, reinforce, setBarrage, setEcon, setStance, withdraw } from './levers';
 import { LEVY_COST, countRecruit, train } from './supply';
+import { callPause, votePause } from './vote';
 import { buildCostOf, unitCost, unitName } from './rules';
 import { nationOf } from '../data/nations';
 import { mountainRegion } from '../data/terrain';
@@ -396,12 +397,21 @@ export function mergeCorps(g: GameState, fid: number, region: number, a: number,
 }
 
 /** Form a new corps at the region centre from battalions of the depot. */
-export function formCorps(g: GameState, fid: number, region: number, n: Partial<Units>): string | null {
+export function formCorps(g: GameState, fid: number, region: number, n: Partial<Units>, into?: number): string | null {
   const A = g.regions[region];
   if (!A || A.owner !== fid) return 'Select one of your own regions first.';
   const u = unitsOf(n), dep = depotOf(A).u, q = groundUnits(u);
   for (const k of GROUND_TYPES) if (u[k] > dep[k]) return 'The depot does not have that many battalions.';
   if (q < 1) return 'Pick the battalions for the new corps.';
+  // into an existing corps of the region (design-play §2: trained recruits join a corps)
+  if (into !== undefined) {
+    const c = corpsById(A, into); if (!c) return 'That corps is not in this region.';
+    if ((c.ord ?? 0) >= 1) return 'That corps is moving up to attack.';
+    if (corpsSize(c) + q > CORPS_CAP) return `A corps holds at most ${CORPS_CAP} battalions.`;
+    const out = takeDepot(A, u);
+    addToGroup(g, A, c.p, out.u, out.m, A.mor, { id: c.id, n: c.n, man: c.man, army: c.army });
+    return null;
+  }
   if (q > CORPS_CAP) return `A corps holds at most ${CORPS_CAP} battalions.`;
   const out = takeDepot(A, u);
   addToGroup(g, A, -1, out.u, out.m, A.mor, { id: -1, n: 0, man: true });
@@ -659,7 +669,9 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'attackCorps': return attackCorps(g, fid, c.region, c.id, c.to, c.goal, !!c.now, c.brk);
     case 'detach': return detach(g, fid, c.region, c.id, c.u);
     case 'merge': return mergeCorps(g, fid, c.region, c.a, c.b);
-    case 'form': return formCorps(g, fid, c.region, c.u);
+    case 'form': return formCorps(g, fid, c.region, c.u, c.into);
+    case 'pauseCall': return callPause(g, fid);
+    case 'pauseVote': return votePause(g, fid, !!c.yes);
     case 'corpsSet': return corpsSet(g, fid, c.region, c.id, c.st, c.man, typeof c.refill === 'boolean' ? c.refill : undefined);
     case 'army': return formArmyHq(g, fid, c.corps);
     case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);

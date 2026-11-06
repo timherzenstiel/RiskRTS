@@ -42,7 +42,7 @@ function regionVerbs(g: GameState, me: number, sel: number): Verb[] {
     { id: 'fort', label: t('Fortify a border…'), key: 'h', run: showBorders, title: t('Pick the border in the list below, or click a chip or a border on the map') },
     { id: 'move', label: t('Move troops'), key: 'm', run: () => { ui().orderMode && ui().orderKind === 'march' ? ui().cancelOrder() : ui().beginOrder('march'); }, on: ui().orderMode && ui().orderKind === 'march',
       off: busy ?? (ground < 2 ? t('Needs 2 battalions') : undefined), title: t('Pick a neighbour on the map: the share set in the Overview marches there or attacks it') },
-    { id: 'form', label: t('Form corps from reserve'), key: 'n', run: () => { ui().order({ t: 'form', region: sel, u: upToCap(depotOf(r).u) }); },
+    { id: 'form', label: t('Form corps from reserve'), key: 'j', run: () => { ui().order({ t: 'form', region: sel, u: upToCap(depotOf(r).u) }); },
       off: dep < 1 ? t('The reserve holds no battalions') : undefined, title: t('A corps of up to {0} battalions from the troops in reserve, under your orders', CORPS_CAP) },
   ];
   if (r.units.plane > 0) v.push({ id: 'air', label: t('Air strike'), key: 'a', ext: true, run: () => ui().beginOrder('air'), off: busy ?? undefined });
@@ -57,7 +57,7 @@ function borderVerbs(g: GameState, me: number, rid: number, sec: number): Verb[]
     { id: 'send', label: t('Send corps…'), key: 'm', run: toggle('send'), on: tool === 'send' },
     { id: 'fort', label: t('Fortify…'), key: 'h', run: toggle('fort'), on: tool === 'fort' },
   ];
-  if (b.nb >= 0) v.push({ id: 'scout', label: t('Scout…'), key: 'y', run: toggle('scout'), on: tool === 'scout' });
+  if (b.nb >= 0) v.push({ id: 'scout', label: t('Scout…'), key: 'j', run: toggle('scout'), on: tool === 'scout' });
   if (b.nb >= 0 && b.foe !== me) v.push({ id: 'atk', label: t('Attack across'), key: 'k', danger: true, run: () => ui().march(rid, b.nb, !!treatyOf(g, me, b.foe) || undefined),
     off: r.battle >= 0 ? t('A battle is going on here') : groundUnits(r.units) < 2 ? t('Needs 2 battalions') : undefined });
   v.push({
@@ -126,7 +126,7 @@ function enemyVerbs(g: GameState, me: number, sel: number): Verb[] {
     { id: 'atk', label: from !== undefined ? t('Attack from {0}', W.regions[from].name) : t('Attack'), key: 'k', danger: true, run: () => ui().march(from!, sel, !!tr || undefined),
       off: fr === null ? t('None of your regions borders it') : fr.battle >= 0 ? t('A battle is going on in {0}', W.regions[fr.id].name) : groundUnits(fr.units) < 2 ? t('Needs 2 battalions in {0}', W.regions[fr.id].name) : undefined,
       title: tr ? t('Attacking breaks the treaty: war weariness and lost trust') : t('The share set below marches from the strongest neighbour') },
-    { id: 'scout', label: t('Patrol · {0}', COST.patrol), key: 'y', run: () => ui().order({ t: 'patrol', from: from!, to: sel }),
+    { id: 'scout', label: t('Patrol · {0}', COST.patrol), key: 'u', run: () => ui().order({ t: 'patrol', from: from!, to: sel }),
       off: from === undefined ? t('None of your regions borders it') : sup < COST.patrol ? t('{0} Production short', COST.patrol - sup) : undefined },
     { id: 'spy', label: t('Spy · {0}', COST.spy), key: 'j', run: () => ui().order({ t: 'spy', to: sel }),
       off: spies.some(s => s.region === sel) ? t('Our agent is already there') : !cap ? t('Our capital has fallen') : spies.length >= 3 ? t('3 agents in the field already') : sup < COST.spy ? t('{0} Production short', COST.spy - sup) : undefined },
@@ -169,6 +169,7 @@ export function CommandBar() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      if (e.key === 'y' || e.key === 'n' || e.key === 'Y' || e.key === 'N') return; // the Inbox answers with Y / N
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
       const st = ui(), ss = st.session; if (!ss || st.overlay) return;
       const c = current(ss.state, ss.me, st); if (!c) return;

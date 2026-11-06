@@ -38,4 +38,5 @@ export * from './data/names';
 export * from './sim/balance';
 export * from './sim/terms';
 export * from './sim/commanders';
+export * from './sim/vote';
 export * from './data/commanders';

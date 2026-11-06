@@ -9,7 +9,7 @@ import { menOf, menStr, nm } from './format';
 import { t, tx } from '../i18n';
 import { rich, tn } from './LangPicker';
 import { rendererRef } from './refs';
-import { reqText, staffBadge } from './Staff';
+import { inboxOf } from './Inbox';
 import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
 
@@ -33,7 +33,7 @@ const RailIcon = ({ d }: { d: string }) => <svg viewBox="0 0 24 24" width="22" h
 export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
   const sim = useSim(); if (!sim) return null;
-  const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, staff = staffBadge(sim.g, sim.me);
+  const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, inbox = inboxOf(sim.g, sim.me), staff = { n: inbox.length, crit: inbox.some(x => x.urg > 0) };
   const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false, title = label, pulse = false) => (
     <button className={'rb' + (panel === k ? ' on' : '') + (pulse ? ' pulse' : '')} aria-pressed={panel === k} title={t(title)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
       {icon}<span>{t(label)}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={t(what, badge)}>{badge}</em> : null}
@@ -45,7 +45,7 @@ export function LeftRail() {
   return (
     <nav id="rail" className="plate" aria-label={t('War Office panels')}>
       {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
-      {p('staff', 'Staff', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, '{0} requests waiting', !staff.crit, 'Staff: requests from your commanders (G)', staff.crit && panel !== 'staff')}
+      {p('staff', 'Inbox', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, '{0} decisions waiting', !staff.crit, 'Inbox: every decision waiting for you (G)', staff.crit && panel !== 'staff')}
       {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />, 0, undefined, false, 'Forces: your corps and armies (O)')}
       {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />, 0, undefined, false, 'Economy: Production, shells, men, conscription and the nation')}
       {p('navy', 'Navy', <RailIcon d="M12 3v14M7 8h10M4 14c2 4 5 6 8 6s6-2 8-6" />)}
@@ -287,7 +287,6 @@ function alertsOf(g: GameState, me: number): Alert[] {
     key: 'cap' + r.id, level: l > c * OVER.far ? 1 : 0, title: t('{0} over its supply capacity', W.regions[r.id].name), text: t(l > c * OVER.far ? '{0} / {1} · men fall sick and hungry: move troops out or lay a railway' : '{0} / {1} · no replacements, morale falls: move troops out or lay a railway', l, c), act: t('Show'),
     go: () => { useUi.getState().select(r.id); useUi.getState().setMode(3); rendererRef.current?.flyTo(r.id, 30); },
   }); }
-  for (const q of (g.requests ?? []).filter(q => q.owner === me && q.urg === 2)) { const rt = reqText(g, me, q); out.push({ key: 'rq' + q.id, level: 2, title: tn('Staff: {0}', { raw: rt.title }), text: rt.why, act: t('Staff'), go: () => useUi.getState().setPanel('staff') }); }
   if ((f.men ?? 0) < 300) out.push({ key: 'men', level: 1, title: t('Manpower nearly gone'), text: t('{0} men left in the pool: no recruits, no replacements', Math.floor(f.men ?? 0)), act: t('Economy'), go: () => useUi.getState().setPanel('economy') });
   const inc = income(g, me);
   if (f.supply > Math.max(30, inc * 4)) out.push({ key: 'idle', level: 0, title: t('{0} Production unspent', f.supply), text: t('Recruit, fortify or build'), act: t('Capital'), go: () => { const c = g.regions.find(r => r.capitalOf === me && r.owner === me); if (c) { useUi.getState().select(c.id); useUi.getState().setTab('rec'); rendererRef.current?.flyTo(c.id, 30); } } });

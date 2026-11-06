@@ -75,7 +75,7 @@ export function GuestLobby() {
       <div><div className="lbl"><span>{t('Seats · click a computer seat to take it')}</span></div>
         <Seats lobby={lobby} you={guest.you} onPick={f => { click(); guest.pick(f); }} /></div>
       {(() => { const mine = lobby.seats.find(x => x.player === guest.you); return mine ? <NationCard f={mine.faction} /> : null; })()}
-      {lobby.settings && <RulesPicker value={lobby.settings} />}
+      {lobby.settings && <RulesPicker multi value={lobby.settings} />}
       <div className="row spread">
         <div><div className="lbl"><span>{t('Difficulty')}</span></div><p className="muted" style={{ margin: 0 }}>{tx(DIFFICULTIES[lobby.difficulty]?.name)} · {tx(DIFFICULTIES[lobby.difficulty]?.desc)}</p></div>
         <div><div className="lbl"><span>{t('In the room ({0})', lobby.players.length)}</span></div><Players lobby={lobby} you={guest.you} /></div>

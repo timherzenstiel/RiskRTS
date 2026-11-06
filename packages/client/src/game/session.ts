@@ -1,7 +1,7 @@
 // A Session is the client's view of one running game. The UI and renderer only talk to this interface,
 // so single player, hosting and joining all look the same to them.
 import {
-  applyCommand, applySnapshot, createGame, eventsFor, createMirror, drainEvents, fogView, initMirrorCapitals, makeSnapshot, migrateState, step, TICK_DT,
+  applyCommand, applySnapshot, votePaused, voteTick, createGame, eventsFor, createMirror, drainEvents, fogView, initMirrorCapitals, makeSnapshot, migrateState, step, TICK_DT,
   type Command, type Fx, type GameEvent, type GameSettings, type GameState, type ServerMsg, type ClientMsg,
 } from '@riskrts/shared';
 import type { Channel } from '../net/channel';
@@ -90,9 +90,12 @@ export class HostSession implements Session {
 
   update(dt: number) {
     if (this.speed > 1 && !this.canChangeSpeed) this.speed = 1;
-    if (this.sim.over || this.speed <= 0) { this.collect(); this.view = fogView(this.sim, this.me); return; }
-    this.acc += Math.min(dt, .25) * this.speed;
-    while (this.acc >= TICK_DT) { step(this.sim, TICK_DT); this.acc -= TICK_DT; this.collect(); }
+    voteTick(this.sim, Math.min(dt, .5));
+    if (this.sim.over || this.speed <= 0 || votePaused(this.sim)) this.collect();
+    else {
+      this.acc += Math.min(dt, .25) * this.speed;
+      while (this.acc >= TICK_DT) { step(this.sim, TICK_DT); this.acc -= TICK_DT; this.collect(); }
+    }
     this.view = fogView(this.sim, this.me);
     if (this.peers.size) { this.sinceSnap += dt; if (this.sinceSnap >= SNAP_EVERY) { this.sinceSnap = 0; for (const p of this.peers.values()) this.sendSnap(p, false); this.evNet.length = 0; this.fxNet.length = 0; } }
   }
@@ -105,7 +108,7 @@ export class HostSession implements Session {
 
   private sendSnap(p: PeerSlot, full: boolean) {
     const fx = this.fxNet.filter(f => 'b' in f ? p.watch.has(f.b) : true);
-    const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: this.speed };
+    const msg: ServerMsg = { t: 'snap', snap: makeSnapshot(this.sim, p.faction, p.watch, fx), events: full ? [] : eventsFor(this.sim, this.evNet, p.faction), speed: votePaused(this.sim) ? 0 : this.speed };
     try { p.ch.send(msg); } catch { /* peer went away; onClose will clean up */ }
   }
 

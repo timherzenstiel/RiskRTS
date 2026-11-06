@@ -56,7 +56,7 @@ export function HostLobby() {
       <div><div className="lbl"><span>{t('Seats · pick yours, computers fill the rest')}</span></div>
         <Seats lobby={s} you="host" onPick={f => { click(); l.claim('host', null, f); }} /></div>
       {(() => { const mine = s.seats.find(x => x.player === 'host'); return mine ? <NationCard f={mine.faction} /> : null; })()}
-      <RulesPicker value={s.settings} onChange={p => l.setSettings(p)} />
+      <RulesPicker multi value={s.settings} onChange={p => l.setSettings(p)} />
       <div className="row spread">
         <div><div className="lbl"><span>{t('Difficulty of the computer powers · {0}', DIFFICULTIES[s.difficulty].desc)}</span></div>
           <div className="seg" role="group" aria-label={t('Difficulty')}>

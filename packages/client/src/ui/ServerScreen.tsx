@@ -86,7 +86,7 @@ export function ServerScreen() {
         <div className="seg" role="group" aria-label={t('Ranked')}><button aria-pressed={!ranked} onClick={() => setRanked(false)}>{t('Casual')}</button><button aria-pressed={ranked} onClick={() => setRanked(true)}>{t('Ranked')}</button></div>
         {ranked ? <p className="muted small">{t('Ranked wars use fixed rules (3 attacks at once, normal pace, Officer computers), cannot be paused and count for the ladder.')}</p> : (
           <>
-            <RulesPicker value={rules} onChange={p => setRules(r => ({ ...r, ...p }))} />
+            <RulesPicker multi value={rules} onChange={p => setRules(r => ({ ...r, ...p }))} />
             <div className="seg" role="group" aria-label={t('Difficulty')}>{DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={diff === i} onClick={() => setDiff(i)}>{tx(d.name)}</button>)}</div>
             <p className="muted small">{t('Casual wars run while at least one player is connected and wait when everyone has left.')}</p>
           </>

@@ -8,11 +8,11 @@ import { FleetCard, SeaCard } from './Navy';
 import { Feed } from './Feed';
 import { Hint } from './Hint';
 import { Overlays } from './Overlays';
-import { OfferBanner } from './Diplomacy';
 import { Sidebar } from './Sidebar';
 import { Alerts, LeftRail, SituationPanel } from './Situation';
 import { ForcesPanel } from './Forces';
-import { StaffPanel } from './Staff';
+import { InboxPanel, InboxWatcher } from './Inbox';
+import { VoteBanner } from './Vote';
 import { EconomyPanel, IntelPanel, NavyPanel } from './Panels';
 import { OrderPreview } from './Forces';
 import { Stage } from './Stage';
@@ -99,13 +99,14 @@ export function Game() {
       <LeftRail />
       <SituationPanel />
       <ForcesPanel />
-      <StaffPanel />
+      <InboxPanel />
       <EconomyPanel />
       <NavyPanel />
       <IntelPanel />
       <OrderPreview />
       <Alerts />
-      <OfferBanner />
+      <InboxWatcher />
+      <VoteBanner />
       <div id="leftcol"><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>
       <Connection />

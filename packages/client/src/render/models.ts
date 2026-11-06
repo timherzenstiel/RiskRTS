@@ -6,7 +6,7 @@
 import type { UnitType } from '@riskrts/shared';
 import type * as THREE from 'three';
 import type { Pool } from './pools';
-import { DEADC, HELM, K, TANKC, TANKD, TANKL, UNI, UNI2, facCol } from './palette';
+import { DEADC, DRESS_AIR, HELM, K, TANKC, TANKD, TANKL, UNI, UNI2, facCol } from './palette';
 import { HELM_OF, TANK_OF, type MeshKey, type MeshPools } from './meshPools';
 
 const FLAG = facCol;
@@ -407,7 +407,7 @@ export class Models {
   plane(x: number, y: number, z: number, face: number, c: THREE.Color, S: number, f = -1) {
     this.at(x, y, z, face, S);
     if (this.mesh?.has('plane')) {
-      this.mesh.push('plane', x, y, z, face, S, c);
+      this.mesh.push('plane', x, y, z, face, S, c, 0, 0, f >= 0 ? DRESS_AIR[f] : c);
       this.mesh.push('prop', x, y, z, face, S, K.wood, this.t * 38 + x * 7);
       if (f >= 0 && f < 7) this.mesh.push(`mark_${f}` as MeshKey, x, y, z, face, S, K.wood);
       return;

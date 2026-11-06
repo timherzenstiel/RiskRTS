@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Soundboard (dev only)</title>
+<style>
+body{margin:0;padding:24px;background:#1b1c18;color:#d8cfae;font:14px/1.4 system-ui,sans-serif}
+h1{font:600 22px/1 'Arial Narrow',system-ui;letter-spacing:.06em;text-transform:uppercase;margin:0 0 16px}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#b08d3c;margin:22px 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button{background:#3a3c36;color:#d8cfae;border:1px solid #1f201c;border-top-color:#5b5d55;padding:7px 12px;font:600 13px system-ui;cursor:pointer;border-radius:2px}
+button:hover{background:#45473f}
+button[aria-pressed=true]{background:#b08d3c;color:#1b1c18}
+label{display:flex;gap:8px;align-items:center;margin-right:16px}
+#wire{margin-top:14px;min-height:3.6em;padding:10px 12px;background:#0c1208;color:#9fe070;font:13px/1.4 'Share Tech Mono',monospace;border:1px solid #000;max-width:820px}
+#wire.tick{animation:t .4s steps(8)}
+@keyframes t{from{opacity:.3}}
+#vstate{color:#9fe070;font-size:12px;margin-left:8px}
+</style>
+</head>
+<body>
+<h1>Fronts of 1914 · Soundboard</h1>
+
+<h2>Battle sounds</h2>
+<div class="row">
+  <button data-shot="rifle">Rifle</button><button data-shot="mg">MG burst</button><button data-shot="gun">Field gun + shell</button>
+  <button data-shot="heavy">Heavy gun</button><button data-shot="boom">Impact</button><button data-shot="tank">Tank gun</button>
+  <button data-shot="flak">Flak</button><button data-shot="strafe">Strafing</button><button data-shot="distant">Distant gun</button>
+  <button data-shot="charge">Over the top (whistles + cheer)</button>
+</div>
+<div class="row" style="margin-top:6px"><button id="skirmish">Skirmish 12 s</button><button id="battle">Big battle 12 s (massed fire)</button></div>
+
+<h2>Ambience</h2>
+<div class="row">
+  <button id="amb" aria-pressed="false">Start the front</button>
+  <label>Battles <input id="battles" type="range" min="0" max="8" value="3" /><span id="battles-v"></span></label>
+  <label>Zoom <input id="zoom" type="range" min="2" max="200" value="14" /><span id="zoom-v"></span></label>
+  <label>Tanks <input id="tanks" type="range" min="0" max="12" value="0" /><span id="tanks-v"></span></label>
+  <label>Planes <input id="planes" type="range" min="0" max="10" value="0" /><span id="planes-v"></span></label>
+</div>
+
+<h2>Signal cues</h2>
+<div class="row">
+  <button data-st="over-the-top">Over the top</button><button data-st="alarm">Alarm</button><button data-st="siren">Siren</button><button data-st="victory">Victory</button>
+  <button data-st="held">Held</button><button data-st="lost">Lost</button><button data-st="capital-taken">Capital taken</button><button data-st="capital-lost">Capital lost</button>
+  <button data-st="declare">Declare</button><button data-st="orders">Orders</button><button data-st="triumph">Triumph</button><button data-st="taps">Taps</button>
+</div>
+
+<h2>Radio</h2>
+<div class="row">
+  Voice: <button data-vm="off">Off</button><button data-vm="basic">Basic</button><button data-vm="neural">Field telephone</button><span id="vstate"></span>
+</div>
+<div class="row" style="margin-top:6px">
+  <button id="sit-atk">Situation report (attacker)</button><button id="sit-def">Situation report (defender)</button>
+</div>
+<div class="row" style="margin-top:6px">
+  <button data-ev="declare">War declared</button><button data-ev="attack">Our attack</button><button data-ev="defend">We are attacked</button>
+  <button data-ev="overtop">Over the top</button><button data-ev="firstline">First line taken</button><button data-ev="surrender">Enemy surrenders</button>
+  <button data-ev="air">Air raid</button><button data-ev="cut">Cut off</button><button data-ev="massing">Massing</button><button data-ev="convoy">Convoy torpedoed</button>
+  <button data-ev="taken">Region taken</button><button data-ev="lost">Region lost</button><button data-ev="capital">Capital taken</button>
+  <button data-ev="eliminated">Power capitulates</button><button data-ev="win">War won</button>
+</div>
+<div id="wire">Press a button. Sound starts with the first click.</div>
+<p style="font-size:12px;color:#8a8470;max-width:820px">Recorded samples from <code>public/sfx/manifest.json</code> replace the synthesised sound of their category (see <code>tools/sfx/README.md</code>).</p>
+<script type="module" src="./soundboard.ts"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 // The in-game screen: map, top strip, War Office sidebar (docked right), dispatches, front command bar, overlays.
 import { useEffect } from 'react';
+import { rendererRef } from './refs';
 import { useSim, useUi } from '../game/store';
 import { GuestSession } from '../game/session';
 import { BattleCard } from './BattleCard';
@@ -40,6 +41,18 @@ function Connection() {
         </Modal>
       )}
     </>
+  );
+}
+
+/** Subtitle of the radio dispatch on air: a strip of telegraph tape under the top bar. Click flies to the region. */
+function RadioLine() {
+  const on = useUi(s => s.onAir);
+  if (!on) return null;
+  const go = () => { if (on.region !== undefined) { rendererRef.current?.flyTo(on.region, 16); useUi.getState().select(on.region); } };
+  return (
+    <button className="radio-line" onClick={go} aria-live="polite" title="Radio dispatch on air">
+      <i className="onair" aria-hidden="true" /><span>{on.text}</span>
+    </button>
   );
 }
 
@@ -86,6 +99,7 @@ export function Game() {
       <div id="leftcol"><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>
       <Connection />
+      <RadioLine />
       <Overlays />
       <Fatal />
     </div>

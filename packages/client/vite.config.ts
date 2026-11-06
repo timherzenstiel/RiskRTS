@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { fileURLToPath } from 'node:url';
 
 // GitHub Pages serves the site from /RiskRTS/. Override with BASE=/ for local preview or custom domains.
 const base = process.env.BASE ?? '/RiskRTS/';
@@ -12,7 +13,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,glb,json}'], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,glb,json,mp3}'], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // the neural radio voice's worker loads only for players who use it (and the model is cached by the voice itself)
+        globIgnores: ['**/voice.worker-*.js'],
         runtimeCaching: [{ urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i, handler: 'StaleWhileRevalidate', options: { cacheName: 'fonts' } }] },
       manifest: {
         name: 'Fronts of 1914', short_name: 'Fronts 1914',
@@ -26,5 +29,8 @@ export default defineConfig({
       },
     }),
   ],
-  build: { target: 'es2022', chunkSizeWarningLimit: 1500 },
+  // The radio's neural voice uses kokoro-js' self-contained browser build (the default entry pulls in node's fs/path).
+  resolve: { alias: { 'kokoro-web': fileURLToPath(new URL('../../node_modules/kokoro-js/dist/kokoro.web.js', import.meta.url)) } },
+  worker: { format: 'es' },
+  build: { target: 'es2022', chunkSizeWarningLimit: 2500 },
 });

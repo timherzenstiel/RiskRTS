@@ -58,7 +58,7 @@ describe('doctrines', () => {
   });
   it('elastic defence pulls breaking defenders back once', () => {
     const g = createGame({ seed: 8, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } }); g.day = dayOf(1918, 6);
-    for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.capitalOf = -1; r.factory = false; }
+    for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.capitalOf = -1; r.factory = false; }
     g.factions.forEach(f => { f.mission = null; }); g.factions[1].doctrines = ['elastic'];
     const A = id('France'), B = id('Germany'); g.regions[A].owner = 0; g.regions[B].owner = 1;
     g.regions[A].units = { ...emptyUnits(), inf: 16 }; g.regions[B].units = { ...emptyUnits(), inf: 5 }; fill(g); updateSupplyLines(g);

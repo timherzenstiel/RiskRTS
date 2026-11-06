@@ -120,10 +120,10 @@ export function Drawer() {
           </div>
         </div>
       )}
-      {!own && r.fr && Object.keys(r.fr).length > 0 && (
+      {!own && r.cs && r.cs.length > 0 && (
         <div className="pad borders corps-seen">
-          {Object.entries(r.fr).map(([s, c]) => (
-            <small key={s}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} on the {borderLabel(W, +s).replace(' border', '') + (+s >= 1000 ? '' : ' border')}:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
+          {r.cs.map(c => (
+            <small key={c.id}><b>{c.n > 0 ? groupName(r.owner, 1, c.n) : 'Troops'} {c.p < 0 ? 'in the centre' : `on the ${borderLabel(W, c.p).replace(' border', '') + (c.p >= 1000 ? '' : ' border')}`}:</b> {c.est ? `est. ${menStr(c.est[0])}–${menStr(c.est[1])} men` : unitsLine(c.u)}{(c.ord ?? 0) >= 1 ? ' · massing for an attack' : c.n > 0 ? ` · ${corpsState(g, c)}` : ''}</small>
           ))}
         </div>
       )}

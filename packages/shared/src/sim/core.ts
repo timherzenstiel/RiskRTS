@@ -58,7 +58,7 @@ export function offensives(g: GameState, fid: number): Set<number> {
     if (a.inner) { if ((a.ord ?? 0) >= 1 && a.post !== undefined && a.post >= 0 && g.regions[a.post].owner !== fid) s.add(a.post); }
     else if (g.regions[a.to].owner !== fid) s.add(a.to);
   }
-  for (const r of g.regions) if (r.owner === fid && r.fr) for (const [k, c] of Object.entries(r.fr)) if ((c.ord ?? 0) >= 1 && g.regions[+k].owner !== fid) s.add(+k);
+  for (const r of g.regions) if (r.owner === fid && r.cs) for (const c of r.cs) if ((c.ord ?? 0) >= 1 && c.p >= 0 && c.p < 1000 && g.regions[c.p].owner !== fid) s.add(c.p);
   for (const b of g.battles) {
     if (b.ended || b.def === fid) continue;
     const inIt = b.agents.length ? b.agents.some(x => x.f === fid && !x.dead && !x.out) : (b.counts ?? []).some(([f, al]) => f === fid && al > 0);

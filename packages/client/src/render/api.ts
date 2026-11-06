@@ -12,7 +12,7 @@ export interface RendererCallbacks {
   /** Left click / tap on a region (-1 for water). */
   onSelect(regionId: number): void;
   /** Right click, or a click while orderMode is on (`zone`: the sea zone clicked, when it was water). */
-  onOrder(regionId: number, zone?: number): void;
+  onOrder(regionId: number, zone?: number, pt?: { x: number; z: number }): void;
   onHover(regionId: number): void;
 }
 

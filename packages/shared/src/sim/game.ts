@@ -1,12 +1,12 @@
 // Creating and advancing a game.
 import { FACTIONS, NUM_FACTIONS } from '../data/factions';
 import { nationOf } from '../data/nations';
-import { FORMATION, UNIT_TYPES, emptyUnits, type Units } from '../data/units';
+import { FORMATION, GROUND_TYPES, UNIT_TYPES, emptyUnits, groundUnits, type Units } from '../data/units';
 import { Rng } from '../rng';
 import { newRegion, world, rnd } from './core';
 import { aiThink } from './ai';
 import { arrive } from './commands';
-import { autoDeploy, stepPosts } from './posts';
+import { CORPS_CAP, autoDeploy, fixPosts, raiseCorps, stepPosts } from './posts';
 import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy';
 import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
@@ -16,7 +16,7 @@ import { buildMissions } from './missions';
 import { migrateNavy, startNavy, stepNavy } from './navy';
 import { stepSeaBattles } from './naval';
 import { TICK_SECONDS } from '../data/units';
-import { DEFAULT_SETTINGS, type GameSettings, type GameState } from './types';
+import { DEFAULT_SETTINGS, type GameSettings, type GameState, type Order, type Stance } from './types';
 import { DT, SHELLS } from '../data/units';
 
 export interface GameOptions {
@@ -33,7 +33,7 @@ export interface GameOptions {
 export function createGame(opt: GameOptions): GameState {
   const W = world(), seed = (opt.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0, R = new Rng(seed);
   const g: GameState = {
-    v: 6, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
+    v: 7, seed, rng: R.s, time: 0, day: 0, supplyT: 0, diff: opt.difficulty ?? 1, cfg: { ...DEFAULT_SETTINGS, ...opt.settings },
     regions: W.regions.map(r => newRegion(r.id)),
     factions: FACTIONS.map((_, id) => ({ id, supply: opt.humans.includes(id) ? 8 : 5, alive: true, mission: null, aiT: 1.5 + R.next() * 2, ai: !opt.humans.includes(id), ww: 0, wounded: 0, shells: SHELLS.start, men: 0, mob: 0, unrestT: 0 })),
     armies: [], battles: [], intel: FACTIONS.map(() => []), spies: [], reports: [], railCut: {}, railNew: [], treaties: [], offers: [], ships: [], fleets: [], seaBattles: [], over: false, winner: null, nextId: 1,
@@ -76,10 +76,11 @@ const fullStrength = (u: Units) => { const m = emptyUnits(); for (const k of UNI
 export function migrateState(s: GameState & { v: number }): GameState | null {
   if (!s || !Array.isArray(s.regions)) return null;
   addMissingPowers(s);
-  if (s.v === 6) { s.ships ??= []; s.fleets ??= []; s.seaBattles ??= []; return s; }
-  if (s.v === 5) return to6(s);
-  if (s.v === 4) return to6(to5(fill4(s)));
-  if (s.v === 3) return to6(migrate3(s));
+  if (s.v === 7) return s;
+  if (s.v === 6) { s.ships ??= []; s.fleets ??= []; s.seaBattles ??= []; return to7(s); }
+  if (s.v === 5) return to7(to6(s));
+  if (s.v === 4) return to7(to6(to5(fill4(s))));
+  if (s.v === 3) return to7(to6(migrate3(s)));
   if (s.v !== 2) return null;
   const W = world();
   type Old = GameState['regions'][number] & { trench?: number };
@@ -93,7 +94,7 @@ export function migrateState(s: GameState & { v: number }): GameState | null {
   for (const b of s.battles) { b.tr ??= 0; b.sand ??= 0; b.wire ??= 0; b.wire0 ??= 0; b.mor ??= {}; b.lost ??= {}; b.lastJoin ??= b.age; }
   s.intel = s.factions.map(() => []); s.spies = [];
   (s as { v: number }).v = 3; updateSupplyLines(s);
-  return to6(migrate3(s));
+  return to7(to6(migrate3(s)));
 }
 
 /** Saves from before a power was added (the United States): it joins as already defeated, holding nothing. */
@@ -148,6 +149,36 @@ function to6(s: GameState): GameState {
   migrateNavy(s);
   for (const r of s.regions) autoDeploy(s, r, true);
   updateSupplyLines(s);
+  return s;
+}
+
+/**
+ * Version 6 → 7: corps as formations. Each corps on a border (one per border, sharing its region's strength) becomes a corps of
+ * its own with the region's share of men and morale, split at CORPS_CAP battalions; the main army becomes the depot. Columns,
+ * fleets and battles keep their troops (they come back without a corps identity).
+ */
+function to7(s: GameState): GameState {
+  (s as { v: number }).v = 7;
+  type Old = { u: Units; n: number; ord?: Order; ready?: number; st?: Stance; since?: number; now?: boolean };
+  for (const r of s.regions) {
+    const fr = (r as unknown as { fr?: Record<number, Old> }).fr; delete (r as unknown as { fr?: unknown }).fr;
+    if (!fr) continue;
+    r.cs = undefined;
+    if (r.owner < 0) continue;
+    for (const [ks, o] of Object.entries(fr)) {
+      const left = { ...o.u, plane: 0 }; let first = true;
+      while (groundUnits(left) > 0) {
+        const c = raiseCorps(s, r, +ks, first ? { n: o.n } : undefined); first = false;
+        let room = CORPS_CAP;
+        for (const k of GROUND_TYPES) {
+          const q = Math.min(left[k], room); if (q <= 0) continue;
+          c.u[k] = q; c.m[k] = r.units[k] > 0 ? Math.round(r.men[k] * q / r.units[k]) : 0; left[k] -= q; room -= q;
+        }
+        c.mor = r.mor; c.ord = o.ord; c.ready = o.ready; c.st = o.st; c.since = o.since ?? s.time; c.now = o.now;
+      }
+    }
+    fixPosts(s, r);
+  }
   return s;
 }
 

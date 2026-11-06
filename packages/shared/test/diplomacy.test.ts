@@ -10,7 +10,7 @@ const W = buildWorld(); const id = (n: string) => W.byName[n].id;
 function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TYPES) r.men[k] = r.units[k] * FORMATION[k].men; }
 function setup(humans = [0, 1, 2, 3, 4, 5]) {
   const g = createGame({ seed: 4, humans, settings: { attackCap: 0, pace: 1 } });
-  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; }
+  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; }
   const A = id('France'), B = id('Germany'), C = id('Italy');
   g.regions[A].owner = 0; g.regions[A].home = 0; g.regions[B].owner = 1; g.regions[B].home = 1; g.regions[C].owner = 0; g.regions[C].home = 0;
   g.factions.forEach(f => { f.supply = 100; f.mission = null; f.ww = 0; });

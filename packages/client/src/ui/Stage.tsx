@@ -5,6 +5,7 @@ import { createWorldRenderer } from '../render/WorldRenderer';
 import type { WorldRendererApi } from '../render/api';
 import { useUi } from '../game/store';
 import { rendererRef } from './refs';
+import { orderCorps } from './Forces';
 
 export function Stage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,9 +23,11 @@ export function Stage() {
     try {
       renderer = createWorldRenderer(canvas, labels, {
         onSelect: (id) => ui().select(id < 0 ? -1 : id),
-        onOrder: (id, zone) => {
-          const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal } = ui();
+        onOrder: (id, zone, pt) => {
+          const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal, corps } = ui();
           if (!s) return;
+          // selected corps take the order: move to an own region or border, attack an enemy region
+          if (corps.length && !orderMode && id >= 0) { orderCorps(id, pt); return; }
           const W = buildWorld(), me = s.me, g = s.state;
           // the navy: station warships in the zone clicked (or off the region clicked), carrier strikes, shipping, landings
           if (orderMode && orderKind === 'station') {

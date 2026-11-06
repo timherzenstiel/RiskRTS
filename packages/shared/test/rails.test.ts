@@ -12,7 +12,7 @@ function fill(g: GameState) { for (const r of g.regions) for (const k of UNIT_TY
 /** Everything belongs to power 2 except what a test hands out. */
 function blank(seed = 3) {
   const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } });
-  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; }
+  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.factory = false; r.capitalOf = -1; }
   g.factions.forEach(f => { f.mission = null; f.supply = 100; f.shells = 200; });
   return g;
 }

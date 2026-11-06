@@ -579,13 +579,13 @@ export class Terrain {
     let key = '';
     for (const r of g.regions) {
       if (r.cr) for (const n in r.cr) key += r.id + ':' + n + '=' + (r.cr[n] >> 3) + ',';
-      for (const n of this.world.regions[r.id].adj) { const w = worksAt(r, n), c = r.fr?.[n] ? 1 : 0; if (w.tr || c || w.wire) key += r.id + '>' + n + '=' + Math.max(w.tr, c) + '/' + w.wire + ','; }
+      for (const n of this.world.regions[r.id].adj) { const w = worksAt(r, n), c = r.cs?.some(x => x.p === n) ? 1 : 0; if (w.tr || c || w.wire) key += r.id + '>' + n + '=' + Math.max(w.tr, c) + '/' + w.wire + ','; }
     }
     if (key === this.warKey) return;
     this.warKey = key; const D = this.warData; D.fill(0);
     const B = this.border, TB = B.table, NR = B.regions; TB.fill(0, 0, NR * NR * 4);
     for (const r of g.regions) for (const n of this.world.regions[r.id].adj) {
-      const lvl = Math.max(worksAt(r, n).tr, r.fr?.[n] ? 1 : 0), dmg = Math.min(1, (r.cr?.[n] ?? 0) / 150);
+      const lvl = Math.max(worksAt(r, n).tr, r.cs?.some(x => x.p === n) ? 1 : 0), dmg = Math.min(1, (r.cr?.[n] ?? 0) / 150);
       if (!lvl && dmg <= 0 && !worksAt(r, n).wire) continue;
       if (n < NR) { const o = (r.id * NR + n) * 4; TB[o] = lvl * 80; TB[o + 1] = Math.round(dmg * 255); TB[o + 2] = worksAt(r, n).wire; }
       const band = this.borderBand(r.id, n);

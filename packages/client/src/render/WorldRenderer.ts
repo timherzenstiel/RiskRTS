@@ -29,7 +29,7 @@ import { Terrain } from './terrain';
 import { Water } from './water';
 import { Shroud } from './shroud';
 import { GlobeBackdrop } from './globe';
-import { battleAnchor, sectorPoint } from '@riskrts/shared';
+import { battleAnchor, corpsAtPost, sectorPoint } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
 /** Fronts mode: a region without hostile borders (its land is dimmed, no band). */
@@ -140,18 +140,23 @@ class WorldRenderer implements WorldRendererApi {
     this.rig.snap();
 
     this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); },
-      (id) => { cb.onSelect(id); const u = useUi.getState(), st = this.session?.state; if (st && st.regions[id].owner === this.session!.me) u.setTab('deploy'); },
+      (id, post, how) => {
+        const u = useUi.getState(), st = this.session?.state, me = this.session?.me ?? -1;
+        if (how === 'order') { if (u.corps.length) { const p = sectorPoint(this.world, id, post); cb.onOrder(id, undefined, { x: p.x, z: p.z }); } return; }
+        if (st && st.regions[id].owner === me) { u.selectCorps(corpsAtPost(st.regions[id], post).map(c => c.id), how === 'add', id); return; }
+        cb.onSelect(id);
+      },
       (fleet) => useUi.getState().selectFleet(fleet), (sea) => { useUi.getState().selectSea(sea); this.flyToSea(sea); },
       (id, sector) => { cb.onSelect(id); useUi.getState().selectBorder(id, sector); });
     this.labelCtx = {
-      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, frame: 0, now: 0, me: -1,
+      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, corps: [], frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
       armyH: (a) => { this.armyTuple[0] = this.terrain.anchorH(a.from); this.armyTuple[1] = this.terrain.anchorH(a.to); return this.armyTuple; },
     };
 
     this.input = new Input({
       canvas, rig: this.rig, regionAt: (x, y) => this.regionAt(x, y), orderMode: () => useUi.getState().orderMode,
-      onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); }, onOrder: (id) => cb.onOrder(id, id < 0 ? this.pickZone : undefined),
+      onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); }, onOrder: (id) => cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }),
       onHover: (id) => { if (id !== this.lastHover) { this.lastHover = id; cb.onHover(id); } },
       onDoubleClick: (id) => { const b = this.session?.state.regions[id].battle ?? -1; this.flyTo(id, b >= 0 ? 6 : Math.min(this.rig.gdist, 24)); },
     });
@@ -286,7 +291,7 @@ class WorldRenderer implements WorldRendererApi {
     this.post.tune(this.rig.dist, ui.look, this.now); uChrome.value = ui.look ? .75 : .3;
     this.post.render();
 
-    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
+    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.corps = ui.corps; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
     this.dyn.me = c.me; this.dyn.zoomK = Math.max(1, this.rig.dist / 10);
     this.labels.update(c);
     let active = 0; if (g) for (const b of g.battles) if (!b.ended) active++;

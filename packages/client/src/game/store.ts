@@ -21,7 +21,7 @@ export const MAP_MODES = [
   { name: 'Intel', short: 'Intel', key: 'i', hint: 'What you know of each region and how old the report is' },
 ] as const;
 /** Left-hand panels (design-command §5.2). */
-export type Panel = null | 'situation';
+export type Panel = null | 'situation' | 'forces';
 const layerOf = (m: MapMode): MapLayer => m === 2 ? 1 : m === 3 ? 2 : 0;
 /** march / air strike, and the navy: ship troops to an own coast, assault an enemy coast, station warships in a zone, carrier strike. */
 export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair';
@@ -46,6 +46,8 @@ interface Ui {
   panel: Panel;
   /** Border opened from a balance chip or a list: [own region, sector], shown as the border card above the region file. */
   border: [number, number] | null;
+  /** Selected own corps (ids). Right-clicking the map orders them: an own region or border moves them, an enemy region attacks. */
+  corps: number[];
   /** Alerts the player dismissed (by key) and until which game time. */
   dismissed: Record<string, number>;
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
@@ -79,6 +81,8 @@ interface Ui {
   setPanel(p: Panel): void;
   selectBorder(region: number, sector: number): void;
   closeBorder(): void;
+  /** Select corps (add with `add`, toggling ones already selected); [] clears. `region` selects their region too. */
+  selectCorps(ids: number[], add?: boolean, region?: number): void;
   dismiss(key: string, until: number): void;
   beginOrder(kind?: OrderKind, arg?: number, sub?: 'bb' | 'carrier'): void;
   selectFleet(id: number): void;
@@ -132,17 +136,17 @@ export function loadVoiceMode(get: (k: string) => string | null = lsGet): VoiceM
 Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'rec', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'rec', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [] });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
-  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
+  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
   setTab: (tab) => set({ tab, fortMarker: tab === 'fort' ? get().fortMarker : null }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
@@ -150,7 +154,11 @@ export const useUi = create<Ui>((set, get) => ({
   setLayer: (layer) => set({ layer, mode: layer === 1 ? 2 : layer === 2 ? 3 : 0, modeSet: true }),
   setMode: (mode, auto) => { if (auto && get().modeSet) return; set({ mode, layer: layerOf(mode), modeSet: get().modeSet || !auto }); },
   setPanel: (panel) => set({ panel }),
-  selectBorder: (region, sector) => set({ sel: region, border: [region, sector], orderMode: false, fleet: -1, seaSel: -1 }),
+  selectBorder: (region, sector) => set({ sel: region, border: [region, sector], orderMode: false, fleet: -1, seaSel: -1, corps: [] }),
+  selectCorps: (ids, add, region) => {
+    const cur = get().corps, next = !add ? ids : [...cur.filter(i => !ids.includes(i)), ...ids.filter(i => !cur.includes(i))];
+    set({ corps: next, orderMode: false, fleet: -1, seaSel: -1, border: null, ...(region !== undefined && region >= 0 ? { sel: region } : {}) }); Sfx.click();
+  },
   closeBorder: () => set({ border: null }),
   dismiss: (key, until) => set(st => ({ dismissed: { ...st.dismissed, [key]: until } })),
   beginOrder: (orderKind = 'march', orderArg = -1, orderSub = 'bb') => set({ orderMode: true, orderKind, orderArg, orderSub }),

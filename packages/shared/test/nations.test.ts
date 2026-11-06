@@ -102,7 +102,7 @@ describe('national damage', () => {
     // averaged over several seeds: one battle alone is too much a matter of luck
     const hit = (f: number, seed: number) => {
       const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 0, pace: 1 } });
-      for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.capitalOf = -1; }
+      for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; r.owner = 2; r.home = 2; r.capitalOf = -1; }
       const A = id('Austria-Hungary'), B = id('Italy'); g.regions[A].owner = f; g.regions[B].owner = 1;
       g.regions[A].units = { ...emptyUnits(), inf: 3, art: 3 }; g.regions[B].defs = [{ id: 900, k: 'bunk', s: A, hp: DT.bunk.hp, f: 1 }]; g.regions[B].units.inf = 1; fill(g);
       g.factions.forEach(x => { x.mission = null; x.shells = 300; }); updateSupplyLines(g);

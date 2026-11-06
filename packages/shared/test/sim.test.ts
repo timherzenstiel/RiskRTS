@@ -88,7 +88,7 @@ function duel(seed = 11) {
   const g = createGame({ seed, humans: [0, 1, 2, 3, 4, 5, 6], settings: { attackCap: 2, pace: 0 } });
   const W = buildWorld();
   const A = W.byName['France'].id, B = W.byName['Germany'].id, C = W.byName['Poland'].id;
-  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.defs = []; r.works = {}; }
+  for (const r of g.regions) { r.units = emptyUnits(); r.men = emptyUnits(); r.cs = undefined; r.defs = []; r.works = {}; }
   g.regions[A].owner = 0; g.regions[B].owner = 1; g.regions[C].owner = 1;
   return { g, W, A, B, C };
 }

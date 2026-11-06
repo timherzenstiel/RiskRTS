@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CAP, DRAW, FORMATION, OVER, REPL, TICK_SECONDS, UNIT_TYPES, WOUNDED, applyCommand, applySnapshot, buildWorld, capTerms, capacity, createGame,
   createMirror, cutBreak, emptyUnits, income, initMirrorCapitals, ledger, load, loadRatio, makeSnapshot, replWanted, run,
-  shellIncome, shotCost, step, supplyTick, unitCost, updateSupplyLines, weatherAt, woundedIn, type GameState,
+  shellIncome, shotCost, step, supplyRoute, supplyTick, unitCost, updateSupplyLines, weatherAt, woundedIn, type GameState,
 } from '../src';
 import { openFront, setCs } from './helpers';
 
@@ -62,6 +62,20 @@ describe('supply capacity', () => {
     const atk = shotCost(b, 0, g); r.units.inf = 1; r.men.inf = 100; r.cs = undefined;
     for (const a of b.agents) if (a.f === 0) a.dead = true;
     expect(atk).toBeCloseTo(shotCost(b, 0, g) * OVER.shells);
+  });
+
+  it('traces the route that supplies a region back to a source; none when cut off', () => {
+    const { g, A, B } = setup();
+    // France also holds Italy and Austria-Hungary (not home, no factory): Austria-Hungary is supplied through Italy
+    const X = id('Italy'), Y = id('Austria-Hungary');
+    for (const j of [X, Y]) { g.regions[j].owner = 0; g.regions[j].home = 2; }
+    updateSupplyLines(g);
+    expect(supplyRoute(g, g.regions[A])).toEqual([]);
+    const route = supplyRoute(g, g.regions[Y])!;
+    expect(route.map(l => l.b)).toEqual([X, A]);
+    expect(route[0].a).toBe(Y); expect(route[route.length - 1].b).toBe(A);
+    for (let i = 1; i < route.length; i++) expect(route[i].a).toBe(route[i - 1].b);
+    g.regions[Y].cut = true; expect(supplyRoute(g, g.regions[Y])).toBeNull();
   });
 
   it('names the region where a cut-off pocket was broken', () => {

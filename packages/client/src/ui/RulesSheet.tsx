@@ -1,7 +1,7 @@
 // Rules pages (design-command §5.5): one page per system, every number read from the same constants the simulation uses,
 // so the pages never drift from the game.
 import { useState } from 'react';
-import {
+import { WAR,
   AIR_RANGE, ASSEMBLE, ATTACK_RATIO, BUDGET_MAX, CORPS_CAP, COST, CUT_MORALE, CUT_WEAR, DENY_WEEKS, DIG_IN, FALLBACK_RATIO, MANPOWER, MAX_REQ, MAX_SPIES, MIN_ATTACK,
   REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, GEN, OP, START_GENERALS, FACTIONS, BAD_TRAITS, WORK_MULT, WW_INCOME, XP_DMG, XP_MAX, CAP, DRAW, ECON, LEVY_COST, OVER, REPL, WOUNDED,
 } from '@riskrts/shared';
@@ -27,6 +27,10 @@ export function RulesSheet() {
         {page === 0 && <>
           <h3>{t('Who is at war')}</h3>
           <p>{t('Every power is at war with every other power it has no treaty with. A ceasefire, non-aggression pact or alliance ends that until it lapses or is broken.')}</p>
+          <h3>{t('War aims, war score and peace')}</h3>
+          <p>{t('A war between two powers begins with their first battle. Each side then picks one war aim of three: take a region of theirs, lose no region to them for {0} weeks, or raise the war score. A reached aim pays out (Production or less war weariness) and counts for the war score; a missed one costs {1} war weariness. Then a new aim is chosen. Once scouted by an agent in their land, the enemy\'s aim shows in the Situation panel.', WAR.weeks.hold, WAR.missWW)}</p>
+          <p>{t('The war score counts regions taken ({0} each), men lost against men killed (up to {1}) and aims reached ({2} each, at most two). After {3} weeks of war, a side ahead by {4} or more gets peace terms: the loser pays Production, and from {5} also cedes a region. Both sides must agree. Peace is never forced, but refusing costs war weariness ({6} for the loser, {7} for the winner). A peace becomes a non-aggression pact.', WAR.region, WAR.men, WAR.aim, WAR.minDays / 7, WAR.offerAt, WAR.cedeAt, WAR.refuseLoser, WAR.refuseWinner)}</p>
+          <p>{t('Every week the newspaper reports the big events: our own paper our wars (in its own way), the wire service the other wars we can see. It and the cards for the big moments can be switched off in the Reports.')}</p>
           <h3>{t('The balance on a border')}</h3>
           <p>{rich(t('Each chip in Fronts mode compares <b>ours</b> – the corps on that border, plus half of what stands at the centre if it can get there within {0} s – with <b>theirs</b> – what we know of the corps across and half their centre, plus columns marching in.', RESERVE_REACH))}</p>
           <table className="ledger"><tbody>

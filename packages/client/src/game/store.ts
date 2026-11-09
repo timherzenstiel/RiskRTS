@@ -238,6 +238,7 @@ export const useUi = create<Ui>((set, get) => ({
     for (const e of evs) {
       if (e.k === 'supply') { Sfx.supply(); const ww = s.state.factions[s.me]?.ww ?? 0; set({ wwWeek: [get().wwWeek?.[1] ?? ww, ww] }); continue; }
       Radio.event(s.state, e, s.me);
+      for (const tap of eventTaps) tap(s.state, e, s.me);
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       if (e.k === 'battleStart' && (e.attacker === s.me || e.defender === s.me)) get().setMode(1, true);
       if (e.k === 'trained' && e.faction === s.me) { const tr = get().trained, old = tr[e.region]; set({ trained: { ...tr, [e.region]: { n: (old && s.state.time - old.at < 60 ? old.n : 0) + e.n, at: s.state.time } } }); }
@@ -269,6 +270,8 @@ export const useUi = create<Ui>((set, get) => ({
   },
 }));
 let lastCall = -1e9;
+/** Modules that react to game events as they come in (the story cards of design-play §5.3). */
+export const eventTaps: ((g: Session['state'], e: GameEvent, me: number) => void)[] = [];
 
 Radio.onAir = (d) => useUi.setState({ onAir: d ? { text: d.say, region: d.region } : null });
 Neural.onState = () => useUi.setState({ voiceState: { state: Neural.state, p: Neural.progress } });

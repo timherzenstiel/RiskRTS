@@ -19,8 +19,9 @@ import { KIND, hqName, reqText } from './Staff';
 import { upToCap } from './CommandBar';
 import { KDESC } from './Diplomacy';
 import { stars } from './Forces';
+import { storyInbox } from './Story';
 
-export type Src = 'cmd' | 'train' | 'econ' | 'diplo' | 'cal';
+export type Src = 'cmd' | 'train' | 'econ' | 'diplo' | 'cal' | 'war';
 /** An answer; `run` returns false when the game refused it (the item then stays up). */
 export interface Opt { label: string; run: () => boolean | void; danger?: boolean; off?: boolean; title?: string; primary?: boolean }
 export interface InboxItem {
@@ -37,7 +38,7 @@ export interface InboxItem {
   opts: Opt[]; y?: number; n?: number;
 }
 
-const SRC: Record<Src, string> = { cmd: 'Commander', train: 'Training', econ: 'Economy', diplo: 'Diplomacy', cal: 'General Staff' };
+const SRC: Record<Src, string> = { cmd: 'Commander', train: 'Training', econ: 'Economy', diplo: 'Diplomacy', cal: 'General Staff', war: 'War' };
 const SHORT_KIND: Record<ReqKind, string> = { men: 'Always approve men for this army', fort: 'Always approve works for this army', recon: 'Always approve patrols for this army', attack: '', fallback: 'Always approve falling back for this army', release: 'Always approve sending corps back for this army', op: '' };
 const ui = useUi.getState;
 const send = (cmd: Parameters<ReturnType<typeof ui>['order']>[0]) => ui().order(cmd);
@@ -100,6 +101,8 @@ export function inboxOf(g: GameState, me: number): InboxItem[] {
     key: 'of' + o.id, src: 'diplo', urg: 1, title: tn('{0} offers a {1}', { raw: tx(FACTIONS[o.from].name) }, { raw: getLang() === 'de' ? t(TREATY_NAMES[o.kind]) : TREATY_NAMES[o.kind].toLowerCase() }), why: t(KDESC[o.kind]), at: o.exp - 60, exp: o.exp, from: o.exp - 60,
     opts: [{ label: t('Accept'), primary: true, run: () => send({ t: 'answer', id: o.id, yes: true }) }, { label: t('Decline'), run: () => send({ t: 'answer', id: o.id, yes: false }) }], y: 0, n: 1,
   });
+  // war aims to choose, peace terms to answer (design-play §5)
+  out.push(...storyInbox(g, me, send));
   // the year's doctrine
   if (f.docOffer) out.push({
     key: 'doc' + f.docOffer, src: 'cal', urg: 1, title: t('Choose the doctrine for {0}', f.docOffer), why: doctrinesOf(f.docOffer).map(d => tx(d.name)).join(' · '), at: (f.docDue ?? g.time) - 60, exp: f.docDue, from: (f.docDue ?? g.time) - 60,

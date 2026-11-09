@@ -14,6 +14,7 @@ import { DIFFICULTIES, MANPOWER, supplyTick, updateSupplyLines } from './economy
 import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
 import { diploStep } from './diplomacy';
+import { warsStep, warsWeek } from './wars';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
 import { migrateNavy, startNavy, stepNavy } from './navy';
@@ -190,7 +191,7 @@ function to7(s: GameState): GameState {
 export function step(g: GameState, dt: number) {
   if (g.over) return;
   g.time += dt; g.supplyT += dt;
-  if (g.supplyT >= TICK_SECONDS) { g.supplyT -= TICK_SECONDS; supplyTick(g); }
+  if (g.supplyT >= TICK_SECONDS) { g.supplyT -= TICK_SECONDS; supplyTick(g); warsWeek(g); }
   for (let i = g.armies.length - 1; i >= 0; i--) {
     const a = g.armies[i];
     // troops called up for an offensive form up before they move
@@ -204,7 +205,7 @@ export function step(g: GameState, dt: number) {
   stepNavy(g, dt);
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
   stepSeaBattles(g, dt);
-  updateSpies(g); doctrineDeadlines(g); diploStep(g);
+  updateSpies(g); doctrineDeadlines(g); diploStep(g); warsStep(g);
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) { if (!f.alive || !f.ai) continue; f.aiT -= dt; if (f.aiT <= 0) { f.aiT = (2.5 + rnd(g) * 1.8) * d.ai; aiThink(g, f); } }

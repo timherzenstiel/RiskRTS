@@ -175,6 +175,24 @@ export function describeEvent(g: GameState, e: GameEvent, me: number): Described
       if (e.kind === 'relieved') return { text: `${e.name} is relieved of his command. ${h ? h.cmd.name : 'A new general'} takes over.`, cls: '' };
       return { text: e.lost ? `${e.name} earns his third star. He loses the trait ${TRAITS[e.lost].name} and gains ${TRAITS[e.tr!].name}.` : `${e.name} earns his third star and gains the trait ${TRAITS[e.tr!].name}.`, cls: 'good' };
     }
+    case 'war': {
+      const mine = e.a === me || e.b === me, foe = e.a === me ? e.b : e.a;
+      if (e.what === 'peace') {
+        if (!mine) return { text: `${cap(F(e.win!).the)} and ${F(e.win === e.a ? e.b : e.a).the} make peace.`, cls: '' };
+        const whose = e.win === me ? 'our' : 'their', at = e.region !== undefined ? R(e.region) : '';
+        const text = at && e.pay ? `Peace with ${F(foe).the} on ${whose} terms: ${at} is ceded and ${e.pay} Production paid.` : at ? `Peace with ${F(foe).the} on ${whose} terms: ${at} is ceded.`
+          : e.pay ? `Peace with ${F(foe).the} on ${whose} terms: ${e.pay} Production paid.` : `Peace with ${F(foe).the} on ${whose} terms.`;
+        return { text, cls: e.win === me ? 'good' : 'bad', region: e.region };
+      }
+      if (!mine) return null;
+      switch (e.what) {
+        case 'begins': return { text: `War with ${F(foe).the}: the first battle has begun. Choose a war aim in the Inbox.`, cls: 'me' };
+        case 'aim': if (e.by !== me) return null; return e.ok ? { text: `War aim against ${F(foe).the} reached.`, cls: 'good', region: e.region } : { text: `War aim against ${F(foe).the} missed: the nation grows wearier.`, cls: 'bad', region: e.region };
+        case 'offer': return { text: e.win === me ? `${cap(F(foe).the)} is beaten enough to talk: peace terms are on the table. See the Inbox.` : `${cap(F(foe).the)} sends peace terms. See the Inbox.`, cls: 'me' };
+        case 'refused': return e.by === me ? null : e.by === -1 ? { text: `The peace terms with ${F(foe).the} lapsed. The war goes on.`, cls: '' } : { text: `${cap(F(foe).the)} refuses the peace terms. The war goes on.`, cls: '' };
+        default: return null;
+      }
+    }
     case 'trained': return e.faction === me ? { text: e.n === 1 ? `1 battalion has finished training in ${R(e.region)}.` : `${e.n} battalions have finished training in ${R(e.region)}.`, cls: '', region: e.region } : null;
     case 'vote': {
       const who = e.faction === me ? 'You' : F(e.faction).name;

@@ -12,6 +12,7 @@ import { Sidebar } from './Sidebar';
 import { Alerts, LeftRail, SituationPanel } from './Situation';
 import { ForcesPanel } from './Forces';
 import { InboxPanel, InboxWatcher } from './Inbox';
+import { StoryWatcher } from './Story';
 import { VoteBanner } from './Vote';
 import { EconomyPanel, IntelPanel, NavyPanel } from './Panels';
 import { OrderPreview } from './Forces';
@@ -106,6 +107,7 @@ export function Game() {
       <OrderPreview />
       <Alerts />
       <InboxWatcher />
+      <StoryWatcher />
       <VoteBanner />
       <div id="leftcol"><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>

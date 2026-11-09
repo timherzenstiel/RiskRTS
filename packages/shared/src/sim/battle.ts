@@ -652,7 +652,7 @@ export function endBattle(g: GameState, b: Battle, winner: number | null) {
 }
 
 /** The troops left in a fallen region march to a neighbouring region of their power, or are lost. */
-function evacuate(g: GameState, t: RegionState, f: number) {
+export function evacuate(g: GameState, t: RegionState, f: number) {
   if (f < 0 || totalUnits(t.units) <= 0) return;
   const W = world(), land = W.regions[t.id].adj.filter(j => g.regions[j].owner === f && !W.seaLane.has(t.id + '|' + j));
   const dest = land.sort((a, b) => (g.regions[a].cut ? 1 : 0) - (g.regions[b].cut ? 1 : 0))[0];

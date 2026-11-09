@@ -57,6 +57,34 @@ export const TREATY_NAMES: Record<TreatyKind, string> = { cease: 'Ceasefire', na
 export interface Treaty { a: number; b: number; kind: TreatyKind; until?: number; ends?: number }
 /** An offer waiting for an answer until game time `exp`. */
 export interface Offer { id: number; from: number; to: number; kind: TreatyKind; exp: number }
+/** War aims (design-play §5.1): take a region, lose none for a while, or force the enemy to the table (war score). */
+export type AimKind = 'take' | 'hold' | 'win';
+/** An aim: its region (take), the regions the enemy had taken when it was set (hold), the war score it asks for (win), the
+ *  day it runs out, and its result. */
+export interface WarAim { k: AimKind; region?: number; base?: number; need?: number; until: number; res?: 1 | -1 }
+/** Peace terms on the table: the side that wins, a region the loser cedes, Production it pays, until when (game time) the
+ *  two can answer, and who has said yes. */
+export interface PeaceOffer { id: number; win: number; region?: number; pay: number; exp: number; yes: number[] }
+/**
+ * A war between two powers (design-play §5): it begins with their first battle and ends with a treaty or a destroyed power.
+ * Per side (index 0 = a, 1 = b): regions taken from the other, men lost in battles between them, the aim, aims offered.
+ */
+export interface War {
+  id: number; a: number; b: number; day0: number; battles: number;
+  taken: number[]; lost: number[];
+  aims: (WarAim | null)[];
+  /** Aims each side has reached in this war. */
+  won?: number[];
+  /** Aims offered to a side that has not chosen yet, and the game time by which the War Office chooses for it. */
+  opts: (WarAim[] | null)[]; due?: number;
+  offer?: PeaceOffer;
+  /** Day of the last peace offer; draws from the war's own random stream. */
+  last?: number; rs?: number;
+  end?: { day: number; how: 'peace' | 'treaty' | 'gone'; win?: number; region?: number; pay?: number };
+}
+/** A line in the week's news (design-play §5.3). `a` is the side the item is about, `b` the other; `n` men or weeks. */
+export interface NewsItem { k: 'took' | 'held' | 'war' | 'peace' | 'aim' | 'relieved' | 'star' | 'strike' | 'rising' | 'elim' | 'op'; a: number; b?: number; region?: number; n?: number; name?: string; ok?: boolean }
+export interface NewsWeek { day: number; items: NewsItem[] }
 /** Quick phrases powers can send each other in game. */
 export const PHRASES = ['Peace in our time?', 'Stay out of my way.', 'Together against the common enemy!', 'You will regret this.', 'We have no quarrel with you.', 'Good luck, old friend.'] as const;
 
@@ -426,6 +454,8 @@ export type GameEvent =
   | { k: 'general'; faction: number; kind: 'new' | 'lost' | 'relieved' | 'star'; name: string; why?: 'year' | 'wins' | 'back'; army?: number; region?: number; tr?: TraitKey; lost?: TraitKey }
   /** Operations: approved, the attack goes in, ended (with the result id), called off. */
   | { k: 'op'; faction: number; army: number; name: string; what: 'approved' | 'begins' | 'ended' | 'off'; region: number; ok?: boolean; res?: number }
+  /** Wars (design-play §5): one begins, an aim is set or settled, peace is offered, refused or signed, a war ends by treaty. */
+  | { k: 'war'; war: number; a: number; b: number; what: 'begins' | 'aimSet' | 'aim' | 'offer' | 'refused' | 'peace' | 'ended'; by?: number; ok?: boolean; region?: number; pay?: number; win?: number }
   | { k: 'reqExpired'; faction: number; army: number; kind: ReqKind; region: number; sector: number; mor: number; corps: number[] }
   /** Recruits finished training and joined a region's reserve. */
   | { k: 'trained'; faction: number; region: number; n: number }
@@ -570,6 +600,8 @@ export interface GameState {
   /** Fog-of-war views only: the faction this view was made for. */
   viewer?: number;
   over: boolean; winner: number | null;
+  /** Wars (design-play §5): running ones and the last that ended; the news of the last weeks and of the week running. */
+  wars?: War[]; news?: NewsWeek[]; newsWk?: NewsItem[];
   /** Results of operations (design-play §3.3), the last OPS_KEEP. */
   ops?: OpResult[];
   nextId: number;
@@ -636,6 +668,9 @@ export type Command =
   | { t: 'offer'; to: number; kind: TreatyKind }
   | { t: 'answer'; id: number; yes: boolean }
   | { t: 'cancel'; to: number }
+  /** Wars: choose one of the aims offered (`k` its index), answer peace terms. */
+  | { t: 'aim'; war: number; k: number }
+  | { t: 'peace'; war: number; yes: boolean }
   | { t: 'say'; to: number; p: number }
   /** Storm the holdout defences in one of your own contested regions with its garrison. */
   | { t: 'assault'; region: number }

@@ -37,6 +37,8 @@ export function missionDone(g: GameState, f: FactionState): boolean {
 }
 /** Does the faction's mission want this region? (AI uses it to pick targets.) */
 export function missionWants(g: GameState, f: FactionState, regionId: number): boolean {
+  // the region a war aim names counts too (design-play §5.1)
+  if (g.wars?.some(w => !w.end && ((w.a === f.id && w.aims[0]?.region === regionId && !w.aims[0].res) || (w.b === f.id && w.aims[1]?.region === regionId && !w.aims[1].res)))) return true;
   const m = f.mission; if (!m) return false;
   if (m.type === 'conts' || m.type === 'conts1') return m.conts.includes(world().regions[regionId].cont);
   if (m.type === 'destroy') return g.regions[regionId].owner === m.target;

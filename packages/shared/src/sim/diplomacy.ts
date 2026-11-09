@@ -37,7 +37,7 @@ export function answer(g: GameState, fid: number, id: number, yes: boolean): str
   sign(g, o.from, o.to, o.kind); return null;
 }
 
-function sign(g: GameState, a: number, b: number, kind: TreatyKind) {
+export function sign(g: GameState, a: number, b: number, kind: TreatyKind) {
   g.treaties = (g.treaties ?? []).filter(t => t !== treatyOf(g, a, b));
   g.treaties.push({ a, b, kind, until: kind === 'cease' ? g.day + DIPLO.cease : undefined });
   emit(g, { k: 'treaty', a, b, kind, what: 'signed' });

@@ -28,7 +28,7 @@ export const isBad = (t: TraitKey) => BAD_TRAITS.includes(t);
 export const stars = (x: General) => Math.floor(x.xp + 1e-6);
 
 /** Numbers in 0..1 for a general, from the game's seed and his id: deterministic, and they leave the game's random stream alone. */
-function stream(seed: number, id: number): () => number {
+export function stream(seed: number, id: number): () => number {
   let a = (seed ^ Math.imul(id + 1, 2654435761)) >>> 0;
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }

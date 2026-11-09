@@ -13,6 +13,7 @@ import { inboxOf } from './Inbox';
 import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
 import { FrontsList } from './Generals';
+import { WarStory } from './Story';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
@@ -114,6 +115,7 @@ export function SituationPanel() {
               <span><small>{t('Their regions')}</small><b>{w.regions}</b></span>
               <span title={t('Men lost in the battles between us that are still on record')}><small>{t('Men lost · us : them')}</small><b>{menStr(w.lostUs)} : {menStr(w.lostThem)}</b></span>
             </div>
+            {!w.treaty && <WarStory g={g} me={me} foe={w.f} />}
             {w.battles.map(b => <BattleRow key={b.id} g={g} me={me} b={b} />)}
           </div>
         ))}

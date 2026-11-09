@@ -6,6 +6,7 @@ import { Modal } from './Modal';
 import { menStr } from './format';
 import { t, tx } from '../i18n';
 import { tn } from './LangPicker';
+import { PaperArchive } from './Story';
 
 const REACH = ['never left the start line', 'were stopped in no-man\'s-land', 'reached the wire', 'took the trench'];
 
@@ -46,6 +47,7 @@ export function ReportsSheet() {
   return (
     <Modal label={t('After-action reports')} onClose={close}>
       <div className="kicker">{t('General staff')}</div><h2>{t('After-action reports')}</h2>
+      <PaperArchive />
       {!list.length ? <p className="lede">{t('No battles fought yet.')}</p> : (
         <div className="aar-wrap">
           <div className="aar-list" role="listbox" aria-label={t('Battles')}>

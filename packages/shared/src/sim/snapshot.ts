@@ -3,7 +3,8 @@ import { FACTIONS } from '../data/factions';
 import { AGENT_TYPES, DEF_KINDS, UNIT_TYPES, type AgentType } from '../data/units';
 import { newRegion, world } from './core';
 import { fogView } from './fog';
-import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Generals, type Hq, type OpResult, type Req, type Vote } from './types';
+import { DEFAULT_SETTINGS, type Fleet, type SeaBattle, type Ship, type ShipAgentKind, type FactionState, type Offer, type Treaty, type Agent, type Army, type Barrage, type Battle, type Fx, type GameSettings, type GameState, type Mission, type Report, type Spy, type Stance, type Corps, type Order, type Generals, type Hq, type OpResult, type Req, type Vote, type War, type NewsWeek } from './types';
+import { activeSpies } from './fog';
 import { humansOf } from './vote';
 
 /** [agent type index, faction, x, z, face, flags(1 dead,2 moving,4 trench,8 left the field), seconds since last shot] */
@@ -55,6 +56,8 @@ export interface Snapshot {
   hq?: Hq[]; rq?: Req[];
   /** The recipient's operation results. */
   ops?: OpResult[];
+  /** Wars (the recipient's in full, the enemy's aim only once scouted; other powers' without aims) and the news it may read. */
+  wars?: War[]; nw?: NewsWeek[];
   /** Pause by vote: the open vote, the host's real-time clock, the human powers, the recipient's recent pause calls. */
   vt?: Vote; wl?: number; hum?: number[]; pc?: number[];
   /** The recipient's own logistics: war economy lever, wounded coming back, last week's manpower ledger, recruits in training [region, unit index, seconds left, post (-1), army (-1)]. */
@@ -92,7 +95,7 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
     spies: g.spies,
     d: g.regions.flatMap(r => r.defs.map(d => [r.id, d.id, DEF_KINDS.indexOf(d.k), d.s, Math.round(d.hp), d.f])), cfg: g.cfg,
     a: g.armies, b, stats: g.stats, fx,
-    hq: g.hq, rq: g.requests, ops: (full.ops ?? []).filter(o => o.owner === recipient),
+    hq: g.hq, rq: g.requests, ops: (full.ops ?? []).filter(o => o.owner === recipient), wars: warsFor(full, recipient), nw: newsFor(full, g, recipient),
     vt: full.vote, wl: q2(full.wall ?? 0), hum: humansOf(full), pc: full.factions[recipient]?.pc,
     me: recipient >= 0 && g.factions[recipient] ? {
       id: recipient, econ: g.factions[recipient].econ ?? 1, wq: (g.factions[recipient].wq ?? []).map(([m, d]) => [Math.round(m), d]), led: g.factions[recipient].led,
@@ -107,6 +110,27 @@ export function makeSnapshot(full: GameState, recipient: number, watch: Iterable
       tp: x.torps.map(t => [q2(t.x), q2(t.z), q2(t.hd)]),
     })),
   };
+}
+
+/** Wars as a power may see them: its own in full except the enemy's aim (shown once an agent of ours works in one of their
+ *  regions) and the aims offered to the enemy; other powers' wars without aims or terms. */
+function warsFor(g: GameState, me: number): War[] {
+  const spied = new Set(activeSpies(g, me).map(s => g.regions[s.region]?.owner));
+  return (g.wars ?? []).map(w => {
+    const i = w.a === me ? 0 : w.b === me ? 1 : -1;
+    if (i < 0) return { ...w, aims: [null, null], opts: [null, null], offer: undefined };
+    const foe = i === 0 ? w.b : w.a, aims = [...w.aims], opts = [...w.opts];
+    if (!spied.has(foe)) aims[1 - i] = null;
+    opts[1 - i] = null;
+    return { ...w, aims, opts };
+  });
+}
+
+/** The news a power may read: everything about its own wars and the public events (wars begun and ended, powers destroyed);
+ *  of other wars only what happened in regions it can see. */
+function newsFor(full: GameState, view: GameState, me: number): NewsWeek[] {
+  const pub = new Set(['war', 'peace', 'elim']), mine = new Set(['relieved', 'star', 'op', 'aim']);
+  return (full.news ?? []).map(w => ({ day: w.day, items: w.items.filter(n => n.a === me || n.b === me || pub.has(n.k) || (!mine.has(n.k) && n.region !== undefined && (view.regions[n.region]?.vis ?? 3) >= 1)) }));
 }
 
 /** An empty state for a guest to mirror the host into. */
@@ -151,7 +175,7 @@ export function applySnapshot(m: GameState, s: Snapshot) {
     (m.regions[ri].cs ??= []).push(c);
   }
   for (const [ri, id, k, sec, hp, f] of s.d ?? []) m.regions[ri].defs.push({ id, k: DEF_KINDS[k], s: sec, hp, f });
-  m.spies = s.spies ?? []; m.viewer = undefined; m.hq = s.hq ?? []; m.requests = s.rq ?? []; m.ops = s.ops ?? [];
+  m.spies = s.spies ?? []; m.viewer = undefined; m.hq = s.hq ?? []; m.requests = s.rq ?? []; m.ops = s.ops ?? []; m.wars = s.wars ?? []; m.news = s.nw ?? [];
   m.vote = s.vt; m.wall = s.wl ?? m.wall;
   if (s.hum) for (const f of m.factions) f.ai = !s.hum.includes(f.id);
   for (const r of m.regions) r.train = undefined;

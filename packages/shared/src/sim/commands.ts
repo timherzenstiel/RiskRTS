@@ -31,6 +31,7 @@ import { assignArmy, disband, formArmyHq, hqOf, relieve, reply, setArmy } from '
 import { carrierAir, embarkAir, landOnCarrier } from './carrier';
 import { isCoast } from '../world/zones';
 import { SHIP_KINDS } from '../data/sea';
+import { answerPeace, chooseAim } from './wars';
 import type { Army, Battle, BuildKind, Command, GameState, Order, RegionState, Stance } from './types';
 import type { Units } from '../data/units';
 
@@ -624,7 +625,7 @@ function tagCarrier(b: Battle, a: Army) {
 }
 
 const FORT_KINDS: FortKind[] = ['trench', 'sand', 'wire', 'pill', 'fort', 'flak', 'bunk'];
-const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship', 'a', 'b', 'st', 'army', 'req', 'mandate', 'target', 'budget', 'gen'] as const;
+const NUM_FIELDS = ['region', 'from', 'to', 'frac', 'n', 'sector', 'battle', 'level', 'id', 'p', 's', 'post', 'toPost', 'k', 'goal', 'mode', 'zone', 'fleet', 'sea', 'ship', 'a', 'b', 'st', 'army', 'req', 'mandate', 'target', 'budget', 'gen', 'war'] as const;
 /** Commands arrive from the network: every numeric field must be a finite number. */
 function validCommand(c: Command): boolean {
   if (!c || typeof c !== 'object' || typeof c.t !== 'string') return false;
@@ -686,6 +687,8 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'offer': return offer(g, fid, c.to, c.kind);
     case 'answer': return answer(g, fid, c.id, c.yes);
     case 'cancel': return cancel(g, fid, c.to);
+    case 'aim': return chooseAim(g, fid, c.war, c.k);
+    case 'peace': return answerPeace(g, fid, c.war, !!c.yes);
     case 'say': { if (!(c.p >= 0 && c.p < PHRASES.length) || !(c.to === -1 || (c.to >= 0 && c.to < g.factions.length && c.to !== fid))) return 'Invalid order.'; emit(g, { k: 'say', from: fid, to: c.to, p: c.p }); return null; }
     case 'rush': return rush(g, fid, c.tech);
     case 'doctrine': return chooseDoctrine(g, fid, c.doc);

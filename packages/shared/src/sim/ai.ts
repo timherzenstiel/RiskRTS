@@ -17,6 +17,7 @@ import { underAttack } from './commands';
 import { aiArmies, warMinister } from './aiarmies';
 import { nationOf } from '../data/nations';
 import { unitCost } from './rules';
+import { attackCap, diffOf } from './economy';
 import { paceOf } from './battle';
 import { fogView, guessedUnits } from './fog';
 import { missionWants } from './missions';
@@ -63,8 +64,9 @@ export function aiThink(g: GameState, f: FactionState) {
   railways(g, f, mine, V);
   research(g, f);
   diplomacy(g, f, mine);
-  const P = nationOf(f.id).ai, W = world();
-  const cap = g.cfg?.attackCap ?? 0;
+  const P = nationOf(f.id).ai, W = world(), D = diffOf(g);
+  // the difficulty caps how many attacks run at once (Recruit: one) and scales the odds an attack needs
+  const cap = attackCap(g, f.id);
   let guard = 50;
   // sea powers keep back the price of the next capital ship
   const save = navySave(g, f, mine);
@@ -133,7 +135,7 @@ export function aiThink(g: GameState, f: FactionState) {
       // over a sea lane: only with landing craft, and not into an enemy-held sea
       const lane = !W.regions[t.id].land.includes(n.id);
       if (lane && (!landers || enemySea(g, f.id, W.laneZone.get(t.id + '|' + n.id) ?? -1))) continue;
-      const dp = defPower(n, t.id) * (lane ? 1.5 : 1), margin = avail - dp * 1.3 * P.aggr - 1.5; if (margin <= 0) continue;
+      const dp = defPower(n, t.id) * (lane ? 1.5 : 1), margin = avail - dp * 1.3 * P.aggr * D.margin - 1.5; if (margin <= 0) continue;
       const sea = lane || W.regions[n.id].seaAdj.length > 0;
       const s = margin + (missionWants(g, f, n.id) ? 6 : 0) + (n.capitalOf >= 0 ? 3 : 0) - dp * .2 + rnd(g) * 2 + (sea ? 2 * (P.navy - 1) : 0);
       if (s > bs) { bs = s; best = n; }
@@ -142,7 +144,7 @@ export function aiThink(g: GameState, f: FactionState) {
     if (best && !sendArmy(g, f.id, t.id, best.id, .85, false, rnd(g) < P.line ? 1 : 2)) {
       attacks++;
       // a feint elsewhere to draw the enemy's eye
-      if (rnd(g) < .25 && f.supply >= 3) { const o = mine.find(x => x !== t && x.battle < 0 && enemyNb(V, x, f.id).length); if (o) { const own = world().regions[o.id].adj.find(j => g.regions[j].owner === f.id && enemyNb(V, g.regions[j], f.id).length); decoy(g, f.id, o.id, own !== undefined && rnd(g) < .5 ? own : enemyNb(V, o, f.id)[0].id); } }
+      if (rnd(g) < D.feint && f.supply >= 3) { const o = mine.find(x => x !== t && x.battle < 0 && enemyNb(V, x, f.id).length); if (o) { const own = world().regions[o.id].adj.find(j => g.regions[j].owner === f.id && enemyNb(V, g.regions[j], f.id).length); decoy(g, f.id, o.id, own !== undefined && rnd(g) < .5 ? own : enemyNb(V, o, f.id)[0].id); } }
     }
   }
   // aircraft: support our running attacks first, otherwise raid the weakest enemy region in range

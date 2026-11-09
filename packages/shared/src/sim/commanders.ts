@@ -18,7 +18,7 @@ import { atWar } from './navy';
 import { allied } from './diplomacy';
 import { borderBalance, WORK_MULT, type Balance } from './balance';
 import { MAX_SPIES, activeSpies, fogView } from './fog';
-import { income } from './economy';
+import { diffOf, income } from './economy';
 import { capCheck, fortCost, fortify, patrol, recon, recruit, setOrder, spy } from './commands';
 import { techOn } from './tech';
 import { unitCost } from './rules';
@@ -490,15 +490,15 @@ export function disband(g: GameState, f: number, army: number): string | null {
 }
 
 /** Weeks a request waits for an answer before it lapses (critical ones one week), and the morale its corps lose then. */
-export const EXPIRE = { weeks: 2, critical: 1, mor: 5 } as const;
-/** Game time at which a request lapses unanswered. */
-export const reqExpiry = (q: Req) => q.at + (q.urg === 2 ? EXPIRE.critical : EXPIRE.weeks) * TICK_SECONDS;
+export const EXPIRE = { mor: 5 } as const;
+/** Game time at which a request lapses unanswered: by difficulty (design-play §7), never on Recruit. */
+export const reqExpiry = (q: Req, g: { diff: number }) => { const d = diffOf(g), w = q.urg === 2 ? d.crit : d.expire; return w === null ? Infinity : q.at + w * TICK_SECONDS; };
 
 /** Requests nobody answered in time lapse (design-play §2): men, works, patrols and falling back cost the corps concerned
  *  morale; an attack or a corps to send back simply lapses. The commander does not ask again for a while. */
 function expire(g: GameState) {
   for (const q of [...(g.requests ?? [])]) {
-    if (g.time < reqExpiry(q)) continue;
+    if (g.time < reqExpiry(q, g)) continue;
     const h = hqOf(g, q.army); g.requests = (g.requests ?? []).filter(x => x !== q);
     if (!h) continue;
     h.deny[q.key] = g.time + DENY_WEEKS * TICK_SECONDS;

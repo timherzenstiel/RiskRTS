@@ -15,11 +15,22 @@ import { ownsCont, checkElim, checkMissions } from './missions';
 import { navyConvoy, seaLinks } from './navy';
 import type { GameState } from './types';
 
+/**
+ * Difficulty bundles (design-play §7). `ai` scales the computer's thinking interval, `inc` its income; `gen` generals added
+ * for players; `margin` scales the odds the computer needs to attack (below 1: thinner odds), `feint` the chance of a feint
+ * with each attack, `attacks` how many attacks it runs at once (0: as many as usual); `expire` weeks before an unanswered
+ * request lapses (critical ones after `crit`; null: never); `exact` forecasts or ranges; `pause` the auto-pause defaults.
+ */
 export const DIFFICULTIES = [
-  { name: 'Recruit', ai: 1.7, inc: .8, desc: 'Slow, cautious rivals' },
-  { name: 'Officer', ai: 1, inc: 1, desc: 'A fair fight' },
-  { name: 'Marshal', ai: .7, inc: 1.25, desc: 'Fast, well supplied rivals who see through the fog' },
+  { name: 'Recruit', ai: 1.7, inc: .8, desc: 'Slow, cautious rivals', gen: 2, margin: 1.25, feint: 0, attacks: 1, expire: null, crit: null, exact: true, pause: 'all' },
+  { name: 'Officer', ai: 1, inc: 1, desc: 'A fair fight', gen: 0, margin: 1, feint: .25, attacks: 0, expire: 3, crit: 1, exact: true, pause: 'urgent' },
+  { name: 'Marshal', ai: .7, inc: 1.25, desc: 'Fast, well supplied rivals who see through the fog', gen: -1, margin: 1 / 1.3, feint: .45, attacks: 0, expire: 1, crit: 1, exact: false, pause: 'off' },
 ] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
+/** The difficulty of a game. */
+export const diffOf = (g: { diff: number }): Difficulty => DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
+/** Attacks a power may run at once (0: no limit): the lobby's cap, and for computer powers on Recruit at most one. */
+export const attackCap = (g: GameState, fid: number) => { const c = g.cfg?.attackCap ?? 0, d = diffOf(g).attacks; return g.factions[fid]?.ai && d ? (c ? Math.min(c, d) : d) : c; };
 
 /** Base supply from land: diminishing returns, so the largest power does not snowball (1 land: 4, 9: 7, 25: 10, 54: 13). */
 export const landIncome = (n: number) => n ? 2 + Math.round(1.5 * Math.sqrt(n)) : 0;

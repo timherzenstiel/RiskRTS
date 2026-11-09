@@ -188,7 +188,7 @@ export function CommandBar() {
       {cur.verbs.length > 0 && (
         <div className="cb-v">
           {cur.verbs.map(v => (
-            <button key={v.id} className={'cb' + (v.danger ? ' danger' : '') + (v.off ? ' off' : '')} aria-pressed={v.on ?? undefined} aria-disabled={!!v.off || undefined}
+            <button key={v.id} data-cmd={v.id} className={'cb' + (v.danger ? ' danger' : '') + (v.off ? ' off' : '')} aria-pressed={v.on ?? undefined} aria-disabled={!!v.off || undefined}
               title={[v.off ?? v.title, v.key ? `(${v.key.toUpperCase()})` : ''].filter(Boolean).join(' ')} onClick={() => fire(v)}>
               <span>{v.label}</span>{v.key && <kbd>{v.key.toUpperCase()}</kbd>}
             </button>

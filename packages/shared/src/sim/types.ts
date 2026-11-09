@@ -85,6 +85,9 @@ export interface War {
 /** A line in the week's news (design-play §5.3). `a` is the side the item is about, `b` the other; `n` men or weeks. */
 export interface NewsItem { k: 'took' | 'held' | 'war' | 'peace' | 'aim' | 'relieved' | 'star' | 'strike' | 'rising' | 'elim' | 'op'; a: number; b?: number; region?: number; n?: number; name?: string; ok?: boolean }
 export interface NewsWeek { day: number; items: NewsItem[] }
+/** The guided first war (design-play §6): the player, the neighbour that threatens, the threatened border (`home`, the
+ *  region across: `front`), the stage and its objectives done, when it began, the counts it compares with, and flags. */
+export interface Tut { me: number; foe: number; home: number; front: number; stage: number; ok: number[]; t0: number; c0: number; p0: number; w0: number; flags: Record<string, number> }
 /** Quick phrases powers can send each other in game. */
 export const PHRASES = ['Peace in our time?', 'Stay out of my way.', 'Together against the common enemy!', 'You will regret this.', 'We have no quarrel with you.', 'Good luck, old friend.'] as const;
 
@@ -456,6 +459,8 @@ export type GameEvent =
   | { k: 'op'; faction: number; army: number; name: string; what: 'approved' | 'begins' | 'ended' | 'off'; region: number; ok?: boolean; res?: number }
   /** Wars (design-play §5): one begins, an aim is set or settled, peace is offered, refused or signed, a war ends by treaty. */
   | { k: 'war'; war: number; a: number; b: number; what: 'begins' | 'aimSet' | 'aim' | 'offer' | 'refused' | 'peace' | 'ended'; by?: number; ok?: boolean; region?: number; pay?: number; win?: number }
+  /** The guided war opened a stage (stage = number of stages: guidance over). */
+  | { k: 'tut'; stage: number }
   | { k: 'reqExpired'; faction: number; army: number; kind: ReqKind; region: number; sector: number; mor: number; corps: number[] }
   /** Recruits finished training and joined a region's reserve. */
   | { k: 'trained'; faction: number; region: number; n: number }
@@ -602,6 +607,8 @@ export interface GameState {
   over: boolean; winner: number | null;
   /** Wars (design-play §5): running ones and the last that ended; the news of the last weeks and of the week running. */
   wars?: War[]; news?: NewsWeek[]; newsWk?: NewsItem[];
+  /** The guided first war, when this is one. */
+  tut?: Tut;
   /** Results of operations (design-play §3.3), the last OPS_KEEP. */
   ops?: OpResult[];
   nextId: number;
@@ -671,6 +678,8 @@ export type Command =
   /** Wars: choose one of the aims offered (`k` its index), answer peace terms. */
   | { t: 'aim'; war: number; k: number }
   | { t: 'peace'; war: number; yes: boolean }
+  /** Guided war: something the player did that the state does not show (`supply`: opened Supply mode), or `skip`. */
+  | { t: 'tut'; what: string }
   | { t: 'say'; to: number; p: number }
   /** Storm the holdout defences in one of your own contested regions with its garrison. */
   | { t: 'assault'; region: number }

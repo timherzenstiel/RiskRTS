@@ -7,6 +7,7 @@ import { Radio } from '../audio/radio';
 import { Neural, defaultVoiceMode, type VoiceMode } from '../audio/voice';
 import { DEFAULT_PIXEL_SCALE, type PixelScale } from '../render/api';
 import { getLang, tx } from '../i18n';
+import { guiding, unlocked } from '../ui/unlock';
 
 export type Screen = 'title' | 'solo' | 'host' | 'join' | 'lobby' | 'game' | 'server';
 /** Tabs of the region card (design-command §5.3): Overview (posts, corps, operations from here), Recruit, Build. */
@@ -187,8 +188,14 @@ export const useUi = create<Ui>((set, get) => ({
   setSendFrac: (sendFrac) => set({ sendFrac }),
   setGoal: (goal) => set({ goal }),
   setLayer: (layer) => set({ layer, mode: layer === 1 ? 2 : layer === 2 ? 3 : 0, modeSet: true }),
-  setMode: (mode, auto) => { if (auto && get().modeSet) return; set({ mode, layer: layerOf(mode), modeSet: get().modeSet || !auto }); },
-  setPanel: (panel) => set({ panel }),
+  setMode: (mode, auto) => {
+    if (auto && get().modeSet) return; const s = get().session;
+    if (!unlocked(s?.state, 'mode:' + mode)) return;
+    // the guided war's supply stage asks the player to open this mode
+    if (mode === 3 && !auto && guiding(s?.state) && s?.state.tut && !s.state.tut.flags.supply) get().order({ t: 'tut', what: 'supply' });
+    set({ mode, layer: layerOf(mode), modeSet: get().modeSet || !auto });
+  },
+  setPanel: (panel) => { if (panel && !unlocked(get().session?.state, panel)) return; set({ panel }); },
   selectBorder: (region, sector, tool) => set({ sel: region, border: [region, sector], borderTool: tool ?? (get().border?.[0] === region && get().border?.[1] === sector ? get().borderTool : ''), fortMarker: [region, sector], orderMode: false, fleet: -1, seaSel: -1, corps: [], armySel: -1 }),
   selectCorps: (ids, add, region) => {
     const cur = get().corps, next = !add ? ids : [...cur.filter(i => !ids.includes(i)), ...ids.filter(i => !cur.includes(i))];

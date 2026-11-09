@@ -52,8 +52,8 @@ export class HostSession implements Session {
   private peers = new Map<string, PeerSlot>();
   private myWatch = new Set<number>();
 
-  constructor(public readonly me: number, opts: { seed?: number; humans: number[]; difficulty: number; settings?: GameSettings; network?: boolean; restore?: GameState }) {
-    this.sim = opts.restore ?? createGame({ seed: opts.seed, humans: opts.humans, difficulty: opts.difficulty, settings: opts.settings, fx: true });
+  constructor(public readonly me: number, opts: { seed?: number; humans: number[]; difficulty: number; settings?: GameSettings; network?: boolean; restore?: GameState; guided?: boolean }) {
+    this.sim = opts.restore ?? createGame({ seed: opts.seed, humans: opts.humans, difficulty: opts.difficulty, settings: opts.settings, fx: true, guided: opts.guided });
     if (opts.restore) { opts.restore.fx = []; opts.restore.events = []; }
     this.view = fogView(this.sim, me);
     this.kind = opts.network ? 'host' : 'local';

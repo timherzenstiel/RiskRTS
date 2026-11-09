@@ -267,4 +267,4 @@ function onEvent(g: GameState, e: GameEvent) {
     case 'op': if (e.what === 'ended') addNews(g, { k: 'op', a: e.faction, name: e.name, ok: e.ok, region: e.region }); return;
   }
 }
-hooks.event = onEvent;
+hooks.events.push(onEvent);

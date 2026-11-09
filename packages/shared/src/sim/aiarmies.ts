@@ -4,6 +4,7 @@
 // nation's character and what it can afford. The old planner keeps recruiting, building and launching the big offensives.
 import { world, offensives, rnd } from './core';
 import { hostileBorders } from './balance';
+import { attackCap, diffOf } from './economy';
 import { isCoast } from '../world/zones';
 import { nationOf } from '../data/nations';
 import { unitCost } from './rules';
@@ -60,7 +61,7 @@ export function aiArmies(g: GameState, f: FactionState, V: GameState) {
     // the corps standing on the front's borders (region Auto made them) come under the commander
     for (const id of fr.regions) for (const c of corpsIn(g.regions[id])) if (c.army === undefined && !c.man && (c.ord ?? 0) === 0 && c.p >= 0) c.army = h.id;
     // now and then an offensive on a region the power's orders want
-    if (h.mandate !== 2 && rnd(g) < .02 * offensiveWill(h) / nationOf(f.id).ai.aggr) {
+    if (h.mandate !== 2 && rnd(g) < .02 * offensiveWill(h) / (nationOf(f.id).ai.aggr * diffOf(g).margin)) {
       const W = world(), tgt = fr.regions.flatMap(id => W.regions[id].land).find(j => g.regions[j].owner !== f.id && g.regions[j].owner >= 0 && missionWants(g, f, j) && !capCheck(g, f.id, j));
       if (tgt !== undefined) { h.mandate = 2; h.target = tgt; }
     }
@@ -85,7 +86,7 @@ export function aiArmies(g: GameState, f: FactionState, V: GameState) {
  * when the nation is willing to, and corps sent back where a treaty made the border peaceful.
  */
 export function warMinister(g: GameState, f: FactionState) {
-  const P = nationOf(f.id).ai, cap = g.cfg?.attackCap ?? 0;
+  const P = nationOf(f.id).ai, cap = attackCap(g, f.id), aggr = P.aggr * diffOf(g).margin;
   let budget = Math.max(0, f.supply - AI_ARMY.keep) * AI_ARMY.spend;
   let attacks = offensives(g, f.id).size;
   for (const q of requestsOf(g, f.id).sort((a, b) => b.urg - a.urg)) {
@@ -102,14 +103,14 @@ export function warMinister(g: GameState, f: FactionState) {
         break;
       case 'attack': {
         const room = attacks < 2 + (cap ? 0 : 1) && (!cap || attacks < cap);
-        const want = 1.5 * P.aggr, odds = q.ratio ?? 0;
+        const want = 1.5 * aggr, odds = q.ratio ?? 0;
         if (room && odds >= want && rnd(g) < .6 && !reply(g, f.id, q.id, 'yes')) attacks++;
         else if (odds < want * .8) reply(g, f.id, q.id, 'deny');
         break;
       }
       // an operation plan: approved when the odds suit the nation and the power is not running too many attacks, else put off
       case 'op': {
-        const room = attacks < 2 + (cap ? 0 : 1) && (!cap || attacks < cap), want = Math.min(.6, .35 * P.aggr);
+        const room = attacks < 2 + (cap ? 0 : 1) && (!cap || attacks < cap), want = Math.min(.6, .35 * aggr);
         if (room && (q.op?.p ?? 0) >= want && !reply(g, f.id, q.id, 'yes')) attacks++;
         else reply(g, f.id, q.id, 'later');
         break;

@@ -30,7 +30,7 @@ describe('the inbox', () => {
     run(g, 4);
     const q = (g.requests ?? []).find(x => x.kind === 'men')!; expect(q).toBeTruthy();
     const c = corpsIn(g.regions[A])[0], mor = c.mor; drainEvents(g);
-    q.at = g.time - (q.urg === 2 ? EXPIRE.critical : EXPIRE.weeks) * TICK_SECONDS; expect(reqExpiry(q)).toBeLessThanOrEqual(g.time);
+    q.at = g.time - (q.urg === 2 ? 1 : 3) * TICK_SECONDS; expect(reqExpiry(q, g)).toBeLessThanOrEqual(g.time);
     step(g, .05);
     expect((g.requests ?? []).some(x => x.id === q.id)).toBe(false);
     expect(corpsIn(g.regions[A])[0].mor).toBeLessThanOrEqual(mor - EXPIRE.mor + 1);

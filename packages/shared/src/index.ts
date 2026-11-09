@@ -39,6 +39,7 @@ export * from './sim/balance';
 export * from './sim/terms';
 export * from './sim/commanders';
 export * from './sim/wars';
+export * from './sim/tutorial';
 export * from './sim/generals';
 export * from './sim/operations';
 export * from './sim/vote';

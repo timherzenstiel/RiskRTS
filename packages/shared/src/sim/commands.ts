@@ -21,7 +21,7 @@ import { decoy, decoyArrives, raid } from './levers';
 import { PHRASES } from './types';
 import { techDayFor, type TechKey } from '../data/tech';
 import { monthStr } from '../data/calendar';
-import { bombedNow } from './economy';
+import { attackCap, bombedNow } from './economy';
 import { recordIntel, MAX_SPIES } from './fog';
 import { ASSEMBLE, CORPS_CAP, UNREG, addToGroup, armyNo, autoDeploy, column, columnArrives, corpsAtPost, corpsById, corpsPosts, corpsSize, depotOf, fixPosts, formTime, groupUnits, landRoute, mainOf, moveK, postUnits, renumber, routeColumn, setAttackCheck, tagOf, takeCorps, takeDepot, takeGroup } from './posts';
 import { allied } from './diplomacy';
@@ -32,6 +32,7 @@ import { carrierAir, embarkAir, landOnCarrier } from './carrier';
 import { isCoast } from '../world/zones';
 import { SHIP_KINDS } from '../data/sea';
 import { answerPeace, chooseAim } from './wars';
+import { tutFlag, tutReplied } from './tutorial';
 import type { Army, Battle, BuildKind, Command, GameState, Order, RegionState, Stance } from './types';
 import type { Units } from '../data/units';
 
@@ -143,7 +144,7 @@ export function fortify(g: GameState, fid: number, r: RegionState, kind: FortKin
 }
 
 export function capCheck(g: GameState, fid: number, to: number): string | null {
-  const cap = g.cfg?.attackCap ?? 0; if (!cap || g.regions[to].owner === fid) return null;
+  const cap = attackCap(g, fid); if (!cap || g.regions[to].owner === fid) return null;
   const now = offensives(g, fid); if (now.has(to) || now.size < cap) return null;
   return `You already run ${now.size} attack${now.size === 1 ? '' : 's'} at once (limit ${cap}). Wait for one to finish.`;
 }
@@ -504,7 +505,7 @@ export function assault(g: GameState, fid: number, r: RegionState): string | nul
   if (r.contested < 0) return 'There are no holdouts here.';
   if (r.battle >= 0) return 'A battle is already being fought here.';
   if (groundUnits(r.units) < 1) return 'You need ground troops in the region to storm the holdouts.';
-  const cap = g.cfg?.attackCap ?? 0, now = offensives(g, fid);
+  const cap = attackCap(g, fid), now = offensives(g, fid);
   if (cap && now.size >= cap) return `You already run ${now.size} attacks at once (limit ${cap}).`;
   startAssault(g, r); // the whole garrison, aircraft included, storms the holdouts
   return null;
@@ -677,7 +678,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'army': return formArmyHq(g, fid, c.corps, c.front, c.gen);
     case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);
     case 'armySet': return setArmy(g, fid, c.army, c);
-    case 'reply': return ['yes', 'recruit', 'transfer', 'deny', 'more', 'later'].includes(c.opt) ? reply(g, fid, c.req, c.opt, c.n) : 'Invalid order.';
+    case 'reply': { if (!['yes', 'recruit', 'transfer', 'deny', 'more', 'later'].includes(c.opt)) return 'Invalid order.'; const e = reply(g, fid, c.req, c.opt, c.n); if (!e) tutReplied(g, fid); return e; }
     case 'relieve': return relieve(g, fid, c.army, c.gen);
     case 'disband': return disband(g, fid, c.army);
     case 'deploy': { const r = g.regions[c.region]; if (!r || r.owner !== fid) return 'Select one of your own regions first.'; r.deploy = c.mode === 1 ? 1 : undefined; if (r.deploy !== 1) autoDeploy(g, r); return null; }
@@ -689,6 +690,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'cancel': return cancel(g, fid, c.to);
     case 'aim': return chooseAim(g, fid, c.war, c.k);
     case 'peace': return answerPeace(g, fid, c.war, !!c.yes);
+    case 'tut': return typeof c.what === 'string' ? tutFlag(g, fid, c.what) : 'Invalid order.';
     case 'say': { if (!(c.p >= 0 && c.p < PHRASES.length) || !(c.to === -1 || (c.to >= 0 && c.to < g.factions.length && c.to !== fid))) return 'Invalid order.'; emit(g, { k: 'say', from: fid, to: c.to, p: c.p }); return null; }
     case 'rush': return rush(g, fid, c.tech);
     case 'doctrine': return chooseDoctrine(g, fid, c.doc);

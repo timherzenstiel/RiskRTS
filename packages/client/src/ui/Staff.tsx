@@ -2,7 +2,7 @@
 // corps), the army row of the corps card, and the words for a request (the simulation keeps only numbers). Requests are answered
 // in the Inbox (Inbox.tsx).
 import {
-  BUDGET_MAX, COST, FACTIONS, GEN, TICK_SECONDS, attackRatio, unitCost, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
+  BUDGET_MAX, COST, FACTIONS, diffOf, GEN, TICK_SECONDS, attackRatio, unitCost, MANDATES, STANDING_KINDS, TRAITS, armyCorps, armyName, borderLabel, buildWorld, groundUnits, groupName, income, transferCandidate, treatyOf,
   type GameState, type Hq, type Mandate, type Req, type ReqKind,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -33,6 +33,8 @@ const hqs = (g: GameState, me: number) => (g.hq ?? []).filter(h => h.owner === m
 
 interface Opt { label: string; opt: 'yes' | 'recruit' | 'transfer' | 'deny' | 'more' | 'later'; n?: number; title?: string; danger?: boolean; off?: boolean }
 const pct = (p: number) => `${Math.round(p * 100)} %`;
+/** A chance as a range of ±15 points, for Marshal. */
+const pctRange = (p: number) => `${Math.round(Math.max(0, p - .15) * 100)}–${Math.round(Math.min(1, p + .15) * 100)} %`;
 /** Title, one line of reasons, the answers of a request, and for an operation plan its table. */
 export function reqText(g: GameState, me: number, q: Req, n?: number): { title: string; why: string; opts: Opt[]; rows?: [string, string][] } {
   const W = buildWorld(), R = (i: number) => W.regions[i].name, where = { raw: q.sector >= 0 ? `${nm(R(q.region))} · ${tx(borderLabel(W, q.sector))}` : nm(R(q.region)) };
@@ -54,7 +56,7 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
       const why = q.for === 'attack' ? t('He will not propose an attack without a fresh report.') : q.for === 'target' ? t('He wants eyes on the target of his offensive.') : t('Our report on this border is missing or old.');
       return { title: what, why: `${why} ${how}`, opts: [{ label: t('Send · {0}', q.cost), opt: 'yes', off: sup < (q.cost ?? 0) }, { label: t('Deny'), opt: 'deny' }] };
     }
-    case 'attack': return { title: t(q.goal === 2 ? 'Invade {0}' : 'Take the first line of {0}', R(q.sector)), why: tn('{0} on {1} · {2} · ratio {3}×.', { raw: names || t('His corps') }, where, bal, { raw: dec1(q.ratio ?? 0) }), opts: [{ label: t('Attack'), opt: 'yes', danger: true, title: t('The corps assemble on the border and go over') }, { label: t('Deny'), opt: 'deny' }] };
+    case 'attack': return { title: t(q.goal === 2 ? 'Invade {0}' : 'Take the first line of {0}', R(q.sector)), why: tn('{0} on {1} · {2} · ratio {3}×.', { raw: names || t('His corps') }, where, bal, { raw: diffOf(g).exact ? dec1(q.ratio ?? 0) : `${dec1((q.ratio ?? 0) * .75)}–${dec1((q.ratio ?? 0) * 1.33)}` }), opts: [{ label: t('Attack'), opt: 'yes', danger: true, title: t('The corps assemble on the border and go over') }, { label: t('Deny'), opt: 'deny' }] };
     case 'fallback': return { title: tn('Fall back from {0}', where), why: tn('The border cannot be held: {0}. {1} would fall back to the centre.', bal, { raw: names }), opts: [{ label: t('Fall back'), opt: 'yes', danger: true }, { label: t('Hold on'), opt: 'deny' }] };
     case 'op': {
       const P = q.op!, nc = (q.corps ?? []).length, h = (g.hq ?? []).find(x => x.id === q.army);
@@ -63,7 +65,9 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
         [t('Forces'), t('{0} corps · {1} btl', nc, P.btl) + (P.more ? ' · ' + t('{0} more nearby (+{1} btl)', P.more, P.moreBtl) : '')],
         [t('Enemy'), tn('{0} btl', { raw: rng(P.their) })],
         [t('Barrage'), t(P.heavy ? '{0} days heavy · {1} shells' : '{0} days light · {1} shells (not enough for heavy)', P.days, P.shells)],
-        [t('Expected'), t('success {0} · losses ~{1} men', pct(P.p), P.loss) + (P.more ? ' · ' + t('with the extra corps {0}', pct(P.pMore)) : '')],
+        // Marshal: forecasts only as ranges (design-play §7)
+        diffOf(g).exact ? [t('Expected'), t('success {0} · losses ~{1} men', pct(P.p), P.loss) + (P.more ? ' · ' + t('with the extra corps {0}', pct(P.pMore)) : '')]
+          : [t('Expected'), tn('success {0} · losses {1} men', { raw: pctRange(P.p) }, { raw: `${Math.round(P.loss * .6 / 10) * 10}–${Math.round(P.loss * 1.5 / 10) * 10}` }) + (P.more ? ' · ' + tn('with the extra corps {0}', { raw: pctRange(P.pMore) }) : '')],
       ];
       return { title: tn('Operation {0}: {1}', { raw: q.name ?? '' }, { raw: nm(R(q.sector)) }), rows,
         why: h ? tn('{0} offers a plan: he gathers the corps, fires the barrage and attacks by himself. You can take over the battle at any moment.', { raw: h.cmd.name }) : '',

@@ -58,7 +58,7 @@ export function inboxOf(g: GameState, me: number): InboxItem[] {
         run: () => send({ t: 'reply', req: q.id, opt: first.opt, n: first.n }) && send({ t: 'armySet', army: h.id, standing: [...h.standing, q.kind] }) });
     }
     out.push({ key: 'rq' + q.id, src: 'cmd', tag: KIND[q.kind], urg: q.urg, title: rt.title, why: rt.why, rows: rt.rows, at: q.at, region: q.region, sector: q.sector, who: h ? `${h.cmd.name} · ${hqName(h)}` : undefined,
-      exp: reqExpiry(q), from: q.at, opts, y: opts.findIndex(o => o.primary && !o.off), n: opts.length - 1 });
+      exp: Number.isFinite(reqExpiry(q, g)) ? reqExpiry(q, g) : undefined, from: q.at, opts, y: opts.findIndex(o => o.primary && !o.off), n: opts.length - 1 });
   }
   // result cards of operations (design-play §3.3): plan against outcome, until read
   for (const o of (g.ops ?? []).filter(o => o.owner === me && g.day - o.day <= 120)) {

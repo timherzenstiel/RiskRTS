@@ -14,6 +14,7 @@ import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
 import { FrontsList } from './Generals';
 import { WarStory } from './Story';
+import { unlocked } from './Tutorial';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
 const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
@@ -36,13 +37,13 @@ export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
   const sim = useSim(); if (!sim) return null;
   const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, inbox = inboxOf(sim.g, sim.me), staff = { n: inbox.length, crit: inbox.some(x => x.urg > 0) };
-  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false, title = label, pulse = false) => (
-    <button className={'rb' + (panel === k ? ' on' : '') + (pulse ? ' pulse' : '')} aria-pressed={panel === k} title={t(title)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
+  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false, title = label, pulse = false) => !unlocked(sim.g, k ?? '') ? null : (
+    <button data-panel={k} className={'rb' + (panel === k ? ' on' : '') + (pulse ? ' pulse' : '')} aria-pressed={panel === k} title={t(title)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
       {icon}<span>{t(label)}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={t(what, badge)}>{badge}</em> : null}
     </button>
   );
-  const o = (k: Overlay, label: string, icon: React.ReactNode, title: string) => (
-    <button className={'rb' + (overlay === k ? ' on' : '')} title={t(title)} onClick={() => { Sfx.clunk(); ui().setOverlay(k); }}>{icon}<span>{t(label)}</span></button>
+  const o = (k: Overlay, label: string, icon: React.ReactNode, title: string) => !unlocked(sim.g, k ?? '') ? null : (
+    <button data-panel={k} className={'rb' + (overlay === k ? ' on' : '')} title={t(title)} onClick={() => { Sfx.clunk(); ui().setOverlay(k); }}>{icon}<span>{t(label)}</span></button>
   );
   return (
     <nav id="rail" className="plate" aria-label={t('War Office panels')}>

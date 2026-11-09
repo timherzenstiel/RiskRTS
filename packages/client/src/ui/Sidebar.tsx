@@ -13,6 +13,7 @@ import { CorpsCard } from './Forces';
 import { ArmyCard } from './Staff';
 import { CommandBar } from './CommandBar';
 import { rendererRef } from './refs';
+import { unlocked } from './unlock';
 import { getLang, t, tx } from '../i18n';
 
 /** Zoom band names (render/camera) in the interface language. */
@@ -22,11 +23,11 @@ const modeShort = (i: number, n: string) => getLang() === 'de' ? ['Pol.', 'Front
 
 /** Map mode (design-command §1): political, fronts, forces, supply, intel. The same mode again goes back to the political map. */
 export function LayerPicker() {
-  const mode = useUi(s => s.mode), set = useUi.getState().setMode;
+  const mode = useUi(s => s.mode), set = useUi.getState().setMode, sim = useSim();
   return (
     <div className="seg layer-seg mode-seg" role="group" aria-label={t('Map mode')}>
-      {MAP_MODES.map((m, i) => (
-        <button key={m.name} aria-pressed={mode === i} title={`${t(m.name)}: ${t(m.hint)} (${m.key.toUpperCase()})`} onClick={() => { click(); set(mode === i && i ? 0 : i as MapMode); }}>{modeShort(i, m.short)}<kbd>{m.key.toUpperCase()}</kbd></button>
+      {MAP_MODES.map((m, i) => !unlocked(sim?.g, 'mode:' + i) ? null : (
+        <button key={m.name} data-mode={i} aria-pressed={mode === i} title={`${t(m.name)}: ${t(m.hint)} (${m.key.toUpperCase()})`} onClick={() => { click(); set(mode === i && i ? 0 : i as MapMode); }}>{modeShort(i, m.short)}<kbd>{m.key.toUpperCase()}</kbd></button>
       ))}
     </div>
   );

@@ -11,8 +11,8 @@ export function rnd(g: GameState): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 /** Listeners the sim modules register for events as they happen (wars keep their score from battles and treaties). */
-export const hooks: { event: ((g: GameState, e: GameEvent) => void) | null } = { event: null };
-export const emit = (g: GameState, e: GameEvent) => { g.events.push(e); if (g.events.length > 400) g.events.splice(0, 200); hooks.event?.(g, e); };
+export const hooks: { events: ((g: GameState, e: GameEvent) => void)[] } = { events: [] };
+export const emit = (g: GameState, e: GameEvent) => { g.events.push(e); if (g.events.length > 400) g.events.splice(0, 200); for (const h of hooks.events) h(g, e); };
 export const world = () => buildWorld();
 export const battleOf = (g: GameState, r: RegionState): Battle | null => r.battle < 0 ? null : (g.battles.find(b => b.id === r.battle) ?? null);
 export const regionsOf = (g: GameState, fid: number) => g.regions.filter(r => r.owner === fid);

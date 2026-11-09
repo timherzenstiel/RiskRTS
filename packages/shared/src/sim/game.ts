@@ -15,6 +15,7 @@ import { updateSpies } from './fog';
 import { doctrineDeadlines } from './tech';
 import { diploStep } from './diplomacy';
 import { warsStep, warsWeek } from './wars';
+import { startTutorial, stepTutorial } from './tutorial';
 import { stepBattle } from './battle';
 import { buildMissions } from './missions';
 import { migrateNavy, startNavy, stepNavy } from './navy';
@@ -32,6 +33,8 @@ export interface GameOptions {
   fx?: boolean;
   /** Lobby rules (attack cap, battle pace). */
   settings?: Partial<GameSettings>;
+  /** The guided first war (design-play §6): the one human plays it. */
+  guided?: boolean;
 }
 
 export function createGame(opt: GameOptions): GameState {
@@ -69,6 +72,7 @@ export function createGame(opt: GameOptions): GameState {
   for (const t of g.regions) autoDeploy(g, t, true);
   g.events.push({ k: 'start' });
   for (const f of g.factions) generals(g, f.id);
+  if (opt.guided && opt.humans.length === 1) startTutorial(g, opt.humans[0]);
   return g;
 }
 
@@ -205,7 +209,7 @@ export function step(g: GameState, dt: number) {
   stepNavy(g, dt);
   for (let i = 0; i < g.battles.length; i++) stepBattle(g, g.battles[i], dt);
   stepSeaBattles(g, dt);
-  updateSpies(g); doctrineDeadlines(g); diploStep(g); warsStep(g);
+  updateSpies(g); doctrineDeadlines(g); diploStep(g); warsStep(g); stepTutorial(g);
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) { if (!f.alive || !f.ai) continue; f.aiT -= dt; if (f.aiT <= 0) { f.aiT = (2.5 + rnd(g) * 1.8) * d.ai; aiThink(g, f); } }

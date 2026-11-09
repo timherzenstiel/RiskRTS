@@ -8,6 +8,7 @@ import { BAD_TRAITS, START_GENERALS, TRAIT_KEYS, commanderName, commanderTraits,
 import { dateOf, dayOf } from '../data/calendar';
 import { TICK_SECONDS } from '../data/units';
 import { emit, rnd } from './core';
+import { diffOf } from './economy';
 import type { GameState, General, Generals, Hq } from './types';
 
 export const GEN = {
@@ -46,7 +47,7 @@ export function drawGeneral(g: GameState, f: number): General {
 export function generals(g: GameState, f: number): Generals {
   const F = g.factions[f];
   if (!F.gen) {
-    const inUse = (g.hq ?? []).filter(h => h.owner === f).length, slots = Math.max(START_GENERALS[f] ?? 3, inUse);
+    const inUse = (g.hq ?? []).filter(h => h.owner === f).length, slots = Math.max(1, (START_GENERALS[f] ?? 3) + (F.ai ? 0 : diffOf(g).gen), inUse);
     F.gen = { slots, pool: [], wins: 0, due: [], y: dateOf(g.day).y };
     for (let i = inUse; i < slots; i++) F.gen.pool.push(drawGeneral(g, f));
   }

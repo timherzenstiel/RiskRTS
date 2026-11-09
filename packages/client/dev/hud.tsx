@@ -14,6 +14,7 @@ import { ForcesPanel } from '../src/ui/Forces';
 import { InboxPanel, InboxWatcher } from '../src/ui/Inbox';
 import { VoteBanner } from '../src/ui/Vote';
 import { StoryWatcher } from '../src/ui/Story';
+import { Objectives } from '../src/ui/Tutorial';
 import { EconomyPanel, IntelPanel, NavyPanel } from '../src/ui/Panels';
 import { OrderPreview } from '../src/ui/Forces';
 import { FACTIONS, battleCounts, buildWorld } from '@riskrts/shared';
@@ -27,7 +28,8 @@ import '../src/ui/styles.css';
 import '../src/ui/war-office.css';
 
 const q = new URLSearchParams(location.search), me = Number(q.get('me') ?? 1);
-const session = new HostSession(me, { humans: [me], difficulty: 1, seed: 11 });
+const guided = new URLSearchParams(location.search).has('guided');
+const session = guided ? new HostSession(1, { humans: [1], difficulty: 0, seed: 1914, guided: true }) : new HostSession(me, { humans: [me], difficulty: 1, seed: 11 });
 session.speed = 0;
 useUi.setState({ session, screen: 'game' });
 setInterval(() => useUi.getState().pump(), 200);
@@ -49,6 +51,6 @@ function Card() {
 }
 function Hud() {
   const hasDrawer = useUi(s => s.sel >= 0); const panel = useUi(s => s.panel);
-  return <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (panel ? ' has-panel' : '')}><TopBar /><Sidebar /><LeftRail /><SituationPanel /><ForcesPanel /><InboxPanel /><EconomyPanel /><NavyPanel /><IntelPanel /><OrderPreview /><Alerts /><InboxWatcher /><StoryWatcher /><VoteBanner /><div id="leftcol"><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
+  return <div id="app" className={(hasDrawer ? 'has-drawer' : '') + (panel ? ' has-panel' : '')}><TopBar /><Sidebar /><LeftRail /><SituationPanel /><ForcesPanel /><InboxPanel /><EconomyPanel /><NavyPanel /><IntelPanel /><OrderPreview /><Alerts /><InboxWatcher /><StoryWatcher /><VoteBanner /><div id="leftcol"><Objectives /><Feed /></div><div id="bottom"><Card /></div><Overlays /><Toast /></div>;
 }
 createRoot(document.getElementById('root')!).render(<Hud />);

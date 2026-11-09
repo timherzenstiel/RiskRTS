@@ -13,6 +13,7 @@ import { Alerts, LeftRail, SituationPanel } from './Situation';
 import { ForcesPanel } from './Forces';
 import { InboxPanel, InboxWatcher } from './Inbox';
 import { StoryWatcher } from './Story';
+import { Objectives } from './Tutorial';
 import { VoteBanner } from './Vote';
 import { EconomyPanel, IntelPanel, NavyPanel } from './Panels';
 import { OrderPreview } from './Forces';
@@ -109,7 +110,7 @@ export function Game() {
       <InboxWatcher />
       <StoryWatcher />
       <VoteBanner />
-      <div id="leftcol"><Feed /></div>
+      <div id="leftcol"><Objectives /><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>
       <Connection />
       <RadioLine />

@@ -15,13 +15,15 @@ const DONE = TUT_STAGES.length;
 
 const STAGE_NAME = ['Mobilise', 'Dig in', 'First battle', 'Hand off', 'Supply', 'Offensive'];
 const STAGE_WHY = [
-  'Troops in the reserve do nothing until you form them into corps. Corps can be moved, dug in and given to a commander.',
-  'A trench, sandbags or wire on a border make every corps behind it fight harder.',
-  'The neighbour attacks now, and the other powers stop holding back. Watch the battle bar at the bottom: the barrage and the stance are yours to set.',
-  'You cannot run every front by hand. A commander holds his front by himself and sends you requests: men, works, patrols.',
-  'Every region feeds only so many men. Corps over its capacity go hungry and lose strength.',
-  'Give an army the Attack order: its commander prepares an operation and sends you the plan to approve.',
+  'New battalions wait in their region\'s reserve. The reserve cannot be sent anywhere as a unit: "Form corps from reserve" puts all of it into one corps, which you can then move, dig in or hand to a commander.',
+  'Your corps on the border fights harder behind field works. "Dig in" adds a trench level for Production (up to three, each +25 % defence); sandbags and wire add more. Works only help in defence, and they stay on the border when the corps leaves.',
+  'The neighbour attacks now, and the other powers stop holding back. The battle card shows both sides and your levers: the barrage spends shells for firepower, the stance trades losses against damage. Your trench is already working for you.',
+  'You cannot run every front by hand. A commander moves the corps of his front by himself and asks you in the Inbox for what he may not decide: men, works, patrols, attacks.',
+  'Every region feeds only so many battalions. Over its capacity they lose morale every week and get no replacements. The Supply map mode shows it: red regions are over capacity.',
+  'On the Attack mandate your commander prepares an operation and sends you the plan: forces, barrage, odds and expected losses. Approve it and he attacks by himself. Or attack yourself: select corps, press Attack (K) and click an enemy region.',
 ];
+/** The section of the Rules' Basics that explains each stage. */
+const STAGE_RULE = ['b-reserve', 'b-dig', 'b-battle', 'b-cmd', 'b-supply', 'b-attack'];
 
 type Point = Omit<TutPoint, 'key'>;
 
@@ -93,7 +95,7 @@ export function Objectives() {
         <small>{t('First war · stage {0} of {1}', T.stage + 1, DONE)}</small><b>{t(STAGE_NAME[T.stage])}</b><span className="chev">{open ? '▾' : '▸'}</span>
       </button>
       {open && <>
-        <p className="ob-why">{t(STAGE_WHY[T.stage])}</p>
+        <p className="ob-why">{t(STAGE_WHY[T.stage])} <button className="lnk" onClick={() => { click(); useUi.getState().openRules(STAGE_RULE[T.stage]); }}>{t('More in the rules')}</button></p>
         <ul className="ob-list">
           {st.goals.map((k, i) => { const x = goal(g, me, k), ok = T.ok.includes(i), on = tp?.key === k; return (
             <li key={k} className={ok ? 'ok' : ''}><span className="ob-c" aria-hidden="true">{ok ? '✓' : '○'}</span><span className="ob-t">{x.text}{!ok && x.how && <small className="ob-how">{x.how}</small>}</span>

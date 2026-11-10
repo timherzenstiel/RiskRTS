@@ -582,4 +582,10 @@ export const UI_PLAY: Record<string, string> = {
   'The game is paused': 'Das Spiel ist angehalten',
   'nothing moves until you resume': 'nichts bewegt sich, bis du fortsetzt',
   'Resume (Space)': 'Weiter (Leertaste)',
+  // design-optimize phase 2a: the news lane, the paper in Reports, the corps card
+  'Dispatches': 'Meldungen',
+  '{0} more in Situation': '{0} weitere unter Lage',
+  'A new paper is out': 'Eine neue Zeitung ist erschienen',
+  "Reports: this week's paper is out": 'Berichte: Die Zeitung dieser Woche ist erschienen',
+  'Call off': 'Abbrechen',
 };

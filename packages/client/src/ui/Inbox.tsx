@@ -7,6 +7,7 @@ import {
   reqExpiry, type GameState, type ReqKind,
 } from '@riskrts/shared';
 import { useSim, useUi, type AutoPause } from '../game/store';
+import { inLane } from './lane';
 import { pins } from '../game/pins';
 import { Sfx } from '../audio/sfx';
 import { click } from './actions';
@@ -221,7 +222,7 @@ export function InboxWatcher() {
   // with the Inbox open the toasts would only repeat it
   const shown = [...(focus ? [focus] : []), ...(panel === 'staff' ? [] : toasts.map(x => x.key).filter(k => k !== focus))].map(k => items.find(x => x.key === k)).filter((x): x is InboxItem => !!x).slice(0, 3);
   if (!shown.length) return null;
-  return (
+  return inLane('ask',
     <div id="ib-toasts" aria-live="polite">
       {shown.map(x => <Card key={x.key} g={sim.g} x={x} toast onClose={() => ui().dropInbox(x.key)} />)}
     </div>

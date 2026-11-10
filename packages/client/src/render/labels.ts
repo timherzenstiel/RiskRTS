@@ -12,7 +12,7 @@ import { pins } from '../game/pins';
 function garrisonLabel(r: GameState['regions'][number], merged = false) {
   const v = r.vis ?? 3, n = r.cs && !merged ? totalUnits(mainOf(r)) : totalUnits(r.units);
   if (v >= 3) return String(n);
-  if (r.est) return r.est[1] > 0 ? `~${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '~0';
+  if (r.est) return r.est[1] > 0 ? `≈${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '≈0';
   if (v === 2) return `${n}?`;
   return '?';
 }
@@ -399,7 +399,7 @@ export class Labels {
 
   /** Text and state classes of a corps marker: symbol, battalions (or the estimate), name up close, holding / assembling / attacking. */
   private corpsText(l: CorpsLabel, g: GameState, f: number, c: Corps, named: boolean, many = 1, on = false) {
-    const n = groundUnits(c.u), est = c.est ? `~${Math.max(1, Math.round((c.est[0] + c.est[1]) / 200))}` : String(n);
+    const n = groundUnits(c.u), est = c.est ? `≈${Math.max(1, Math.round((c.est[0] + c.est[1]) / 200))}` : String(n);
     const ord = c.ord ?? 0, left = ord >= 1 ? Math.max(0, (c.ready ?? 0) - g.time) : 0;
     const dug = ord === 0 && c.since !== undefined && g.time - c.since >= 40;
     const state = ord >= 1 ? (left > 0 && !c.now ? 'asm' : 'atk') : dug ? 'dug' : 'hold';
@@ -480,8 +480,9 @@ function intelLabel(r: GameState['regions'][number]) {
   return '?';
 }
 
-const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
-/** Text, danger class and tooltip of a balance chip: our battalions | ratio bar | theirs (exact, estimate, report date or ?). */
+// an estimate shows as a range; the range itself says it is one
+const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `${a[0]}–${a[1]}`;
+/** Text, danger class and tooltip of a balance chip: our battalions : theirs (exact, a range, or ?). */
 function chipText(l: ChipLabel, b: Balance, W: World) {
   const own = b.own.btl[0] + b.own.reserve[0], th: [number, number] = [b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]];
   const their = b.know === 0 ? '?' : rng(th) + (b.their.incoming ? ` +${b.their.incoming}` : '');
@@ -489,7 +490,8 @@ function chipText(l: ChipLabel, b: Balance, W: World) {
   const key = own + '|' + their + '|' + b.danger + '|' + fill.toFixed(2) + (b.know === 2 ? b.day : '') + (b.massing ? 'm' : '');
   if (key === l.key) return; l.key = key;
   l.el.className = 'bal d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '') + (b.know === 2 ? ' old' : '');
-  l.el.innerHTML = `<b>${own}</b><i style="--f:${fill.toFixed(2)}"></i><b>${their}</b>`;
+  // ours : theirs (design-optimize §4.6); the frame colour carries the balance
+  l.el.innerHTML = `<b class="o">${own}</b><u>:</u><b>${their}</b>`;
   const where = b.nb >= 0 ? t('Border with {0}', W.regions[b.nb].name) : t('Coast');
   const why = b.danger < 0 ? t('Nothing known of the other side: send a patrol or a reconnaissance flight.') : b.massing ? t('Troops across the border are assembling for an attack.') : [t('Safe: we are clearly stronger.'), t('About even.'), t('They may be stronger.'), t('In danger: they are much stronger.')][b.danger];
   const ours = t('Ours: {0} btl on the border', b.own.btl[0]) + (b.own.reserve[0] ? t(' + {0} from the reserve', b.own.reserve[0]) : '') + (b.own.trench ? ', ' + t('trench {0}', 'I'.repeat(Math.min(3, b.own.trench))) : '') + (b.own.wire ? ', ' + t('wire') : '') + (b.own.defs ? ', ' + (b.own.defs > 1 ? t('{0} defences', b.own.defs) : t('{0} defence', b.own.defs)) : '');

@@ -115,18 +115,32 @@ interface Story {
   /** Day of the paper on screen, the last week seen. */
   open: number | null; seen: number;
   moment: Moment | null; at: number;
+  /** Day of a paper that came in without being shown (the Reports button carries a mark until it is read). */
+  fresh: number | null;
   set(p: Partial<Pick<Story, 'paper' | 'moments'>>): void;
 }
 const saved = (() => { try { return JSON.parse(lsGet('f14story') ?? '{}') as Partial<Story>; } catch { return {}; } })();
 export const useStory = create<Story>((set, get) => ({
-  paper: saved.paper ?? true, moments: saved.moments ?? true, open: null, seen: -1, moment: null, at: -1e9,
+  // the paper waits in Reports unless the player asks for it every week (design-optimize §4.2)
+  paper: saved.paper ?? false, moments: saved.moments ?? true, open: null, seen: -1, moment: null, at: -1e9, fresh: null,
   set: (p) => { set(p); lsSet('f14story', JSON.stringify({ paper: get().paper, moments: get().moments })); },
 }));
 
 /** Show a moment, at most one a week of game time. */
 function moment(g: GameState, m: Moment, sound: Stinger) {
   const s = useStory.getState(); if (!s.moments || g.time - s.at < 20 || useUi.getState().overlay) return;
-  useStory.setState({ moment: m, at: g.time }); Sfx.stinger(sound);
+  const show = () => { if (!useUi.getState().overlay) { useStory.setState({ moment: m }); Sfx.stinger(sound); } };
+  useStory.setState({ at: g.time });
+  // never under a click: a card that opens while the player is giving an order would swallow it
+  if (pointerDown || performance.now() - lastPointer < CLICK_GUARD) setTimeout(show, CLICK_GUARD + 100); else show();
+}
+/** Milliseconds after a click during which no full-screen card opens. */
+const CLICK_GUARD = 400;
+let pointerDown = false, lastPointer = -1e9;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', () => { pointerDown = true; lastPointer = performance.now(); }, true);
+  window.addEventListener('pointerup', () => { pointerDown = false; lastPointer = performance.now(); }, true);
+  window.addEventListener('pointercancel', () => { pointerDown = false; }, true);
 }
 
 eventTaps.push((g, e, me) => {
@@ -138,17 +152,7 @@ eventTaps.push((g, e, me) => {
   if (e.k === 'battleStart' && g.regions[e.region]?.capitalOf >= 0 && (e.defender === me || e.attacker === me)) {
     const cap = g.regions[e.region].capitalOf;
     if (cap === me && e.defender === me) moment(g, { title: t('{0} is threatened', R(e.region)), text: t('{0} attacks our capital.', Fc(e.attacker)), tone: 'bad', region: e.region }, 'siren');
-    else if (e.attacker === me && cap !== me) moment(g, { title: t('Before the gates of {0}', R(e.region)), text: t('Our troops attack the capital of {0}.', F(cap)), tone: 'me', region: e.region }, 'declare');
   }
-  if (e.k === 'battleEnd' && e.winner !== null && e.winner !== e.prev && (e.winner === me || e.prev === me)) {
-    const rep = [...(g.reports ?? [])].reverse().find(r => r.region === e.region);
-    if (rep && rep.dur >= WAR.siege) {
-      const weeks = Math.round(rep.dur / 20);
-      moment(g, e.winner === me ? { title: t('{0} is ours', R(e.region)), text: t('Taken after {0} weeks of fighting.', weeks), tone: 'good', report: rep.id, region: e.region }
-        : { title: t('{0} has fallen', R(e.region)), text: t('Lost after {0} weeks of fighting.', weeks), tone: 'bad', report: rep.id, region: e.region }, e.winner === me ? 'triumph' : 'lost');
-    }
-  }
-  if (e.k === 'general' && e.kind === 'star' && e.faction === me) moment(g, { title: t('{0}: the third star', e.name), text: t('Our general has won his third star and a new trait.'), tone: 'good' }, 'victory');
 });
 
 const openReports = (id?: number) => { click(); if (id !== undefined) useUi.setState({ reportId: id }); useUi.getState().setOverlay('reports'); };
@@ -239,12 +243,15 @@ export function StoryWatcher() {
   useEffect(() => {
     if (!sim) return;
     // what was already in the news when the game was loaded comes without a paper
-    if (sim.session !== lastSession) { lastSession = sim.session; useStory.setState({ seen: last?.day ?? sim.g.day, open: null, moment: null, at: -1e9 }); return; }
+    if (sim.session !== lastSession) { lastSession = sim.session; useStory.setState({ seen: last?.day ?? sim.g.day, open: null, moment: null, at: -1e9, fresh: null }); return; }
     if (st.seen < 0) { useStory.setState({ seen: last?.day ?? sim.g.day }); return; }
     if (!last || last.day <= st.seen) return;
     const { own, wire } = paperOf(last.items, sim.me);
-    useStory.setState({ seen: last.day, open: st.paper && (own.length || wire.length) ? last.day : st.open });
+    const any = own.length > 0 || wire.length > 0;
+    useStory.setState({ seen: last.day, open: st.paper && any ? last.day : st.open, fresh: !st.paper && any ? last.day : st.fresh });
   });
+  // reading the reports clears the mark
+  useEffect(() => { if (overlay === 'reports' && st.fresh !== null) useStory.setState({ fresh: null }); });
   if (!sim) return null;
   const week = st.open !== null ? sim.g.news?.find(n => n.day === st.open) : undefined;
   return <>

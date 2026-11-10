@@ -3,21 +3,18 @@
 import { FleetList } from './Navy';
 import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income, sectorName } from '@riskrts/shared';
 import { MAP_MODES, useSim, useUi, type MapMode } from '../game/store';
-import { BANDS, bandOf } from '../render/camera';
 import { click } from './actions';
-import { Sfx } from '../audio/sfx';
 import { Drawer } from './Drawer';
 import { Minimap } from './Minimap';
 import { BorderCard } from './Situation';
 import { CorpsCard } from './Forces';
 import { ArmyCard } from './Staff';
 import { CommandBar } from './CommandBar';
+import { Lane } from './lane';
 import { rendererRef } from './refs';
 import { unlocked } from './unlock';
 import { getLang, t, tx } from '../i18n';
 
-/** Zoom band names (render/camera) in the interface language. */
-const bandName = (i: number, n: string) => getLang() === 'de' ? ['Übersicht', 'Front', 'Gefecht', 'Nah'][i] ?? n : n;
 /** Short map mode labels (game/store MAP_MODES) in the interface language. */
 const modeShort = (i: number, n: string) => getLang() === 'de' ? ['Pol.', 'Fronten', 'Truppen', 'Nachsch.', 'Aufkl.'][i] ?? n : n;
 
@@ -29,17 +26,6 @@ export function LayerPicker() {
       {MAP_MODES.map((m, i) => !unlocked(sim?.g, 'mode:' + i) ? null : (
         <button key={m.name} data-mode={i} aria-pressed={mode === i} title={`${t(m.name)}: ${t(m.hint)} (${m.key.toUpperCase()})`} onClick={() => { click(); set(mode === i && i ? 0 : i as MapMode); }}>{modeShort(i, m.short)}<kbd>{m.key.toUpperCase()}</kbd></button>
       ))}
-    </div>
-  );
-}
-
-/** Zoom bands: theatre, front, battle, close (keys Z X C V). Lights the band the camera is in. */
-function ZoomPicker() {
-  useSim(); // re-render with the game clock so the lit band follows the wheel
-  const d = rendererRef.current?.cameraDistance() ?? 55, cur = bandOf(d);
-  return (
-    <div className="seg zoom-seg" role="group" aria-label={t('Zoom')}>
-      {BANDS.map((b, i) => <button key={b.name} aria-pressed={cur === i} title={t('{0} view ({1})', bandName(i, b.name), b.key.toUpperCase())} onClick={() => { Sfx.clunk(); rendererRef.current?.zoomBand(i); }}>{bandName(i, b.name)}<kbd>{b.key.toUpperCase()}</kbd></button>)}
     </div>
   );
 }
@@ -97,10 +83,10 @@ export function Sidebar() {
       <div className="radar">
         <div className="crt"><Minimap /></div>
         <LayerPicker />
-        <ZoomPicker />
       </div>
       <CommandBar />
       <div className="side-body"><ArmyCard /><CorpsCard /><BorderCard />{sel >= 0 ? <Drawer /> : <Idle />}</div>
+      <Lane />
       <SupplyGauge />
     </aside>
   );

@@ -65,7 +65,7 @@ export function SoloSetup() {
             <div className="seg" role="group" aria-label={t('Difficulty')}>
               {DIFFICULTIES.map((d, i) => <button key={d.name} aria-pressed={diff === i} onClick={() => { click(); setDiff(i); }}>{t('difficulty|' + d.name)}</button>)}
             </div><small className="diff-det">{diffLine(diff)}</small></div>
-          <div className="row"><button className="btn" onClick={() => { click(); useUi.getState().setScreen('title'); }}>{t('Back')}</button>
+          <div className="row oob-go"><button className="btn" onClick={() => { click(); useUi.getState().setScreen('title'); }}>{t('Back')}</button>
             <button className="btn primary" disabled={pick < 0} onClick={() => begin()}>{t('Begin the war')}</button></div>
         </div>
       </div>

@@ -13,7 +13,8 @@ import { inboxOf } from './Inbox';
 import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
 import { FrontsList } from './Generals';
-import { WarStory } from './Story';
+import { WarStory, useStory } from './Story';
+import { inLane, laneOn } from './lane';
 import { unlocked } from './Tutorial';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
@@ -35,6 +36,7 @@ const RailIcon = ({ d }: { d: string }) => <svg viewBox="0 0 24 24" width="22" h
 /** Panels and national sheets, one button each, down the left edge of the map. */
 export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
+  const paper = useStory(x => x.fresh);
   const sim = useSim(); if (!sim) return null;
   const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, inbox = inboxOf(sim.g, sim.me), staff = { n: inbox.length, crit: inbox.some(x => x.urg > 0) };
   const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false, title = label, pulse = false) => !unlocked(sim.g, k ?? '') ? null : (
@@ -53,7 +55,7 @@ export function LeftRail() {
       {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />, 0, undefined, false, 'Economy: Production, shells, men, conscription and the nation')}
       {p('navy', 'Navy', <RailIcon d="M12 3v14M7 8h10M4 14c2 4 5 6 8 6s6-2 8-6" />)}
       {p('intel', 'Intel', <RailIcon d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" />)}
-      {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
+      {o('reports', 'Reports', <><RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />{paper !== null && <em className="rbadge calm" aria-label={t('A new paper is out')}>•</em>}</>, paper !== null ? 'Reports: this week\'s paper is out' : 'After-action reports of the last battles')}
       {o('diplomacy', 'Diplo', <HandshakeIcon />, 'Diplomacy: treaties and messages')}
       {o('rules', 'Rules', <RailIcon d="M5 4h11l3 3v13H5zM9 9h7M9 13h7M9 17h4" />, 'Rules: how fronts, corps, commanders, scouting, supply and men work, with the numbers')}
       {o('calendar', 'Calendar', <RailIcon d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4" />, 'War calendar: unlocks, rushes and doctrines')}
@@ -302,9 +304,9 @@ export function Alerts() {
   const sim = useSim(); const dismissed = useUi(s => s.dismissed);
   if (!sim || sim.g.over) return null;
   const { g, me } = sim, ui = useUi.getState;
-  const list = alertsOf(g, me).filter(a => (dismissed[a.key] ?? -1) < g.time).slice(0, 4);
+  const all = alertsOf(g, me).filter(a => (dismissed[a.key] ?? -1) < g.time), lane = laneOn(), list = all.slice(0, lane ? 2 : 4), more = all.length - list.length;
   if (!list.length) return null;
-  return (
+  return inLane('alert',
     <div id="alerts" aria-label={t('Alerts')} aria-live="polite">
       {list.map(a => (
         <div key={a.key} className={'alert-i plate l' + a.level}>
@@ -313,6 +315,7 @@ export function Alerts() {
           <button className="x" aria-label={t('Dismiss')} title={t('Dismiss for a minute')} onClick={() => ui().dismiss(a.key, g.time + 60)}><CloseIcon /></button>
         </div>
       ))}
+      {lane && more > 0 && <button className="lnk lane-more" onClick={() => { click(); ui().setPanel('situation'); }}>{t('{0} more in Situation', more)}</button>}
     </div>
   );
 }

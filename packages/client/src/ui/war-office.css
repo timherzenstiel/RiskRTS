@@ -560,6 +560,8 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 /* balance chips on own borders (Fronts mode) */
 .bal{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;padding:2px 6px;background:rgba(20,21,17,.92);border:2px solid #77786e;border-radius:2px;color:#eee6cc;font:400 13px/1.1 var(--f-lcd);cursor:pointer;will-change:transform;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 .bal i{display:block;width:30px;height:5px;background:#3a3c36;position:relative;overflow:hidden}
+.bal u{text-decoration:none;opacity:.6;margin:0 -2px}
+.bal b.o{color:#fff}
 .bal i::after{content:"";position:absolute;inset:0 auto 0 0;width:calc(var(--f) * 100%);background:currentColor}
 .bal.d0{border-color:var(--lcd);color:#d6f5c0}.bal.d0 i::after{background:var(--lcd)}
 .bal.d1{border-color:var(--khaki)}.bal.d1 i::after{background:var(--khaki)}
@@ -630,7 +632,8 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .cc-acts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
 .cc-det{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px;background:#1b1c17;border:1px solid #0d0e0b}
 .cc-det label{display:flex;align-items:center;gap:4px;font-size:12px;color:#c9c2a8}.cc-det input{width:44px;background:#0f100d;color:var(--lcd);border:1px solid #3d3f37;font:400 14px/1 var(--f-lcd);padding:2px 4px}
-.post .st.cl{display:block;width:100%;text-align:left;background:none;border:0;border-left:3px solid transparent;padding:2px 4px;margin:1px 0;color:inherit;font:inherit;cursor:pointer}
+/* .cl is also the map's city label (absolute, stencil): undo that for the corps lines of the region overview */
+.post .st.cl{position:static;white-space:normal;text-transform:none;letter-spacing:normal;text-shadow:none;will-change:auto;display:block;width:100%;text-align:left;background:none;border:0;border-left:3px solid transparent;padding:2px 4px;margin:1px 0;color:inherit;font:inherit;cursor:pointer}
 .post .st.cl:hover{background:rgba(255,255,255,.04)}.post .st.cl.on{border-left-color:var(--lcd);background:#25301f}
 .bc-corps{display:flex;flex-wrap:wrap;gap:4px}.bc-corps .lnk{background:none;border:0;border-bottom:1px dotted currentColor;color:var(--khaki);padding:0;font:inherit;font-size:12px;cursor:pointer}
 .tl.cp .n .x{font-style:normal;color:#c9c2a8;margin-left:2px;font-size:10px}
@@ -862,3 +865,21 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .btn.guided{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 14px;border-color:var(--brass);min-height:0}
 .btn.guided b{font-size:14px}.btn.guided.primary small{color:inherit;opacity:.8;font-weight:600}.btn.guided small{font-size:11px;color:var(--mute);text-transform:none;letter-spacing:0}
 .diff-det{display:block;max-width:420px;font-size:11px;line-height:1.35;color:var(--mute);margin-top:5px;text-transform:none;letter-spacing:0}
+
+/* ---- the news lane (design-optimize §4.2): decisions, alerts and dispatches in the sidebar instead of over the map ---- */
+#lane{flex:0 1 auto;max-height:32%;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:4px;padding:6px;background:var(--plate-2);border:1px solid #111;border-radius:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+#lane:not(:has(.alert-i,.fi,#ib-toasts > *)){display:none}
+#lane .lane-h{margin:0 0 2px;font:600 10.5px var(--f-head);letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+#lane > div{display:flex;flex-direction:column;gap:4px}
+#lane > div:empty{display:none}
+#lane #alerts,#lane #ib-toasts,#lane #feed{position:static;inset:auto;width:auto;transform:none;z-index:auto;display:flex;flex-direction:column;gap:4px}
+#lane .alert-i{padding:5px 4px 5px 8px;gap:6px;box-shadow:none}
+#lane .alert-i .at b{font-size:13px}
+#lane .alert-i .at small{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#lane .fi{animation:none;box-shadow:none;padding:4px 8px;font-size:12px;opacity:.92}
+#lane .fi:first-child{opacity:1}
+#lane .lane-more{align-self:flex-start;font-size:12px;padding:2px 0}
+@media (max-width:760px){#lane{display:none}}
+
+/* the setup sheet scrolls, its Back / Begin buttons stay in view */
+.sheet.oob .oob-go{position:sticky;bottom:-28px;margin-left:auto;padding:10px 0 10px 14px;background:linear-gradient(90deg,transparent,var(--plate) 14px);z-index:2}

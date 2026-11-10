@@ -237,19 +237,17 @@ function OneCorps({ g, me, r, c }: { g: GameState; me: number; r: RegionState; c
           {STANCES.map((sn, i) => <button key={sn} title={tx(sn)} aria-pressed={(c.st ?? r.stance ?? 0) === i} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, st: i as Stance }); }}>{t(['Balanced', 'Aggressive', 'Defensive', 'Hold'][i])}</button>)}
         </div>
       </div>
-      {foe && (
+      {foe && (c.ord ?? 0) >= 1 && (
         <div className="lv-row"><span className="lv-l">{t('Order')}</span>
-          <div className="seg ord" role="group" aria-label={t('Corps order')}>
-            {ORDERS.map((o, k) => <button key={o} aria-pressed={(c.ord ?? 0) === k} title={t(o)} onClick={() => order(k as Order)}>{k === 0 ? t('Hold') : k === 1 ? t('First line') : t('Invade')}</button>)}
-          </div>
-          {(c.ord ?? 0) >= 1 && !c.now && (c.ready ?? 0) > g.time && <button className="btn sm danger" title={t('Attack before the troops have assembled: tired men, unregistered guns')} onClick={() => order(c.ord!, true)}>{t('Go now')}</button>}
+          <b className="cc-ord">{c.ord === 1 ? t('Take the first line') : t('Invade')} · {nm(W.regions[c.p].name)}</b>
+          {!c.now && (c.ready ?? 0) > g.time && <button className="btn sm danger" title={t('Attack before the troops have assembled: tired men, unregistered guns')} onClick={() => order(c.ord!, true)}>{t('Go now')}</button>}
+          <button className="btn sm" onClick={() => order(0)}>{t('Call off')}</button>
         </div>
       )}
       <div className="cc-acts">
         <button className="btn sm" aria-expanded={det} disabled={groundUnits(c.u) < 2} onClick={() => { click(); setDet(!det); }}>{t('Detach…')}</button>
         {mates.map(m => <button key={m.id} className="btn sm" disabled={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP} title={groundUnits(m.u) + groundUnits(c.u) > CORPS_CAP ? t('Together more than {0} battalions', CORPS_CAP) : tn('Merge {0} into this corps', { raw: groupName(me, 1, m.n) })} onClick={() => { click(); ui().order({ t: 'merge', region: r.id, a: c.id, b: m.id }); }}>{tn('Merge {0}', { raw: groupName(me, 1, m.n).split(' ')[0] })}</button>)}
         <button className="btn sm" title={c.man ? t('Hand the corps back to the region: Auto may move it or fold it into the reserve') : t('Keep the corps under your orders: Auto leaves it alone')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, man: !c.man }); }}>{c.man ? t('Hand to Auto') : t('Take command')}</button>
-        <button className="btn sm" aria-pressed={!c.nr} title={c.nr ? t('Refill off: this corps takes no replacements from the manpower pool') : t('Refill on: each week this corps takes men from the pool to make good its losses (front-line corps first)')} onClick={() => { click(); ui().order({ t: 'corpsSet', region: r.id, id: c.id, refill: !!c.nr }); }}>{c.nr ? t('Refill off') : t('Refill on')}</button>
       </div>
       {det && <Detach r={r} c={c} done={() => setDet(false)} />}
       <p className="note">{t(W.regions[r.id].land.length

@@ -9,6 +9,7 @@ import type { CreateRenderer, PixelScale, RendererCallbacks, WorldRendererApi } 
 import { Ambient } from './ambient';
 import { AIR_Y, BS, BattleView } from './battleView';
 import { CameraRig, bandOf } from './camera';
+import { BANDS } from './camera';
 import { CLOSE_PAINT, DynamicDraw } from './dynamic';
 import { Trenches } from './trenches';
 import { GroundDetail } from './detail';
@@ -160,7 +161,12 @@ class WorldRenderer implements WorldRendererApi {
       onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); },
       onOrder: (id) => { if (this.pickSector(id, true)) return; cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }); },
       onHover: (id) => { if (id !== this.lastHover) { this.lastHover = id; cb.onHover(id); } },
-      onDoubleClick: (id) => { const b = this.session?.state.regions[id].battle ?? -1; this.flyTo(id, b >= 0 ? 6 : Math.min(this.rig.gdist, 24)); },
+      band: (b) => this.zoomBand(b),
+      onDoubleClick: (id) => {
+        const st = this.session?.state, me = this.session?.me ?? -1, b = st?.regions[id].battle ?? -1; this.flyTo(id, b >= 0 ? 6 : Math.min(this.rig.gdist, 24));
+        // an own region: everything in it is selected, ready for a right-click (design-optimize §4.4)
+        if (st && st.regions[id].owner === me && b < 0) { const ids = (st.regions[id].cs ?? []).map(c => c.id); if (lookCorps(st, me, reserveId(id))) ids.push(reserveId(id)); if (ids.length) useUi.getState().selectCorps(ids, false, id); }
+      },
     });
 
     const onResize = () => this.resize();
@@ -244,7 +250,11 @@ class WorldRenderer implements WorldRendererApi {
     return best;
   }
 
-  zoomBand(b: number) { this.input.zoomBand(b); }
+  zoomBand(b: number) {
+    // with the cursor off the map the view centres on what is selected
+    const sel = useUi.getState().sel;
+    if (!this.input.overMap && sel >= 0) this.flyTo(sel, BANDS[b].at); else this.input.zoomBand(b);
+  }
 
   watchedBattles(): number[] {
     const g = this.session?.state, out: number[] = []; if (!g || this.rig.dist >= 40) return out;

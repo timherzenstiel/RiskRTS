@@ -23,22 +23,27 @@ const STAGE_WHY = [
   'Give an army the Attack order: its commander prepares an operation and sends you the plan to approve.',
 ];
 
-/** The text of an objective, and what "Show me" does for it. */
-function goal(g: GameState, key: string): { text: string; show: () => void } {
+/** The text of an objective, how to do it, and what "Show me" does for it. */
+function goal(g: GameState, key: string): { text: string; how: string; show: () => void } {
   const T = g.tut!, W = buildWorld(), home = W.regions[T.home]?.name ?? '?', foe = FACTIONS[T.foe]?.the ?? '?', ui = useUi.getState;
   const fly = (r = T.home) => { ui().select(r); rendererRef.current?.flyTo(r, 26); };
+  const border = (tool: 'send' | 'fort') => { fly(); ui().selectBorder(T.home, T.front, tool); };
   switch (key) {
-    case 'corps2': return { text: t('Form 2 corps from the reserve in {0}', home), show: () => { fly(); hl('[data-cmd="form"]'); } };
-    case 'post': return { text: t('Move one of them to the border with {0}', foe), show: () => { fly(); ui().setPanel('forces'); hl('[data-panel="forces"]'); } };
-    case 'trench': return { text: t('Dig field works on the border with {0}', foe), show: () => { fly(); ui().selectBorder(T.home, T.front, 'fort'); hl('[data-cmd="fort"]'); } };
-    case 'hold': return { text: t('Hold {0} against the first attack', home), show: () => fly() };
-    case 'army': return { text: t('Appoint a commander for the front facing {0}', foe), show: () => { fly(); hl('[data-cmd="army"]'); hl('[data-panel="forces"]'); } };
-    case 'reply': return { text: t('Answer his first request in the Inbox'), show: () => { ui().setPanel('staff'); hl('[data-panel="staff"]'); } };
-    case 'mode': return { text: t('Open the Supply map mode'), show: () => hl('[data-mode="3"]') };
-    case 'cap': return { text: t('Keep every region under its supply capacity'), show: () => { ui().setMode(3); hl('[data-mode="3"]'); } };
-    case 'attack': return { text: t('Give an army the Attack order'), show: () => { ui().setPanel('staff'); hl('[data-panel="staff"]'); } };
-    case 'take': return { text: t('Take one region: approve his plan, or attack yourself'), show: () => { ui().setPanel('staff'); hl('[data-panel="staff"]'); } };
-    default: return { text: key, show: () => {} };
+    case 'corps2': return { text: t('Form 2 corps from the reserve in {0}', home), how: t('Click {0} on the map, then press "Form corps from reserve" in the command bar at the top left, twice.', home),
+      show: () => { fly(); hl('[data-cmd="form"]'); } };
+    case 'post': return { text: t('Move one of them to the border with {0}', foe), how: t('"Show me" opens the border card with a list of your corps: press Send next to one. Any time later: select a corps, press Move (M) and click a border on the map.'),
+      show: () => { border('send'); hl('.bc-send .buy'); } };
+    case 'trench': return { text: t('Dig field works on the border with {0}', foe), how: t('In the border card, press a work under Fortify. Or select the corps on the border and press Dig in (H).'),
+      show: () => { border('fort'); hl('.bcard .cm-b:not(:disabled)'); } };
+    case 'hold': return { text: t('Hold {0} against the first attack', home), how: t('Nothing to press: wait for the attack. Unpause with the space bar if the game is paused.'), show: () => fly() };
+    case 'army': return { text: t('Appoint a commander for the front facing {0}', foe), how: t('"Show me" selects the border: press "Hand to a commander" (L) in the command bar.'),
+      show: () => { border('send'); hl('[data-cmd="cmd"], .bc-corps .lnk'); } };
+    case 'reply': return { text: t('Answer his first request in the Inbox'), how: t('Requests arrive in the Staff panel on the left rail. Grant or refuse one.'), show: () => { ui().setPanel('staff'); hl('[data-panel="staff"]'); } };
+    case 'mode': return { text: t('Open the Supply map mode'), how: t('Press the Supply button in the map modes at the top of the sidebar, or the key B.'), show: () => hl('[data-mode="3"]') };
+    case 'cap': return { text: t('Keep every region under its supply capacity'), how: t('Red regions hold more men than they can feed: move a corps out, or build a depot there.'), show: () => { ui().setMode(3); hl('[data-mode="3"]'); } };
+    case 'attack': return { text: t('Give an army the Attack order'), how: t('Open your army (Staff panel or click its commander) and press Attack.'), show: () => { ui().setPanel('staff'); hl('[data-panel="staff"]'); } };
+    case 'take': return { text: t('Take one region: approve his plan, or attack yourself'), how: t('Approve the plan in the Staff panel. Or select corps, press Attack (K) and click an enemy region.'), show: () => { ui().setPanel('staff'); hl('[data-panel="staff"]'); } };
+    default: return { text: key, how: '', show: () => {} };
   }
 }
 
@@ -65,7 +70,7 @@ export function Objectives() {
         <p className="ob-why">{t(STAGE_WHY[T.stage])}</p>
         <ul className="ob-list">
           {st.goals.map((k, i) => { const x = goal(g, k), ok = T.ok.includes(i); return (
-            <li key={k} className={ok ? 'ok' : ''}><span className="ob-c" aria-hidden="true">{ok ? '✓' : '○'}</span><span className="ob-t">{x.text}</span>
+            <li key={k} className={ok ? 'ok' : ''}><span className="ob-c" aria-hidden="true">{ok ? '✓' : '○'}</span><span className="ob-t">{x.text}{!ok && x.how && <small className="ob-how">{x.how}</small>}</span>
               {!ok && <button className="lnk" onClick={() => { click(); x.show(); }}>{t('Show me')}</button>}</li>
           ); })}
         </ul>

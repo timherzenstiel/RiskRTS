@@ -22,17 +22,20 @@ export function diffLine(i: number): string {
   ].join(' · ');
 }
 
+/** Start a single-player war; `guided` is the first war of design-play §6 (France, Recruit, fixed seed). */
+export function startSolo(me: number, d: number, rules?: GameSettings, guided = false) {
+  Sfx.init();
+  if (guided) { me = TUT.me; d = 0; }
+  const s = new HostSession(me, guided ? { humans: [me], difficulty: d, seed: TUT.seed, guided: true } : { humans: [me], difficulty: d, settings: rules });
+  const ui = useUi.getState();
+  // the auto-pause defaults come with the difficulty (design-play §7); the Inbox panel changes them
+  const p = DIFFICULTIES[d].pause; ui.setAutoPause({ urgent: p !== 'off', attacked: p !== 'off', lost: p === 'all', won: p === 'all' });
+  ui.startSession(s); ui.setOverlay('orders'); // pauses until the orders are read
+}
+
 export function SoloSetup() {
   const [pick, setPick] = useState(-1); const [diff, setDiff] = useState(1); const [rules, setRules] = useState<GameSettings>({ ...DEFAULT_SETTINGS });
-  const begin = (guided = false) => {
-    if (pick < 0 && !guided) return; Sfx.init();
-    const d = guided ? 0 : diff, me = guided ? TUT.me : pick;
-    const s = new HostSession(me, guided ? { humans: [me], difficulty: d, seed: TUT.seed, guided: true } : { humans: [me], difficulty: d, settings: rules });
-    const ui = useUi.getState();
-    // the auto-pause defaults come with the difficulty (design-play §7); the Inbox panel changes them
-    const p = DIFFICULTIES[d].pause; ui.setAutoPause({ urgent: p !== 'off', attacked: p !== 'off', lost: p === 'all', won: p === 'all' });
-    ui.startSession(s); ui.setOverlay('orders'); // pauses until the orders are read
-  };
+  const begin = () => { if (pick >= 0) startSolo(pick, diff, rules); };
   // the map of August 1914, for the order-of-battle radar
   const owners = useMemo(() => createGame({ seed: 1914, humans: [0], difficulty: 1 }).regions.map(r => r.owner), []);
   const mine = pick >= 0 ? owners.map((o, i) => o === pick ? i : -1).filter(i => i >= 0) : [];
@@ -40,9 +43,7 @@ export function SoloSetup() {
     <main className="screen">
       <div className="bgfx" aria-hidden="true" />
       <div className="sheet glass oob">
-        <div className="row spread"><div><div className="kicker">{t('Single player · order of battle')}</div><h2>{t('Choose your power')}</h2></div>
-          <button className="btn guided" onClick={() => { click(); begin(true); }} title={t('Play {0} through six short stages that teach the game one system at a time. The other powers hold back until the first battle.', FACTIONS[TUT.me].name)}>
-            <b>{t('First war (guided)')}</b><small>{t('{0} · six stages · Recruit', tx(FACTIONS[TUT.me].short))}</small></button></div>
+        <div><div className="kicker">{t('Single player · order of battle')}</div><h2>{t('Choose your power')}</h2></div>
         <div className="oob-grid">
           <RadarMap owners={owners} highlight={mine} label={t('The world in August 1914')} />
           <div className="ncards" role="group" aria-label={t('Choose your power')}>

@@ -2,7 +2,7 @@
 // orders the map gives them – right-click an own region or border to move the selected corps there, an enemy region to attack.
 import { GeneralsRoster } from './Generals';
 import {
-  ASSEMBLE, CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderBalance, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, lookCorps, reserveId, marchEta, moveK,
+  ASSEMBLE, CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderBalance, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, lookCorps, reserveId, sectorAt, marchEta, moveK,
   frontsOf, fullMen, groundUnits, groupName, menTotal, sectorPoint, wrapDx, type Army, type Corps, type GameState, type Order, type RegionState, type Stance, type Units, type World,
 } from '@riskrts/shared';
 import { useState } from 'react';
@@ -26,12 +26,10 @@ export const strengthOf = (c: { u: Units; m: Units }) => { const f = fullMen(c.u
 export const stars = (xp?: number) => xp ? '★'.repeat(xp) : '';
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-/** The post of `region` nearest to a map point: a border or coast when the point is close to it, else the centre. */
+/** The post of `region` a map point belongs to: the border or coast running nearest to it, else the centre. */
 export function postAt(W: World, region: number, pt?: { x: number; z: number }): number {
   if (!pt) return -1;
-  const R = W.regions[region]; let best = -1, bd = Math.hypot(wrapDx(pt.x, R.cx), pt.z - R.cz) * .8;
-  for (const s of R.sectors) { const p = sectorPoint(W, region, s), d = Math.hypot(wrapDx(pt.x, p.x), pt.z - p.z); if (d < bd) { bd = d; best = s; } }
-  return best;
+  return sectorAt(W, region, pt.x, pt.z);
 }
 
 /** Corps of mine marching or aboard ship (columns and fleets that carry a whole corps). */

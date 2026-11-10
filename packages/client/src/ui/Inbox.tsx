@@ -132,7 +132,7 @@ function Card({ g, x, toast, onClose }: { g: GameState; x: InboxItem; toast?: bo
       <small className="ib-w">{x.why}</small>
       {x.rows && <table className="ib-tab"><tbody>{x.rows.map(([a, b], i) => <tr key={i}><th>{a}</th><td>{b}</td></tr>)}</tbody></table>}
       {left !== null && <div className="ib-exp" title={x.src === 'cmd' ? t('Unanswered, the request lapses and his corps lose morale') : t('Time left to answer')}><i style={{ width: `${(left * 100).toFixed(1)}%` }} /></div>}
-      <div className="ib-a">
+      <div className="ib-a" data-tut={x.src === 'cmd' ? 'req' : undefined}>
         {x.opts.map((o, i) => (
           <button key={i} className={'btn sm' + (o.danger ? ' danger' : o.primary ? ' primary' : '')} disabled={o.off} title={o.title} onClick={() => { click(); if (o.run() !== false) ui().dropInbox(x.key); }}>
             {o.label}{toast && i === x.y ? <kbd>Y</kbd> : toast && i === x.n ? <kbd>N</kbd> : null}

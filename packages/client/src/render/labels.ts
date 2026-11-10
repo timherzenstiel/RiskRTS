@@ -75,6 +75,8 @@ export interface LabelContext {
   corps: number[];
   /** Faction of the viewer (-1 spectator). */
   me: number;
+  /** The guided war's map pin: a region, or one of its borders (sector), with a short label. */
+  pin: { region: number; sector?: number; label: string } | null;
   isTarget(id: number): boolean; anchorH(id: number): number; groundY(id: number): number; armyH(a: Army): [number, number]; frame: number; now: number;
 }
 
@@ -148,8 +150,20 @@ export class Labels {
     for (const l of [...this.battles.values(), ...this.seas.values()]) { l.label = ''; l.nextText = 0; l.el.setAttribute('aria-label', l.aria()); }
   }
 
+  private pinEl: { el: HTMLDivElement; shown: boolean; tf: string; text: string } | null = null;
+  /** The guided war's pin: a bouncing arrow over the region or border to click. */
+  private drawPin(ctx: LabelContext) {
+    const pin = ctx.pin;
+    if (!pin) { if (this.pinEl) this.hide(this.pinEl); return; }
+    if (!this.pinEl) { const el = document.createElement('div'); el.className = 'tut-pin'; el.innerHTML = '<span class="tp-l"></span><span class="tp-a" aria-hidden="true">▼</span>'; this.root.appendChild(el); this.pinEl = { el, shown: true, tf: '', text: '' }; }
+    const l = this.pinEl; if (l.text !== pin.label) { l.text = pin.label; (l.el.firstChild as HTMLElement).textContent = pin.label; }
+    const p = pin.sector !== undefined ? sectorPoint(this.world, pin.region, pin.sector) : { x: this.world.regions[pin.region].cx, z: this.world.regions[pin.region].cz };
+    this.place(l, ctx, p.x, ctx.anchorH(pin.region) + (pin.sector !== undefined ? .35 : 1.6), p.z);
+  }
+
   update(ctx: LabelContext) {
     if (this.lv !== langVersion()) { this.lv = langVersion(); this.relabel(); }
+    this.drawPin(ctx);
     const { g, cam } = ctx, dist = cam.dist, showNames = dist < 40, sm = dist > 95;
     this.regions.forEach((l, i) => {
       const def = this.world.regions[i], rs = g?.regions[i];

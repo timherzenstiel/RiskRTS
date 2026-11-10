@@ -3,7 +3,7 @@
 // clicked or hovered. The cards below hold the details; the bar is the quick way in.
 import { useEffect, type ReactNode } from 'react';
 import {
-  AIR_RANGE, CORPS_CAP, COST, MANDATES, armyCorps, borderBalance, buildWorld, corpsAtPost, corpsIn, depotOf, findCorps, fortCost, groundUnits, groupName, hops, treatyOf,
+  AIR_RANGE, CORPS_CAP, COST, MANDATES, armyCorps, borderBalance, buildWorld, corpsAtPost, corpsIn, depotOf, lookCorps, reserveId, fortCost, groundUnits, groupName, hops, treatyOf,
   type GameState, type Mandate, type Units,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -13,6 +13,7 @@ import { rendererRef } from './refs';
 import { MAND, hqName } from './Staff';
 import { noGeneralText } from './Generals';
 import { nm } from './format';
+import { corpsTitle } from './Forces';
 import { t, tx } from '../i18n';
 import { tn } from './LangPicker';
 
@@ -43,8 +44,8 @@ function regionVerbs(g: GameState, me: number, sel: number): Verb[] {
     { id: 'fort', label: t('Fortify a border…'), key: 'h', run: showBorders, title: t('Pick the border in the list below, or click a chip or a border on the map') },
     { id: 'move', label: t('Move troops'), key: 'm', run: () => { ui().orderMode && ui().orderKind === 'march' ? ui().cancelOrder() : ui().beginOrder('march'); }, on: ui().orderMode && ui().orderKind === 'march',
       off: busy ?? (ground < 2 ? t('Needs 2 battalions') : undefined), title: t('Pick a neighbour on the map: the share set in the Overview marches there or attacks it') },
-    { id: 'form', label: t('Form corps from reserve'), key: 'j', run: () => { ui().order({ t: 'form', region: sel, u: upToCap(depotOf(r).u) }); },
-      off: dep < 1 ? t('The reserve holds no battalions') : undefined, title: t('Turn the {0} battalions waiting in the reserve into a corps you command. Only corps can be selected, moved and put into an army.', Math.min(dep, CORPS_CAP)) },
+    { id: 'form', label: t('Select the reserve'), key: 'j', run: () => { ui().selectCorps([reserveId(sel)], false, sel); },
+      off: dep < 1 ? t('The reserve holds no battalions') : undefined, title: t('Select the {0} battalions of the reserve like a corps, then right-click the map to move them or to attack', dep) },
   ];
   if (r.units.plane > 0) v.push({ id: 'air', label: t('Air strike'), key: 'a', ext: true, run: () => ui().beginOrder('air'), off: busy ?? undefined });
   return v;
@@ -73,7 +74,7 @@ function borderVerbs(g: GameState, me: number, rid: number, sec: number): Verb[]
 function openNewArmy(me: number) { const a = (ui().session?.state.hq ?? []).filter(x => x.owner === me).slice(-1)[0]; if (a) ui().selectArmy(a.id); }
 
 function corpsVerbs(g: GameState, me: number, ids: number[]): Verb[] {
-  const W = buildWorld(), found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
+  const W = buildWorld(), found = ids.map(id => lookCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
   if (!found.length) return [];
   const mode = ui().orderMode && ui().orderKind === 'corps', goal = ui().goal;
   const target = (g2: 1 | 2 | null) => () => { if (g2) ui().setGoal(g2); if (mode && !g2) ui().cancelOrder(); else ui().beginOrder('corps'); };
@@ -92,6 +93,7 @@ function corpsVerbs(g: GameState, me: number, ids: number[]): Verb[] {
       off: !posts.length ? t('They stand in the centre, not on a border') : digMax ? t('The trench is as deep as it goes') : g.factions[me].supply < digCost ? t('{0} Production short', digCost - g.factions[me].supply) : undefined,
       title: t('Deepen the trench on the border each corps stands on') },
   ];
+  if (found.some(x => x.c.res)) return v.slice(0, 2);
   if (one && one.c.p >= 0) v.push({ id: 'fort', label: t('Fortify…'), key: 'u', run: () => ui().selectBorder(one.r.id, one.c.p, 'fort'), title: t('Open this border\'s card: wire, sandbags, MG nests, bunkers, guns') });
   if (pair) { const sum = groundUnits(pair[0].c.u) + groundUnits(pair[1].c.u); v.push({ id: 'merge', label: t('Merge'), key: 'j', run: () => ui().order({ t: 'merge', region: pair[0].r.id, a: pair[0].c.id, b: pair[1].c.id }), off: sum > CORPS_CAP ? t('Together more than {0} battalions', CORPS_CAP) : undefined }); }
   v.push({ id: 'refill', label: nr ? t('Refill off') : t('Refill on'), key: 'e', on: !nr, run: () => { for (const x of found) ui().order({ t: 'corpsSet', region: x.r.id, id: x.c.id, refill: nr }); },
@@ -142,10 +144,10 @@ function current(g: GameState, me: number, s: ReturnType<typeof ui>): { title: R
   const W = buildWorld();
   if (s.armySel >= 0) { const h = (g.hq ?? []).find(x => x.id === s.armySel && x.owner === me); if (h) return { title: hqName(h), sub: `${h.cmd.name} · ${t(MAND[h.mandate])}`, verbs: armyVerbs(g, me, h.id) }; }
   if (s.corps.length) {
-    const found = s.corps.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
+    const found = s.corps.map(id => lookCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
     if (!found.length) return { title: t('{0} corps', s.corps.length), sub: t('on the move: orders once they stand at a post'), verbs: [] };
     const btl = found.reduce((n, x) => n + groundUnits(x.c.u), 0);
-    return { title: found.length === 1 ? groupName(me, 1, found[0].c.n) : found.slice(0, 2).map(x => groupName(me, 1, x.c.n).split(' ')[0]).join(' + ') + (found.length > 2 ? ' …' : ''), sub: t('{0} corps · {1} btl', found.length, btl), verbs: corpsVerbs(g, me, s.corps) };
+    return { title: found.length === 1 ? corpsTitle(me, found[0].r, found[0].c) : found.slice(0, 2).map(x => corpsTitle(me, x.r, x.c).split(' ')[0]).join(' + ') + (found.length > 2 ? ' …' : ''), sub: t('{0} corps · {1} btl', found.length, btl), verbs: corpsVerbs(g, me, s.corps) };
   }
   if (s.sel < 0) return null;
   const r = g.regions[s.sel];

@@ -23,7 +23,7 @@ import { techDayFor, type TechKey } from '../data/tech';
 import { monthStr } from '../data/calendar';
 import { attackCap, bombedNow } from './economy';
 import { recordIntel, MAX_SPIES } from './fog';
-import { ASSEMBLE, CORPS_CAP, UNREG, addToGroup, armyNo, autoDeploy, column, columnArrives, corpsAtPost, corpsById, corpsPosts, corpsSize, depotOf, fixPosts, formTime, groupUnits, landRoute, mainOf, moveK, postUnits, renumber, routeColumn, setAttackCheck, tagOf, takeCorps, takeDepot, takeGroup } from './posts';
+import { ASSEMBLE, CORPS_CAP, UNREG, reserveId, corpsIn, dissolve, addToGroup, armyNo, autoDeploy, column, columnArrives, corpsAtPost, corpsById, corpsPosts, corpsSize, depotOf, fixPosts, formTime, groupUnits, landRoute, mainOf, moveK, postUnits, renumber, routeColumn, setAttackCheck, tagOf, takeCorps, takeDepot, takeGroup } from './posts';
 import { allied } from './diplomacy';
 import { buildPort, buildShip, coastal, dock, landing, shipTroops, station } from './navy';
 import { breakOff } from './naval';
@@ -33,7 +33,7 @@ import { isCoast } from '../world/zones';
 import { SHIP_KINDS } from '../data/sea';
 import { answerPeace, chooseAim } from './wars';
 import { tutFlag, tutReplied } from './tutorial';
-import type { Army, Battle, BuildKind, Command, GameState, Order, RegionState, Stance } from './types';
+import type { Army, Battle, BuildKind, Command, Corps, GameState, Order, RegionState, Stance } from './types';
 import type { Units } from '../data/units';
 
 /** The front of a region the owner's fresh troops should go to: the one facing `from` if there is one, else the most hard-pressed. */
@@ -311,13 +311,31 @@ const unitsOf = (n: Partial<Units>): Units => { const u = emptyUnits(); for (con
 function ownCorps(g: GameState, fid: number, region: number, id: number) {
   const A = g.regions[region];
   if (!A || A.owner !== fid) return 'Select one of your own regions first.';
-  const c = corpsById(A, id); if (!c) return 'That corps is not in this region.';
+  const c = id === reserveId(region) ? reserveCorps(g, A) : corpsById(A, id); if (!c) return id === reserveId(region) ? 'The reserve of this region is empty.' : 'That corps is not in this region.';
   return { A, c };
+}
+/** The reserve takes an order: its battalions (at most CORPS_CAP) become a corps under the player's orders at the centre. */
+function reserveCorps(g: GameState, A: RegionState): Corps | undefined {
+  const dep = depotOf(A).u, n: Partial<Units> = {}; let room = CORPS_CAP;
+  for (const k of GROUND_TYPES) { n[k] = Math.min(dep[k], room); room -= n[k]!; }
+  if (room === CORPS_CAP) return undefined;
+  const out = takeDepot(A, n);
+  made.c = addToGroup(g, A, -1, out.u, out.m, A.mor, { id: -1, n: 0, man: true })[0];
+  return made.c;
+}
+/** The corps the last order made of a reserve; an order that fails hands it back to the reserve. */
+const made: { c?: Corps } = {};
+function orderReserve(g: GameState, region: number, run: () => string | null): string | null {
+  made.c = undefined;
+  const e = run(), c = made.c as Corps | undefined; made.c = undefined;
+  if (e && c && corpsIn(g.regions[region]).includes(c) && c.p < 0) dissolve(g.regions[region], c);
+  return e;
 }
 
 /** March a corps to a post of an own region (through own land, or by sea between coasts). It is the player's from then on. */
 export function moveCorps(g: GameState, fid: number, region: number, id: number, to: number, toPost: number): string | null {
   const W = world(), o = ownCorps(g, fid, region, id); if (typeof o === 'string') return o;
+  id = o.c.id;
   const { A, c } = o, B = g.regions[to];
   if (!B) return 'Unknown region.';
   if (B.owner !== fid) return `${W.regions[to].name} is not yours. To attack it, give the corps an attack order.`;
@@ -351,6 +369,7 @@ export function moveCorps(g: GameState, fid: number, region: number, id: number,
 /** Attack a neighbouring region with a corps: it moves up to the border facing it (unless it stands there), assembles and goes over. */
 export function attackCorps(g: GameState, fid: number, region: number, id: number, to: number, goal: Order, now = false, brk?: boolean): string | null {
   const W = world(), o = ownCorps(g, fid, region, id); if (typeof o === 'string') return o;
+  id = o.c.id;
   const { A, c } = o, T = g.regions[to];
   if (!T) return 'Unknown region.';
   if (T.owner === fid || (T.owner >= 0 && allied(g, fid, T.owner))) return `${W.regions[to].name} is not an enemy region.`;
@@ -667,8 +686,8 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'march': return sendArmy(g, fid, c.from, c.to, c.frac, c.brk, c.goal ?? 2, c.post);
     case 'move': return moveGroup(g, fid, c.region, c.post, c.to, c.toPost, c.frac);
     case 'order': return setOrder(g, fid, c.region, c.post, c.k, !!c.now, c.brk, c.id);
-    case 'moveCorps': return moveCorps(g, fid, c.region, c.id, c.to, c.toPost);
-    case 'attackCorps': return attackCorps(g, fid, c.region, c.id, c.to, c.goal, !!c.now, c.brk);
+    case 'moveCorps': return orderReserve(g, c.region, () => moveCorps(g, fid, c.region, c.id, c.to, c.toPost));
+    case 'attackCorps': return orderReserve(g, c.region, () => attackCorps(g, fid, c.region, c.id, c.to, c.goal, !!c.now, c.brk));
     case 'detach': return detach(g, fid, c.region, c.id, c.u);
     case 'merge': return mergeCorps(g, fid, c.region, c.a, c.b);
     case 'form': return formCorps(g, fid, c.region, c.u, c.into);

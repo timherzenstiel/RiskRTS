@@ -131,6 +131,8 @@ export interface Corps {
   now?: boolean;
   /** No replacements from the pool (refill off). */
   nr?: boolean;
+  /** A region's reserve shown as a formation (see lookCorps): not a stored corps, an order turns it into one. */
+  res?: boolean;
   /** Fog-of-war views only: estimated men [low, high]. */
   est?: [number, number];
 }
@@ -524,11 +526,21 @@ export interface Hq {
   budget: number; spent: number; wk: number;
   /** Request kinds approved in advance. */
   standing: ReqKind[];
+  /** Why the army is not attacking its target yet (Attack mandate; design-optimize §3.4), from the commander's last look. */
+  why?: AttackWhy;
+  /** Attacks when ready (design-optimize §3.4): attacks and operation plans are carried out without asking. */
+  auto?: boolean;
   /** Requests denied, by key, not asked again until this game time. */
   deny: Record<string, number>;
   /** Game time of the next look at the front, the last report counted for experience, recent notes. */
   next: number; rep: number; notes: HqNote[];
 }
+/**
+ * What a commander on the Attack mandate still lacks on the border facing his target: battalions ready there against what he
+ * needs, the strength ratio against the one he wants (null: unknown), whether the report is fresh, whether the line is manned
+ * (have / want over the whole border), and what else is in the way. `ok`: nothing is missing, he asks (or goes).
+ */
+export interface AttackWhy { region: number; sector: number; going: number; need: number; ratio: number | null; min: number; known: boolean; fresh: boolean; have: number; want: number; busy: boolean; cap: boolean; op: boolean; ok: boolean }
 /** An operation plan (design-play §3.3): expected success 0..1, men lost, shells and days of barrage, the battalions going and
  *  the enemy's (range), and the corps of the player's that would raise the odds (`more` corps, `moreBtl` battalions, `pMore`). */
 export interface OpPlan { p: number; /** The strength ratio behind it. */ r: number; loss: number; shells: number; days: number; heavy: boolean; btl: number; their: [number, number]; more: number; moreBtl: number; pMore: number }
@@ -656,7 +668,7 @@ export type Command =
   /** Armies: form one from corps (its front starts with their regions), put corps in or out, change its settings, answer a request. */
   | { t: 'army'; corps: number[]; front?: number[]; gen?: number }
   | { t: 'armyAssign'; army: number; corps: number[]; on: boolean }
-  | { t: 'armySet'; army: number; mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[] }
+  | { t: 'armySet'; army: number; mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[]; auto?: boolean }
   | { t: 'reply'; req: number; opt: 'yes' | 'recruit' | 'transfer' | 'deny' | 'more' | 'later'; n?: number }
   | { t: 'relieve'; army: number; gen?: number }
   | { t: 'disband'; army: number }

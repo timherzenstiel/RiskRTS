@@ -3,7 +3,7 @@
 // post; a corps is selected by clicking it, and then takes its orders from the corps card and from right-clicks on the map.
 import { borderLabel, coastThreat, sectorName } from '@riskrts/shared';
 import {
-  CORPS_CAP, FACTIONS, GROUND_TYPES, ORDERS, UT, buildWorld, corpsAtPost, depotOf, frontsOf, groundUnits, groupName, isMountain, legDist, mainOf, moveK, POST_SPEED, treatyOf,
+  CORPS_CAP, FACTIONS, GROUND_TYPES, ORDERS, UT, buildWorld, corpsAtPost, depotOf, reserveId, frontsOf, groundUnits, groupName, isMountain, legDist, mainOf, moveK, POST_SPEED, treatyOf,
   type Army, type Corps, type GameState, type Order, type RegionState, type Units,
 } from '@riskrts/shared';
 import { useSim, useUi } from '../game/store';
@@ -138,8 +138,8 @@ export function DeployTab({ region, id }: { region: RegionState; id: number }) {
       </div>
       <div className="post main">
         <div className="post-h"><span className="ic"><Icon k="barracks" size={18} /></span>
-          <div className="tx"><b>{t('Centre · {0}', groupName(me, 0, region.an))}</b><small>{tn('Reserve {0}', { raw: unitsLine(dep) })}{dep.plane ? ' · ' + (dep.plane === 1 ? t('{0} squadron', 1) : t('{0} squadrons', dep.plane)) : ''}{reserve.length ? ' · ' + t('{0} reserve corps', reserve.length) : ''}</small></div>
-          <button className="btn sm" disabled={groundUnits(dep) < 1} title={t('Turn the {0} battalions waiting in the reserve into a corps you command. Only corps can be selected, moved and put into an army.', Math.min(groundUnits(dep), CORPS_CAP))} onClick={() => { click(); ui().order({ t: 'form', region: id, u: upTo(dep) }); }}>{t('Form corps from reserve')}</button>
+          <div className="tx"><b>{t('Centre · Reserve')}</b><small>{tn('Reserve {0}', { raw: unitsLine(dep) })}{dep.plane ? ' · ' + (dep.plane === 1 ? t('{0} squadron', 1) : t('{0} squadrons', dep.plane)) : ''}{reserve.length ? ' · ' + t('{0} reserve corps', reserve.length) : ''}</small></div>
+          <button className="btn sm" disabled={groundUnits(dep) < 1} title={t('Select the {0} battalions of the reserve like a corps, then right-click the map to move them or to attack', groundUnits(dep))} onClick={() => { click(); ui().selectCorps([reserveId(id)], false, id); }}>{t('Select the reserve')}</button>
         </div>
         {reserve.map(x => <CorpsLine key={x.id} g={g} me={me} r={region} c={x} />)}
         <small className="note">{t('The reserve: recruits join it, it meets any enemy who breaks through, and Auto and offensives draw on it.')} {groundUnits(main) ? t('{0} battalions stand at the centre.', groundUnits(main)) : ''}</small>

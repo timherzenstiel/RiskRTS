@@ -15,7 +15,7 @@ const DONE = TUT_STAGES.length;
 
 const STAGE_NAME = ['Mobilise', 'Dig in', 'First battle', 'Hand off', 'Supply', 'Offensive'];
 const STAGE_WHY = [
-  'New battalions wait in their region\'s reserve. The reserve cannot be sent anywhere as a unit: "Form corps from reserve" puts all of it into one corps, which you can then move, dig in or hand to a commander.',
+  'New battalions wait in their region\'s reserve. Select the reserve like a corps and right-click the map: its battalions march as a corps under your orders, which you can then move, dig in or hand to a commander.',
   'Your corps on the border fights harder behind field works. "Dig in" adds a trench level for Production (up to three, each +25 % defence); sandbags and wire add more. Works only help in defence, and they stay on the border when the corps leaves.',
   'The neighbour attacks now, and the other powers stop holding back. The battle card shows both sides and your levers: the barrage spends shells for firepower, the stance trades losses against damage. Your trench is already working for you.',
   'You cannot run every front by hand. A commander moves the corps of his front by himself and asks you in the Inbox for what he may not decide: men, works, patrols, attacks.',
@@ -36,7 +36,7 @@ function goal(g: GameState, me: number, key: string): { text: string; how: strin
   const army = (g.hq ?? []).find(h => h.owner === me);
   const staff = () => ui().setPanel('staff');
   switch (key) {
-    case 'corps2': return { text: t('Form a corps from the reserve in {0}', home), how: t('Click {0} on the map, then press "Form corps from reserve" in the command bar at the top left. One click puts the whole reserve into one corps.', home),
+    case 'corps2': return { text: t('Send the reserve of {0} towards the border with {1}', home, foe), how: t('Click {0} on the map and press "Select the reserve" (J) in the command bar at the top left. Then right-click the border with {1} on the map: the reserve marches there as a corps under your orders.', home, foe),
       open: () => fly(), point: { sel: '[data-cmd="form"]', region: T.home, label: t('Click {0}', home) } };
     case 'post': return { text: t('Move a corps to the border with {0}', foe), how: t('"Show me" opens the border card with a list of your corps: press Send next to one. Any time later: select a corps, press Move (M) and click a border on the map.'),
       open: () => border('send'), point: { ...atBorder, sel: '.bc-send .buy, [data-cmd="send"]', label: t('This border') } };

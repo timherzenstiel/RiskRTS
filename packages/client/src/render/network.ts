@@ -21,7 +21,7 @@ export class NetworkLayer {
 
   /** Draw rails and mountain borders (strategic zoom only), and in Supply mode the route of one region. */
   draw(lines: LineBatch, g: GameState, me: number, rig: CameraRig, route: SupplyPath | null = null) {
-    if (rig.dist < 9 || rig.dist > 140) return;
+    if (rig.dist > 140) return;
     const W = this.world, y = (id: number) => this.terrain.anchorH(id) + .12;
     if (route) this.drawRoute(lines, route, rig, y);
     const seg = (a: number, b: number, c: THREE.Color, dash: boolean) => {

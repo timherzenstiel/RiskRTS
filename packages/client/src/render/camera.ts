@@ -5,8 +5,8 @@ import { HH, HW } from '@riskrts/shared';
 import { clamp, lerp, smooth } from './util';
 import { GLOBE, R0, WRAP_K, ZEQ } from './globe';
 
-/** Closest zoom: a region and its neighbours' borders fill the view (closer, the painted ground breaks into tiles). */
-export const MIN_DIST = 9, MAX_DIST = 210;
+/** Closest zoom: a few battalions fill the view (closer, the painted ground breaks into tiles). */
+export const MIN_DIST = 7.5, MAX_DIST = 210;
 /** The map starts rolling into a globe at GLOBE_A and is a closed globe from GLOBE_B (the Theatre band's resting zoom). */
 export const GLOBE_A = 80, GLOBE_B = 150;
 

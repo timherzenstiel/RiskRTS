@@ -430,7 +430,7 @@ function launchCorps(g: GameState, r: RegionState, c: Corps, front?: number) {
 
 /** Strength a border faces: the men across it, more when an enemy corps there is ordered to attack. A coast: enemy ports and ships on the zone. */
 function threat(g: GameState, r: RegionState, n: number): number {
-  if (isCoast(n)) return coastThreat(g, r.owner, zoneOfKey(n));
+  if (isCoast(n)) return fleetThreat(g, r.owner, zoneOfKey(n));
   const o = g.regions[n]; let att = 0;
   for (const c of corpsAtPost(o, r.id)) if ((c.ord ?? 0) >= 1) att += 2 + corpsSize(c) / 2;
   return 1 + menTotal(o.men) / 400 + att;
@@ -439,8 +439,64 @@ function threat(g: GameState, r: RegionState, n: number): number {
 export function coastThreat(g: GameState, me: number, z: number): number {
   const W = world(); let t = 0;
   for (const id of W.zones[z]?.coast ?? []) { const o = g.regions[id]; if (o.port && o.owner >= 0 && o.owner !== me && !allied(g, me, o.owner) && !atPeace(g, me, o.owner)) t += .35; }
+  return t + fleetThreat(g, me, z);
+}
+/** The part of a coast's threat that is at sea right now: enemy ships in the zone, an assault fleet offshore. Only this draws troops to a coast. */
+export function fleetThreat(g: GameState, me: number, z: number): number {
+  let t = 0;
   for (const fl of g.fleets ?? []) if (fl.owner !== me && !allied(g, me, fl.owner) && fl.zs.length && zoneAt(fl.zs, fl.d) === z) t += fl.task === 'assault' ? 2 + groundUnits(fl.cargo) / 4 : .5;
   return t;
+}
+
+/** Share of the troops a region sends out that its coasts may take while no landing is on its way. */
+export const COAST_SHARE = .15;
+/** Threat from which a coast counts as about to be landed on (an assault fleet offshore). */
+const LANDING = 2;
+
+/**
+ * How a region on Auto spreads its formations: for each post in `foes` (land borders and coasts) the units to stand there.
+ * Whole formations are handed out, so nothing is lost to rounding: about (1 − MAIN_SHARE) of them go out, split by the threat
+ * `w` with the largest remainders, every land border gets one before any gets a second (as far as they reach), and coasts take
+ * at most COAST_SHARE unless a landing is coming. Each manned post gets infantry first; guns, MGs and tanks go to the most
+ * threatened posts. A region keeps one formation at the centre.
+ */
+export function deployTargets(avail: Units, foes: number[], w: number[]): Units[] {
+  const target = foes.map(() => emptyUnits());
+  const total = GROUND_TYPES.reduce((n, k) => n + Math.max(0, avail[k]), 0);
+  if (total < 2 || !foes.length) return target;
+  const land = foes.map((s, i) => isCoast(s) ? -1 : i).filter(i => i >= 0);
+  let out = Math.round(total * (1 - MAIN_SHARE));
+  if (total >= land.length + 2) out = Math.max(out, land.length);
+  out = Math.min(out, total - 1);
+  if (out <= 0) return target;
+  // coasts without a landing on its way share a small part of what goes out
+  const ww = [...w], coastW = foes.reduce((a, s, i) => a + (isCoast(s) ? w[i] : 0), 0), landW = land.reduce((a, i) => a + w[i], 0);
+  if (land.length && coastW > 0 && !foes.some((s, i) => isCoast(s) && w[i] >= LANDING)) {
+    const max = landW * COAST_SHARE / (1 - COAST_SHARE);
+    if (coastW > max) foes.forEach((s, i) => { if (isCoast(s)) ww[i] = w[i] * max / coastW; });
+  }
+  const sw = ww.reduce((a, b) => a + b, 0); if (sw <= 0) return target;
+  // whole formations per post, largest remainders first
+  const n = ww.map(x => Math.floor(out * x / sw)); let left = out - n.reduce((a, b) => a + b, 0);
+  const byRest = foes.map((_, i) => i).sort((a, b) => (out * ww[b] / sw - n[b]) - (out * ww[a] / sw - n[a]) || ww[b] - ww[a] || a - b);
+  for (let j = 0; left > 0; j = (j + 1) % byRest.length, left--) n[byRest[j]]++;
+  // no land border stays empty while another post holds two or more
+  for (const i of [...land].sort((a, b) => ww[b] - ww[a] || a - b)) {
+    if (n[i] > 0) continue;
+    let from = -1; n.forEach((x, j) => { if (x >= 2 && (from < 0 || x > n[from] || (x === n[from] && ww[j] < ww[from]))) from = j; });
+    if (from < 0) break;
+    n[from]--; n[i]++;
+  }
+  // which types go out: each type in proportion, largest remainders first
+  const go = emptyUnits(); let g0 = 0;
+  for (const k of GROUND_TYPES) { go[k] = Math.floor(Math.max(0, avail[k]) * out / total); g0 += go[k]; }
+  const tr = [...GROUND_TYPES].sort((a, b) => (avail[b] * out / total - go[b]) - (avail[a] * out / total - go[a]));
+  for (let j = 0; g0 < out; j = (j + 1) % tr.length) { const k = tr[j]; if (go[k] < avail[k]) { go[k]++; g0++; } }
+  // infantry mans every post first, then the heavy weapons and the rest go to the most threatened posts
+  const order = foes.map((_, i) => i).filter(i => n[i] > 0).sort((a, b) => ww[b] - ww[a] || a - b), room = [...n];
+  for (const i of order) if (go.inf > 0) { target[i].inf++; go.inf--; room[i]--; }
+  for (const k of ['art', 'mg', 'tank', 'inf'] as const) for (let turn = 0; go[k] > 0 && turn < out + 1; turn++) for (const i of order) { if (go[k] <= 0) break; if (room[i] > 0) { target[i][k]++; go[k]--; room[i]--; } }
+  return target;
 }
 
 /**
@@ -453,7 +509,7 @@ export function autoDeploy(g: GameState, r: RegionState, instant = false) {
   if (r.owner < 0 || r.deploy === 1 || r.contested >= 0 || r.battle >= 0) return;
   const W = world(), me = r.owner;
   // land borders with foreign powers, and coasts that face a threat from the sea
-  const foes = [...W.regions[r.id].land.filter(n => { const o = g.regions[n].owner; return o !== me && !(o >= 0 && allied(g, me, o)); }), ...W.regions[r.id].zones.map(coastKey).filter(k => coastThreat(g, me, zoneOfKey(k)) > 0)];
+  const foes = [...W.regions[r.id].land.filter(n => { const o = g.regions[n].owner; return o !== me && !(o >= 0 && allied(g, me, o)); }), ...W.regions[r.id].zones.map(coastKey).filter(k => fleetThreat(g, me, zoneOfKey(k)) > 0)];
   const auto = (c: Corps) => !c.man && c.army === undefined && (c.ord ?? 0) === 0;
   // Auto corps on quiet borders come back to the depot
   for (const c of [...corpsIn(r)]) {
@@ -466,14 +522,7 @@ export function autoDeploy(g: GameState, r: RegionState, instant = false) {
   // what Auto may arrange: the depot and its own corps on the threatened borders
   const avail = depotOf(r).u;
   for (const c of corpsIn(r)) if (auto(c) && c.p >= 0) for (const k of GROUND_TYPES) avail[k] += c.u[k];
-  const w = foes.map(n => threat(g, r, n)), sw = w.reduce((a, b) => a + b, 0);
-  const target = foes.map(() => emptyUnits());
-  for (const k of GROUND_TYPES) {
-    const share = Math.max(0, avail[k]) * (1 - MAIN_SHARE);
-    foes.forEach((_, i) => { target[i][k] = Math.floor(share * w[i] / sw); });
-  }
-  // a region with a few battalions still mans its most threatened border
-  if (target.every(t => groundUnits(t) === 0) && avail.inf >= 2) { let bi = 0; w.forEach((x, i) => { if (x > w[bi]) bi = i; }); target[bi].inf = 1; }
+  const target = deployTargets(avail, foes, foes.map(n => threat(g, r, n)));
   foes.forEach((s, i) => {
     const mine = corpsAtPost(r, s).filter(auto), cur = emptyUnits(), fixed = emptyUnits();
     for (const c of corpsAtPost(r, s)) for (const k of GROUND_TYPES) (auto(c) ? cur : fixed)[k] += c.u[k];

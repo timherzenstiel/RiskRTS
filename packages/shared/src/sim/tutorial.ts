@@ -3,7 +3,7 @@
 // scripted attack on the threatened border opens. The client shows the objective list and hides what is not unlocked yet.
 import { emit, hooks, world } from './core';
 import { attackCorps, sendArmy } from './commands';
-import { corpsIn } from './posts';
+import { corpsIn, dissolve } from './posts';
 import { loadRatio } from './supply';
 import { atPeace } from './diplomacy';
 import type { GameState, Tut } from './types';
@@ -64,7 +64,11 @@ function enter(g: GameState, t: Tut, stage: number) {
       let n = 0; const cfg = g.cfg, F = g.factions[t.foe], ai = F.ai;
       g.cfg = { ...cfg, attackCap: 0 }; F.ai = false;
       for (const c of [...corpsIn(fr)].filter(c => c.p === t.home)) if (!attackCorps(g, t.foe, fr.id, c.id, t.home, 1, true)) n++;
-      if (!n && !sendArmy(g, t.foe, t.front, t.home, TUT.attack, false, 1)) n++;
+      if (!n) {
+        // nothing stands on that border: the corps on the region's other borders fall back to the centre and march from there
+        if (fr.battle < 0) for (const c of [...corpsIn(fr)]) if (c.p !== t.home && (c.ord ?? 0) === 0) dissolve(fr, c);
+        if (!sendArmy(g, t.foe, t.front, t.home, TUT.attack, false, 1)) n++;
+      }
       g.cfg = cfg; F.ai = ai;
       t.flags.sent = n;
     }

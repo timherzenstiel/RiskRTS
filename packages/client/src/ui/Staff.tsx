@@ -45,7 +45,7 @@ export function reqText(g: GameState, me: number, q: Req, n?: number): { title: 
       const k = n ?? q.n ?? 1, cost = (q.cost ?? 0) * k, tc = transferCandidate(g, me, q);
       return { title: tn('{0} battalions for {1}', q.n, where), why: tn('The line is short: {0}.', bal), opts: [
         { label: t('Recruit {0} · {1}', k, cost), opt: 'recruit', n: k, off: sup < cost, title: t('{0} infantry battalions, raised in {1}: they train for a week, then take up that border', k, R(q.region)) },
-        { label: tc ? tn('Send {0}', { raw: groupName(me, 1, tc.c.n) }) : t('No corps free'), opt: 'transfer', off: !tc, title: tc ? tn('{0} ({1} btl) from {2} joins the army', { raw: groupName(me, 1, tc.c.n) }, groundUnits(tc.c.u), R(tc.r.id)) : t('Form a corps from a reserve first') },
+        { label: tc ? tn('Send {0}', { raw: groupName(me, 1, tc.c.n) }) : t('No corps free'), opt: 'transfer', off: !tc, title: tc ? tn('{0} ({1} btl) from {2} joins the army', { raw: groupName(me, 1, tc.c.n) }, groundUnits(tc.c.u), R(tc.r.id)) : t('Send a reserve somewhere first: it becomes a corps') },
         { label: t('Deny'), opt: 'deny' },
       ] };
     }
@@ -96,6 +96,23 @@ function send(cmd: Parameters<ReturnType<typeof useUi.getState>['order']>[0]) { 
 
 // ---------------------------------------------------------------- army card
 
+/** Why an army on the Attack mandate is not attacking yet, from its commander's last look (design-optimize §3.4). */
+export function whyLine(h: Hq): string {
+  if (h.target === undefined) return t('No target yet: pick the region to take.');
+  if (h.op) return t('The operation is under way.');
+  const w = h.why; if (!w) return t('He is taking a look at the front.');
+  if (w.ok) return h.auto ? t('Ready: he goes in.') : t('Ready: he asks you for the go (see Requests).');
+  const parts: string[] = [];
+  if (w.busy) parts.push(t('a battle is already going on there'));
+  if (w.going < w.need) parts.push(t('{0} of {1} battalions on the border', w.going, w.need));
+  if (!w.known) parts.push(t('nothing known about the enemy'));
+  else if (!w.fresh) parts.push(t('report older than a week'));
+  if (w.ratio !== null && w.ratio < w.min) parts.push(t('strength {0} : 1, he wants {1} : 1', w.ratio.toFixed(1), w.min.toFixed(1)));
+  if (w.have < w.want) parts.push(t('line short: {0} of {1} battalions', w.have, w.want));
+  if (w.cap) parts.push(t('too many attacks at once'));
+  return tn('Not attacking yet: {0}.', { raw: parts.join(' · ') });
+}
+
 export function ArmyCard() {
   const id = useUi(s => s.armySel); const sel = useUi(s => s.sel); const rel = useUi(s => s.relieveFor); const sim = useSim();
   if (!sim || id < 0) return null;
@@ -138,6 +155,11 @@ export function ArmyCard() {
       <div className="lv-row ac-st"><span className="lv-l" title={t('Carried out without asking')}>{t('Approves by himself')}</span>
         {STANDING_KINDS.map(k => { const on = h.standing.includes(k); return <button key={k} className="tgl" aria-pressed={on} onClick={() => { click(); set({ standing: on ? h.standing.filter(x => x !== k) : [...h.standing, k] }); }}>{t(SHORT[k])}</button>; })}
       </div>
+      <div className="lv-row ac-st"><span className="lv-l" title={t('Attacks and operation plans go ahead without asking you, and so do the scouts they wait for')}>{t('Attacks')}</span>
+        <button className="tgl" aria-pressed={!h.auto} onClick={() => { click(); set({ auto: false }); }}>{t('Asks first')}</button>
+        <button className="tgl" aria-pressed={!!h.auto} onClick={() => { click(); set({ auto: true }); }}>{t('Attacks when ready')}</button>
+      </div>
+      {h.mandate === 2 && <p className="lv-fc ac-why">{whyLine(h)}</p>}
       <div className="lbl"><span>{t('Front')}</span>{own && !h.front.includes(sel) && <button className="lnk" onClick={() => { click(); set({ front: [...h.front, sel] }); }}>+ {nm(W.regions[sel].name)}</button>}</div>
       <p className="ac-fr">{h.front.map(r => <span key={r} className="chip">{nm(W.regions[r].name)}{h.front.length > 1 && <button className="x" aria-label={t('Take {0} off the front', W.regions[r].name)} onClick={() => { click(); set({ front: h.front.filter(x => x !== r) }); }}>×</button>}</span>)}</p>
       <div className="lbl"><span>{t('Corps')}</span></div>

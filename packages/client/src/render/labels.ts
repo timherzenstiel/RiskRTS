@@ -119,6 +119,10 @@ export class Labels {
     this.regions = world.regions.map((r) => {
       const el = document.createElement('div'); el.className = 'tl'; el.innerHTML = '<span class="n"></span><span class="pp"></span><span class="bd"></span><span class="nm"></span>';
       const n = el.children[0] as HTMLSpanElement, pp = el.children[1] as HTMLSpanElement, bd = el.children[2] as HTMLSpanElement, nm = el.children[3] as HTMLSpanElement; nm.textContent = tx(r.name); root.appendChild(el);
+      // the garrison number stands for the reserve at the centre: clicking it selects the reserve like a corps (design-optimize §3.2)
+      n.style.pointerEvents = 'auto'; n.style.cursor = 'pointer';
+      n.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); this.onCorpsClick(r.id, -1, e.button === 2 ? 'order' : e.shiftKey ? 'add' : 'set'); });
+      n.addEventListener('contextmenu', (e) => e.preventDefault());
       return { el, n, nm, bd, pp, pips: '', badges: '', count: '', color: '', sel: false, tg: false, sm: false, names: true, shown: true, tf: '' };
     });
     this.cityLabels = cities.map((c) => {

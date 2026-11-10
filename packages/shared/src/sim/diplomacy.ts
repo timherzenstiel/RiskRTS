@@ -80,6 +80,8 @@ export function breakTreaty(g: GameState, breaker: number, other: number) {
 export function treatyCheck(g: GameState, fid: number, target: number, brk?: boolean): string | null {
   const o = g.regions[target]?.owner ?? -1; if (o < 0 || o === fid) return null;
   const t = treatyOf(g, fid, o); if (!t) return null;
+  // the guided war's own ceasefires: they end with its first battle, and say so
+  if (g.tut && t.kind === 'cease' && (t.until ?? 0) >= 1e9 && (t.a === g.tut.me || t.b === g.tut.me)) return 'The guided war keeps a ceasefire with every power until its third stage, the first battle. Finish the objectives on the left first.';
   if (!brk) return `You have a ${TREATY_NAMES[t.kind].toLowerCase()} with ${FACTIONS[o].the}. Attacking breaks it: war weariness and lost trust. Use "Break treaty" in the region file if you mean it.`;
   breakTreaty(g, fid, o); return null;
 }

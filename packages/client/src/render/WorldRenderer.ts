@@ -29,7 +29,7 @@ import { Terrain } from './terrain';
 import { Water } from './water';
 import { Shroud } from './shroud';
 import { GlobeBackdrop } from './globe';
-import { battleAnchor, corpsAtPost, sectorPoint, OVER, capacity, cutBreak, load, supplyRoute } from '@riskrts/shared';
+import { battleAnchor, corpsAtPost, lookCorps, reserveId, sectorPoint, OVER, capacity, cutBreak, load, supplyRoute } from '@riskrts/shared';
 import { clamp, smooth } from './util';
 
 /** Fronts mode: a region without hostile borders (its land is dimmed, no band). */
@@ -143,7 +143,7 @@ class WorldRenderer implements WorldRendererApi {
       (id, post, how) => {
         const u = useUi.getState(), st = this.session?.state, me = this.session?.me ?? -1;
         if (how === 'order') { if (u.corps.length) { const p = sectorPoint(this.world, id, post); cb.onOrder(id, undefined, { x: p.x, z: p.z }); } return; }
-        if (st && st.regions[id].owner === me) { u.selectCorps(corpsAtPost(st.regions[id], post).map(c => c.id), how === 'add', id); return; }
+        if (st && st.regions[id].owner === me) { const ids = corpsAtPost(st.regions[id], post).map(c => c.id); if (post < 0 && lookCorps(st, me, reserveId(id))) ids.push(reserveId(id)); if (ids.length) u.selectCorps(ids, how === 'add', id); else cb.onSelect(id); return; }
         cb.onSelect(id);
       },
       (fleet) => useUi.getState().selectFleet(fleet), (sea) => { useUi.getState().selectSea(sea); this.flyToSea(sea); },

@@ -8,7 +8,7 @@
 //    approval or a budget for that kind.
 // Corps the player orders by hand (`man`) stay in the army but the commander leaves them alone. Runs inside the simulation, so
 // every client and the server agree.
-import { AIR_RANGE, COST, TICK_SECONDS, groundUnits } from '../data/units';
+import { AIR_RANGE, COST, GROUND_TYPES, TICK_SECONDS, groundUnits, type Units } from '../data/units';
 import { type TraitKey } from '../data/commanders';
 import { OP, approveOp, inOp, opName, planOp, regionStrength, stepOp } from './operations';
 import { GEN, drawGeneral, generalWon, generals, loseGeneral, nextGeneral, returnGeneral, takeGeneral } from './generals';
@@ -23,8 +23,8 @@ import { capCheck, fortCost, fortify, patrol, recon, recruit, setOrder, spy } fr
 import { techOn } from './tech';
 import { unitCost } from './rules';
 import { moraleCap } from './battle';
-import { CORPS_CAP, addToGroup, coastThreat, column, corpsById, corpsIn, corpsSize, findCorps, landRoute, routeColumn, tagOf, takeCorps, takeDepot } from './posts';
-import { STANDING_KINDS, type Corps, type GameState, type General, type Hq, type HqNote, type Mandate, type RegionState, type Req, type ReqKind } from './types';
+import { CORPS_CAP, addToGroup, fleetThreat, column, corpsById, corpsIn, corpsSize, depotOf, findCorps, landRoute, routeColumn, tagOf, takeCorps, takeDepot } from './posts';
+import { STANDING_KINDS, type AttackWhy, type Corps, type GameState, type General, type Hq, type HqNote, type Mandate, type RegionState, type Req, type ReqKind } from './types';
 
 /** Seconds between a commander's looks at his front; open requests per army; days a denied request rests. */
 export const THINK = 3, MAX_REQ = 3, DENY_WEEKS = 3;
@@ -148,7 +148,8 @@ const worksMult = (b: Balance) => 1 + WORK_MULT.trench * b.own.trench + WORK_MUL
 
 /** Is border `s` of own region `r` one the commander must hold: a land border with a power at war with us, or a threatened coast? */
 function hostile(g: GameState, f: number, s: number): boolean {
-  if (isCoast(s)) return coastThreat(g, f, zoneOfKey(s)) > 0;
+  // a coast only while enemy ships are off it (a foreign port alone ties no corps down)
+  if (isCoast(s)) return fleetThreat(g, f, zoneOfKey(s)) > 0;
   const o = g.regions[s].owner; return o >= 0 && o !== f && atWar(g, f, o);
 }
 
@@ -198,6 +199,8 @@ export function think(g: GameState, h: Hq, V: GameState) {
     h.cmd = x; h.seat = undefined; h.deny = {}; g.requests = (g.requests ?? []).filter(q => q.army !== h.id);
   }
   h.front = [...new Set([...h.front, ...list0.map(x => x.r.id)])].filter(id => g.regions[id].owner === f);
+  // the corps region Auto raised on the front's borders come under the commander (design-optimize §3.3)
+  for (const id of h.front) for (const c of corpsIn(g.regions[id])) if (c.army === undefined && !c.man && (c.ord ?? 0) === 0 && c.p >= 0) c.army = h.id;
   if (!h.front.length) { for (const { c } of list0) note(h, g, { k: 'release', n: c.n, region: -1, post: -1, why: 'lost' }); disbandHq(g, h); return; }
   if (h.seat === undefined || !h.front.includes(h.seat)) h.seat = seatFor(g, h);
   const wk = Math.floor(g.time / TICK_SECONDS); if (h.wk !== wk) { h.wk = wk; h.spent = 0; }
@@ -243,6 +246,18 @@ export function think(g: GameState, h: Hq, V: GameState) {
       if (cmdMove(g, x.r, x.c, b.r.id, b.s)) { b.have += corpsSize(x.c); note(h, g, { k: 'move', n: x.c.n, region: b.r.id, post: b.s, why: 'need' }); }
     }
   }
+  // an Attack mandate gathers by itself: what the border facing the target still lacks comes out of that region's reserve
+  if (h.mandate === 2 && h.target !== undefined && !h.op) {
+    const b = bs.filter(x => x.s === h.target && !fighting(x.r, x.s)).sort((a, z) => z.have - a.have)[0];
+    if (b && b.have < b.want) {
+      const dep = depotOf(b.r).u, n: Partial<Units> = {}; let left = Math.min(b.want - b.have, groundUnits(dep) - 1, CORPS_CAP);
+      for (const k of ['inf', 'art', 'mg', 'tank'] as const) { n[k] = Math.max(0, Math.min(dep[k], left)); left -= n[k]!; }
+      if (GROUND_TYPES.some(k => (n[k] ?? 0) > 0)) {
+        const out = takeDepot(b.r, n), c = addToGroup(g, b.r, -1, out.u, out.m, b.r.mor, { id: -1, n: 0, army: h.id })[0];
+        if (c && cmdMove(g, b.r, c, b.r.id, b.s)) { b.have += corpsSize(c); note(h, g, { k: 'move', n: c.n, region: b.r.id, post: b.s, why: 'need' }); }
+      }
+    }
+  }
   // what is left: the reserve keeps its corps; spare corps on the line go back to the reserve until it is full, the rest the
   // commander offers back to the player (with permission)
   // corps of the army already marching to a centre of the front count as reserve
@@ -267,6 +282,7 @@ export function think(g: GameState, h: Hq, V: GameState) {
       ? { kind: 'recon', by: 'recon', from: air, for: purpose, key, urg, region: b.r.id, sector: b.s, cost: COST.recon, ...bal(b) }
       : { kind: 'recon', by: 'patrol', from: b.r.id, for: purpose, key, urg, region: b.r.id, sector: b.s, cost: COST.patrol, ...bal(b) });
   };
+  let why: AttackWhy | undefined;
   const bal = (b: Border) => ({ own: b.bal.own.btl[0] + b.bal.own.reserve[0], their: [b.bal.their.btl[0] + b.bal.their.reserve[0] + b.bal.their.incoming, b.bal.their.btl[1] + b.bal.their.reserve[1] + b.bal.their.incoming] as [number, number], ratio: b.bal.ratio, massing: b.bal.massing });
   for (const b of bs) {
     const fight = fighting(b.r, b.s), mineHere = corpsIn(b.r).filter(c => c.p === b.s && c.army === h.id && !c.man);
@@ -289,7 +305,10 @@ export function think(g: GameState, h: Hq, V: GameState) {
     const idle = mineHere.filter(c => (c.ord ?? 0) === 0);
     const aim = h.mandate === 2 ? (b.s === h.target ? 2 : 0) : h.mandate === 1 ? 1 : 0;
     const going = idle.reduce((n, c) => n + corpsSize(c), 0);
-    const could = aim && !isCoast(b.s) && !fight && going >= Math.max(MIN_ATTACK, Math.ceil(b.theirs * 1.5)) && b.bal.know >= 1 && b.bal.ratio !== null && b.bal.ratio >= attackRatio(h) && b.have >= b.want && !frontsOf(g, b.s).length && !capCheck(g, f, b.s);
+    const need = Math.max(MIN_ATTACK, Math.ceil(b.theirs * 1.5)), land = !isCoast(b.s), busy = fight || (land && frontsOf(g, b.s).length > 0), capped = land && !!capCheck(g, f, b.s);
+    const could = aim && !isCoast(b.s) && !busy && going >= need && b.bal.know >= 1 && b.bal.ratio !== null && b.bal.ratio >= attackRatio(h) && b.have >= b.want && !capped;
+    if (aim === 2 && !isCoast(b.s) && (!why || going > why.going))
+      why = { region: b.r.id, sector: b.s, going, need, ratio: b.bal.ratio, min: attackRatio(h), known: b.bal.know >= 1, fresh: fresh(b.s, REPORT_FRESH), have: b.have, want: b.want, busy, cap: capped, op: !!h.op, ok: !!could && fresh(b.s, REPORT_FRESH) };
     // he proposes an attack only on a fresh report; first he asks for one
     if (could && !fresh(b.s, REPORT_FRESH)) scout(b, 1, 'attack');
     // on the Attack mandate he offers an operation plan for the target instead (design-play §3.3), one at a time
@@ -317,6 +336,7 @@ export function think(g: GameState, h: Hq, V: GameState) {
     if (!xs.length) continue;
     asks.push({ kind: 'release', key: `rel|${why}|${xs.map(x => x.c.id).sort((a, z) => a - z).join(',')}`, urg: 0, region: xs[0].r.id, sector: xs[0].c.p, corps: xs.map(x => x.c.id), why });
   }
+  h.why = h.mandate === 2 && h.target !== undefined ? why : undefined;
   file(g, h, asks);
   autoAnswer(g, h);
 }
@@ -342,7 +362,9 @@ function file(g: GameState, h: Hq, asks: Omit<Req, 'id' | 'owner' | 'army' | 'at
 function autoAnswer(g: GameState, h: Hq) {
   const F = g.factions[h.owner], cap = income(g, h.owner) * Math.max(0, Math.min(BUDGET_MAX, h.budget));
   for (const q of requestsOf(g, h.owner).filter(q => q.army === h.id)) {
-    if (q.kind === 'attack') continue;
+    // attacks when ready: the attack or the plan goes ahead, and so do the scouts it waits for
+    if (q.kind === 'attack' || q.kind === 'op') { if (h.auto) reply(g, h.owner, q.id, 'yes'); continue; }
+    if (h.auto && q.kind === 'recon' && q.for !== 'watch' && F.supply >= (q.cost ?? 0)) { reply(g, h.owner, q.id, 'yes'); continue; }
     const cost = q.kind === 'men' ? (q.cost ?? 0) * (q.n ?? 1) : q.cost ?? 0;
     const standing = h.standing.includes(q.kind), budget = (q.kind === 'men' || q.kind === 'fort' || q.kind === 'recon') && h.spent + cost <= cap;
     if (!(standing || budget) || F.supply < cost) continue;
@@ -441,7 +463,7 @@ export function assignArmy(g: GameState, f: number, army: number, ids: number[],
   return n ? null : 'Those corps are on the move or in battle. Try again once they stand at a post.';
 }
 
-export function setArmy(g: GameState, f: number, army: number, o: { mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[] }): string | null {
+export function setArmy(g: GameState, f: number, army: number, o: { mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[]; auto?: boolean }): string | null {
   const h = hqOf(g, army); if (!h || h.owner !== f) return 'That army is not yours.';
   const W = world();
   if (o.front !== undefined) {
@@ -460,6 +482,7 @@ export function setArmy(g: GameState, f: number, army: number, o: { mandate?: Ma
     }
   }
   if (o.budget !== undefined) h.budget = Math.max(0, Math.min(BUDGET_MAX, o.budget));
+  if (o.auto !== undefined) h.auto = o.auto || undefined;
   if (o.standing !== undefined) h.standing = [...new Set(o.standing)].filter(k => STANDING_KINDS.includes(k));
   g.requests = (g.requests ?? []).filter(q => q.army !== h.id || q.kind !== 'attack' || h.mandate !== 0);
   h.next = Math.min(h.next, g.time + .5);

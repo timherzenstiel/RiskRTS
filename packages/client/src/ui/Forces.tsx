@@ -2,7 +2,7 @@
 // orders the map gives them – right-click an own region or border to move the selected corps there, an enemy region to attack.
 import { GeneralsRoster } from './Generals';
 import {
-  ASSEMBLE, CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderBalance, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, findCorps, marchEta, moveK,
+  ASSEMBLE, CORPS_CAP, FACTIONS, FORMATION, GROUND_TYPES, ORDERS, STANCES, UT, borderBalance, borderLabel, buildWorld, corpsAtPost, corpsIn, depotOf, lookCorps, reserveId, marchEta, moveK,
   frontsOf, fullMen, groundUnits, groupName, menTotal, sectorPoint, wrapDx, type Army, type Corps, type GameState, type Order, type RegionState, type Stance, type Units, type World,
 } from '@riskrts/shared';
 import { useState } from 'react';
@@ -50,13 +50,16 @@ function corpsAway(g: GameState, me: number): { tag: NonNullable<Army['ct']>; wh
   return out;
 }
 
+/** A corps' name; a region's reserve is called after its region. */
+export const corpsTitle = (me: number, r: RegionState, c: Corps) => c.res ? t('Reserve {0}', buildWorld().regions[r.id].name) : groupName(me, 1, c.n);
+
 /** Send the selected corps to region `target` (own: move to the post clicked; enemy: attack). */
 export function orderCorps(target: number, pt?: { x: number; z: number }) {
   const ui = useUi.getState(), s = ui.session; if (!s) return;
   const W = buildWorld(), g = s.state, me = s.me, T = g.regions[target];
   let ok = 0, err: string | null = null;
   for (const id of ui.corps) {
-    const f = findCorps(g, me, id); if (!f) continue;
+    const f = lookCorps(g, me, id); if (!f) continue;
     const cmd = T.owner === me
       ? { t: 'moveCorps' as const, region: f.r.id, id, to: target, toPost: postAt(W, target, pt) }
       : { t: 'attackCorps' as const, region: f.r.id, id, to: target, goal: ui.goal as Order };
@@ -79,7 +82,7 @@ function pickCorps(r: RegionState, c: Corps, add: boolean) {
 export function OrderPreview() {
   const ids = useUi(s => s.corps); const hover = useUi(s => s.hover); const orderMode = useUi(s => s.orderMode); const kind = useUi(s => s.orderKind); const goal = useUi(s => s.goal); const sim = useSim();
   if (!sim || !ids.length || hover < 0 || (orderMode && kind !== 'corps')) return null;
-  const { g, me } = sim, W = buildWorld(), T = g.regions[hover], found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
+  const { g, me } = sim, W = buildWorld(), T = g.regions[hover], found = ids.map(id => lookCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
   if (!found.length) return null;
   const btl = found.reduce((s, x) => s + groundUnits(x.c.u), 0), who = found.length === 1 ? groupName(me, 1, found[0].c.n) : t('{0} corps', found.length);
   let line: string, cls = 'mv', sub = '';
@@ -166,7 +169,7 @@ export function ForcesPanel() {
               </button>
               {cs.map(c => <CorpsRow key={c.id} g={g} me={me} r={r} c={c} sel={selC.includes(c.id)} />)}
               {!mine && dn > 0 && <div className="oob-c dep" title={t('Battalions in no corps: recruits and the troops Auto arranges')}><span className="oc-n"><b>{t('Reserve')}</b><small>{unitsLine(dep)}</small></span><span className="oc-v"><b className="lcdn">{dn}</b><small>{t('btl')}</small></span>
-                <button className="btn sm" title={t('Turn the {0} battalions waiting in the reserve into a corps you command. Only corps can be selected, moved and put into an army.', Math.min(dn, CORPS_CAP))} onClick={e => { e.stopPropagation(); click(); ui().order({ t: 'form', region: r.id, u: fillUp(dep) }); }}>{t('Form corps from reserve')}</button></div>}
+                <button className="btn sm" title={t('Select the {0} battalions of the reserve like a corps, then right-click the map to move them or to attack', dn)} onClick={e => { e.stopPropagation(); click(); ui().selectCorps([reserveId(r.id)], false, r.id); }}>{t('Select the reserve')}</button></div>}
             </div>
           );
         })}
@@ -197,6 +200,22 @@ function Detach({ r, c, done }: { r: RegionState; c: Corps; done: () => void }) 
       ))}
       <button className="btn sm" disabled={!tot || tot >= groundUnits(c.u)} onClick={() => { click(); if (useUi.getState().order({ t: 'detach', region: r.id, id: c.id, u: n })) done(); }}>{t('Detach')}{tot ? ` ${tot}` : ''}</button>
     </div>
+  );
+}
+
+/** The reserve of a region, selected like a corps: what it holds and how to order it. */
+function ReserveBody({ c }: { c: Corps }) {
+  return (
+    <>
+      <div className="cc-stats">
+        <span><small>{t('Battalions')}</small><b className="lcdn">{groundUnits(c.u)}</b></span>
+        <span><small>{t('Men')}</small><b className="lcdn">{menStr(menTotal(c.m))}</b></span>
+        <span><small>{t('Strength')}</small><b className="lcdn">{pct(strengthOf(c))}</b></span>
+        <span><small>{t('Morale')}</small><b className="lcdn">{Math.round(c.mor)}%</b></span>
+      </div>
+      <p className="cc-u">{GROUND_TYPES.filter(k => c.u[k] > 0).map(k => <span key={k}><b>{c.u[k]}</b> {tx(c.u[k] === 1 ? FORMATION[k].one : FORMATION[k].many)}</span>)}</p>
+      <p className="note">{t('The reserve: recruits arrive here, and the region sends part of it to its borders by itself. Right-click the map to give it an order: an own region or border moves it there, a neighbouring enemy region is attacked. Up to {0} battalions go as one corps under your orders; one battalion always stays in the region.', CORPS_CAP)}</p>
+    </>
   );
 }
 
@@ -247,7 +266,7 @@ export function CorpsCard() {
   const ids = useUi(s => s.corps); const sim = useSim();
   if (!sim || !ids.length) return null;
   const { g, me } = sim, W = buildWorld(), ui = useUi.getState;
-  const found = ids.map(id => findCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
+  const found = ids.map(id => lookCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x);
   const goal = ui().goal;
   if (!found.length) return (
     <section className="ccard" aria-label={t('Corps')}><div className="bc-h"><div><small>{t('Corps')}</small><h3>{t('On the move')}</h3></div><button className="x" aria-label={t('Clear selection')} onClick={() => ui().selectCorps([])}><CloseIcon /></button></div>
@@ -258,16 +277,16 @@ export function CorpsCard() {
     <section className="ccard" aria-label={t('Corps')} style={{ '--c': FACTIONS[me].color } as React.CSSProperties}>
       <div className="bc-h">
         <div>
-          <small>{one ? `${nm(W.regions[one.r.id].name)} · ${tx(postLabel(W, one.c.p))} · ${one.c.man ? t('under your orders') : t('Auto')}` : t('{0} corps selected', found.length)}</small>
-          <h3>{one ? groupName(me, 1, one.c.n) : t('{0} battalions', found.reduce((s, f) => s + groundUnits(f.c.u), 0))}</h3>
+          <small>{one ? `${nm(W.regions[one.r.id].name)} · ${tx(postLabel(W, one.c.p))} · ${one.c.res ? t('Reserve') : one.c.man ? t('under your orders') : t('Auto')}` : t('{0} corps selected', found.length)}</small>
+          <h3>{one ? corpsTitle(me, one.r, one.c) : t('{0} battalions', found.reduce((s, f) => s + groundUnits(f.c.u), 0))}</h3>
         </div>
         <button className="x" aria-label={t('Clear selection')} onClick={() => ui().selectCorps([])}><CloseIcon /></button>
       </div>
-      {one ? <OneCorps g={g} me={me} r={one.r} c={one.c} /> : (
+      {one?.c.res ? <ReserveBody c={one.c} /> : one ? <OneCorps g={g} me={me} r={one.r} c={one.c} /> : (
         <>
           {found.map(({ r, c }) => (
             <button key={c.id} className="oob-c" onClick={e => pickCorps(r, c, e.shiftKey)}>
-              <span className="oc-n"><b>{groupName(me, 1, c.n)}</b><small>{nm(W.regions[r.id].name)} · {tx(postLabel(W, c.p))}</small></span>
+              <span className="oc-n"><b>{corpsTitle(me, r, c)}</b><small>{nm(W.regions[r.id].name)} · {tx(postLabel(W, c.p))}</small></span>
               <span className="oc-v"><b className="lcdn">{groundUnits(c.u)}</b><small>{t('btl')}</small></span>
               <span className="oc-xp">{stars(c.xp)}</span>
             </button>
@@ -275,7 +294,7 @@ export function CorpsCard() {
           <p className="note">{t('Right-click the map to move them all, or right-click an enemy region to attack with each one that borders it.')}</p>
         </>
       )}
-      <CorpsArmyRow ids={found.map(x => x.c.id)} />
+      {found.some(x => !x.c.res) && <CorpsArmyRow ids={found.filter(x => !x.c.res).map(x => x.c.id)} />}
       <div className="lv-row"><span className="lv-l" title={t('What attacks ordered by right-click aim for')}>{t('Attack goal')}</span>
         <div className="seg" role="group" aria-label={t('Attack goal')}>
           <button aria-pressed={goal === 1} onClick={() => { click(); ui().setGoal(1); }}>{t('First line')}</button>

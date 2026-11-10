@@ -86,6 +86,16 @@ export function depotOf(r: RegionState): { u: Units; m: Units } {
   for (const k of UNIT_TYPES) { u[k] = Math.max(0, u[k]); m[k] = u[k] > 0 ? Math.max(0, m[k]) : 0; }
   return { u, m };
 }
+/** The reserve of a region as a formation to select and order (design-optimize §3.2): its id, and the region of such an id (-1: a corps id). */
+export const reserveId = (region: number) => -(region + 2);
+export const reserveRegion = (id: number) => id <= -2 ? -(id + 2) : -1;
+/** A corps of a power by id for showing and ordering: a stored corps, or a region's reserve (its id from reserveId) as one. */
+export function lookCorps(g: GameState, f: number, id: number): { r: RegionState; c: Corps } | null {
+  const rid = reserveRegion(id); if (rid < 0) return findCorps(g, f, id);
+  const r = g.regions[rid]; if (!r || r.owner !== f) return null;
+  const d = depotOf(r), u = { ...d.u, plane: 0 }, m = { ...d.m, plane: 0 };
+  return groundUnits(u) > 0 ? { r, c: { id, n: 0, p: -1, u, m, mor: r.mor, res: true } } : null;
+}
 /** Formations at the region centre: the depot and the reserve corps standing there. */
 export function mainOf(r: RegionState): Units {
   const u = depotOf(r).u; for (const c of corpsIn(r)) if (c.p < 0) for (const k of GROUND_TYPES) u[k] += c.u[k]; return u;
@@ -522,7 +532,11 @@ export function autoDeploy(g: GameState, r: RegionState, instant = false) {
   // what Auto may arrange: the depot and its own corps on the threatened borders
   const avail = depotOf(r).u;
   for (const c of corpsIn(r)) if (auto(c) && c.p >= 0) for (const k of GROUND_TYPES) avail[k] += c.u[k];
-  const target = deployTargets(avail, foes, foes.map(n => threat(g, r, n)));
+  // corps on those borders that Auto does not arrange (the player's, an army's) count towards the whole it spreads, so a region
+  // whose border corps a commander took over still sends its recruits out
+  const whole = { ...avail };
+  for (const c of corpsIn(r)) if (!auto(c) && c.p >= 0 && foes.includes(c.p)) for (const k of GROUND_TYPES) whole[k] += c.u[k];
+  const target = deployTargets(whole, foes, foes.map(n => threat(g, r, n)));
   foes.forEach((s, i) => {
     const mine = corpsAtPost(r, s).filter(auto), cur = emptyUnits(), fixed = emptyUnits();
     for (const c of corpsAtPost(r, s)) for (const k of GROUND_TYPES) (auto(c) ? cur : fixed)[k] += c.u[k];

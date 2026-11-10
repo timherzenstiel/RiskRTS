@@ -502,4 +502,11 @@ export const UI_PLAY: Record<string, string> = {
   'Red regions hold more men than they can feed: move a corps out, or build a depot there.': 'Rote Regionen haben mehr Männer, als sie ernähren können: Verlege ein Korps hinaus oder baue dort ein Depot.',
   'Open your army (Staff panel or click its commander) and press Attack.': 'Öffne deine Armee (Stab-Panel oder Klick auf ihren Befehlshaber) und drücke „Angreifen“.',
   'Approve the plan in the Staff panel. Or select corps, press Attack (K) and click an enemy region.': 'Genehmige den Plan im Stab-Panel. Oder wähle Korps aus, drücke „Angriff“ (K) und klicke eine feindliche Region an.',
+  'Click {0}': '{0} anklicken',
+  'This border': 'Diese Grenze',
+  'Dig in here': 'Hier eingraben',
+  'The attack comes here': 'Hier kommt der Angriff',
+  'Over capacity': 'Überlastet',
+  'Take this region': 'Diese Region nehmen',
+  'Hide': 'Ausblenden',
 };

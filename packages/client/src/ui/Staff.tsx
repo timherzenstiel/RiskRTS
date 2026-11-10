@@ -118,7 +118,7 @@ export function ArmyCard() {
       {h.shaken !== undefined && h.shaken > g.time && <p className="lv-fc warn">{t('Shaken after the change of command: morale stays below {0} % for {1} more days.', Math.round(GEN.shakenMor * 100), Math.ceil((h.shaken - g.time) / TICK_SECONDS * 7))}</p>}
       <div className="lv-row"><span className="lv-l" title={t('What the commander may do on his own')}>{t('Mandate')}</span>
         <div className="seg" role="group" aria-label={t('Mandate')}>
-          {MANDATES.map((m, k) => <button key={m} aria-pressed={h.mandate === k} title={mandateLine(k, ratio)} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{t(MAND[k])}</button>)}
+          {MANDATES.map((m, k) => <button key={m} data-tut={'mand' + k} aria-pressed={h.mandate === k} title={mandateLine(k, ratio)} onClick={() => { click(); set({ mandate: k as Mandate }); }}>{t(MAND[k])}</button>)}
         </div>
       </div>
       <p className="lv-fc">{mandateLine(h.mandate, ratio)}</p>

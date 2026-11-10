@@ -27,6 +27,7 @@ export const MAP_MODES = [
 export type Panel = null | 'situation' | 'forces' | 'staff' | 'economy' | 'navy' | 'intel';
 const layerOf = (m: MapMode): MapLayer => m === 2 ? 1 : m === 3 ? 2 : 0;
 /** march / air strike, and the navy: ship troops to an own coast, assault an enemy coast, station warships in a zone, carrier strike. */
+export interface TutPoint { key: string; sel: string; region?: number; sector?: number; label?: string }
 export type OrderKind = 'march' | 'air' | 'ship' | 'landing' | 'station' | 'cvair' | 'corps';
 /** Which tool of the border card is open: send corps, fortify, scout (design-play §1). */
 export type BorderTool = '' | 'fort' | 'send' | 'scout';
@@ -69,6 +70,8 @@ interface Ui {
   dismissed: Record<string, number>;
   /** Border sector highlighted on the map while fortifying: [region, sector] (sector -1 = interior). */
   fortMarker: [number, number] | null;
+  /** The guided war's pointer (Tutorial.tsx): the objective it belongs to, the buttons to pulse, a pin on the map (a region, or one of its borders). */
+  tutPoint: TutPoint | null;
   overlay: Overlay; scoreOpen: boolean;
   /** After-action report shown in the reports sheet. */
   reportId: number;
@@ -171,7 +174,7 @@ Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
 function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') ?? 'null') as Partial<AutoPause> | null; return { ...AP_DEFAULT, ...(v ?? {}) }; } catch { return { ...AP_DEFAULT }; } }
 
 export const useUi = create<Ui>((set, get) => ({
-  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, relieveFor: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, overlay: null, scoreOpen: false, reportId: -1,
+  screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, relieveFor: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, tutPoint: null, overlay: null, scoreOpen: false, reportId: -1,
   trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), wwWeek: null,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
@@ -179,7 +182,7 @@ export const useUi = create<Ui>((set, get) => ({
 
   setScreen: (screen) => set({ screen }),
   clearFatal: () => set({ fatal: null }),
-  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, trained: {}, inboxFocus: null, toasts: [], wwWeek: null });
+  startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, tutPoint: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, trained: {}, inboxFocus: null, toasts: [], wwWeek: null });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
   select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], armySel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },

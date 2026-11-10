@@ -150,7 +150,7 @@ class WorldRenderer implements WorldRendererApi {
       (id, sector) => { cb.onSelect(id); useUi.getState().selectBorder(id, sector); },
       (hq, id) => { const u = useUi.getState(); if (hq >= 0) u.selectArmy(hq); else { this.flyTo(id, 34); u.setPanel('situation'); } });
     this.labelCtx = {
-      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, corps: [], frame: 0, now: 0, me: -1,
+      g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, pin: null, corps: [], frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
       armyH: (a) => { this.armyTuple[0] = this.terrain.anchorH(a.from); this.armyTuple[1] = this.terrain.anchorH(a.to); return this.armyTuple; },
     };
@@ -277,7 +277,7 @@ class WorldRenderer implements WorldRendererApi {
     if (!this.terrain.hasScenery && this.meshes.ready) this.terrain.useModels(this.meshes);
     this.terrain.setCameraDistance(this.rig.dist);
     this.detail.update(this.rig.tx, this.rig.tz, this.rig.dist, this.vw / this.vh, this.ppu());
-    this.dyn.marker = ui.fortMarker; this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.labels.setMode(ui.mode); this.labels.setBand(bandOf(this.rig.dist)); this.dyn.sel = ui.sel;
+    const tp = ui.tutPoint; this.dyn.marker = ui.fortMarker ?? (tp && tp.region !== undefined && tp.sector !== undefined ? [tp.region, tp.sector] : null); this.dyn.layer = ui.layer; this.labels.setLayer(ui.layer); this.labels.setMode(ui.mode); this.labels.setBand(bandOf(this.rig.dist)); this.dyn.sel = ui.sel;
 
     this.syncPaint(g, ui.sel, ui.hover);
     this.shroud.update(g, this.now);
@@ -294,7 +294,7 @@ class WorldRenderer implements WorldRendererApi {
     this.post.tune(this.rig.dist, ui.look, this.now); uChrome.value = ui.look ? .75 : .3;
     this.post.render();
 
-    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.corps = ui.corps; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
+    const c = this.labelCtx; c.g = g; c.w = this.vw; c.h = this.vh; c.sel = ui.sel; c.hover = ui.hover; c.pin = tp && tp.region !== undefined ? { region: tp.region, sector: tp.sector, label: tp.label ?? '' } : null; c.corps = ui.corps; c.frame = this.frameNo; c.now = this.now; c.me = s && !(s.kind === "guest" && (s as unknown as { spectator?: boolean }).spectator) ? s.me : -1;
     this.dyn.me = c.me; this.dyn.zoomK = Math.max(1, this.rig.dist / 10);
     this.labels.update(c);
     let active = 0; if (g) for (const b of g.battles) if (!b.ended) active++;

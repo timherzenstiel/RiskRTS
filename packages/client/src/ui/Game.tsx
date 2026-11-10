@@ -14,7 +14,7 @@ import { ForcesPanel } from './Forces';
 import { InboxPanel, InboxWatcher } from './Inbox';
 import { StoryWatcher } from './Story';
 import { Objectives } from './Tutorial';
-import { VoteBanner } from './Vote';
+import { VoteBanner, PauseBanner } from './Vote';
 import { EconomyPanel, IntelPanel, NavyPanel } from './Panels';
 import { OrderPreview } from './Forces';
 import { Stage } from './Stage';
@@ -110,6 +110,7 @@ export function Game() {
       <InboxWatcher />
       <StoryWatcher />
       <VoteBanner />
+      <PauseBanner />
       <div id="leftcol"><Objectives /><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>
       <Connection />

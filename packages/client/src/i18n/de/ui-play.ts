@@ -579,4 +579,7 @@ export const UI_PLAY: Record<string, string> = {
   '<b>Select the reserve</b> (J, or click the number over a region) selects the reserve of a region like a corps. A right-click on the map sends it: up to {0} battalions go as one corps under your orders, and one battalion always stays in the region. A corps can be moved, dug in, sent to attack and handed to a commander, and it keeps its men, morale and experience wherever it goes.': '<b>Reserve wählen</b> (J, oder Klick auf die Zahl über einer Region) wählt die Reserve einer Region wie ein Korps. Ein Rechtsklick auf die Karte schickt sie los: Bis zu {0} Bataillone marschieren als ein Korps unter deinem Befehl, ein Bataillon bleibt immer in der Region. Ein Korps lässt sich verlegen, eingraben, in den Angriff schicken und einem Befehlshaber unterstellen; Soldaten, Moral und Erfahrung behält es überall.',
   'The reserve of this region is empty.': 'Die Reserve dieser Region ist leer.',
   'The guided war keeps a ceasefire with every power until its third stage, the first battle. Finish the objectives on the left first.': 'Im angeleiteten Krieg gilt bis zur dritten Stufe, der ersten Schlacht, Waffenstillstand mit allen Mächten. Erledige zuerst die Ziele links.',
+  'The game is paused': 'Das Spiel ist angehalten',
+  'nothing moves until you resume': 'nichts bewegt sich, bis du fortsetzt',
+  'Resume (Space)': 'Weiter (Leertaste)',
 };

@@ -148,6 +148,8 @@ interface Ui {
   setAutoPause(p: Partial<AutoPause>): void;
   /** Stop the game for a reason the player picked: pause (solo), or call a pause vote (multiplayer). */
   autoPauseFor(why: PauseWhy): void;
+  /** Why the game paused itself ('' when the player paused it), for the pause banner. */
+  pauseWhy: string;
   focusInbox(key: string | null): void;
   /** Leave an Inbox item alone: drop its toast, and for a while the item itself (game seconds). */
   dropInbox(key: string, quiet?: number): void;
@@ -178,7 +180,7 @@ function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') 
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, relieveFor: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, tutPoint: null, overlay: null, scoreOpen: false, reportId: -1,
-  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), wwWeek: null,
+  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), pauseWhy: '', wwWeek: null,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -222,7 +224,7 @@ export const useUi = create<Ui>((set, get) => ({
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
   say: (text) => set({ toast: { text: tx(text), id: ++feedId } }),
-  setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; get().bump(); } },
+  setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; set({ pauseWhy: '' }); get().bump(); } },
   setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
   setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; if (!sound) Radio.reset(); set({ sound }); },
@@ -273,7 +275,7 @@ export const useUi = create<Ui>((set, get) => ({
     const s = get().session; if (!s || !get().autoPause[why] || s.state.over) return;
     const g = s.state, humans = g.factions.filter(f => f.alive && !f.ai).length;
     const msg = { urgent: 'Paused: a decision is waiting in the Inbox.', attacked: 'Paused: one of our regions is under attack.', lost: 'Paused: we lost a region.', won: 'Paused: we won a battle.' }[why];
-    if (s.canControlTime && humans <= 1) { if (s.speed > 0) { s.speed = 0; get().say(msg); get().bump(); } return; }
+    if (s.canControlTime && humans <= 1) { if (s.speed > 0) { s.speed = 0; set({ pauseWhy: msg }); get().say(msg); get().bump(); } return; }
     // multiplayer: ask the others, at most once in half a minute and never over an open vote
     if (g.vote || g.cfg.vote === false || performance.now() - lastCall < 30000) return;
     lastCall = performance.now(); s.send({ t: 'pauseCall' });

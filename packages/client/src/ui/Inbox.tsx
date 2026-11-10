@@ -196,7 +196,7 @@ export function InboxWatcher() {
     if (fresh.length) {
       next = [...next, ...fresh.map(x => ({ key: x.key, until: x.urg > 0 ? Infinity : now + 15 }))].slice(-3);
       if (fresh.some(x => x.urg > 0)) Sfx.ring(); else Sfx.teletype();
-      if (fresh.some(x => x.urg > 0 && x.src === 'cmd')) st.autoPauseFor('urgent');
+      if (fresh.some(x => x.urg >= 2 && x.src === 'cmd')) st.autoPauseFor('urgent');
     }
     if (next.length !== st.toasts.length || next.some((x, i) => x.key !== st.toasts[i]?.key)) useUi.setState({ toasts: next });
     if (st.inboxFocus && !keys.has(st.inboxFocus)) st.focusInbox(null);

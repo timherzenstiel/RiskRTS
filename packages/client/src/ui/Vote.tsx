@@ -46,3 +46,20 @@ export function PauseCall() {
       onClick={() => { click(); ui().order({ t: 'pauseCall' }); }}>{t('Ask for a pause')}</button>
   );
 }
+
+/**
+ * The game stands still (the player paused it, or it paused itself for an event): a banner over the map says so and why, and
+ * resumes with one click. Orders given meanwhile are taken but nothing moves, which is easy to miss without it.
+ */
+export function PauseBanner() {
+  const sim = useSim(); const why = useUi(s => s.pauseWhy); const overlay = useUi(s => s.overlay);
+  if (!sim || overlay) return null;
+  const { g, session } = sim;
+  if (g.over || g.vote || !session.canControlTime || session.speed !== 0) return null;
+  return (
+    <div id="pausebar" className="plate" role="status">
+      <span><b>{t('The game is paused')}</b>{why ? <> · {t(why).replace(/^[^:]+:\s*/, '').replace(/\.$/, '')}</> : null} · {t('nothing moves until you resume')}</span>
+      <button className="btn sm primary" onClick={() => { click(); ui().setSpeed(1); }}>{t('Resume (Space)')}</button>
+    </div>
+  );
+}

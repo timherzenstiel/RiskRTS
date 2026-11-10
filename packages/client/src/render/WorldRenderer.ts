@@ -187,6 +187,7 @@ class WorldRenderer implements WorldRendererApi {
     for (const v of this.views.values()) v.dispose();
     this.views.clear(); this.war.clear(); this.fx.clear();
     this.curOwner.fill(-2); this.curHl.fill(-1);
+    this.terrain.viewer = s.me;
   }
 
   resize() {

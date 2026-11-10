@@ -120,6 +120,9 @@ interface Ui {
   setFortMarker(m: [number, number] | null): void;
   cancelOrder(): void;
   setOverlay(o: Overlay): void;
+  /** Section of the Rules' Basics page to scroll to when the Rules open (set by the guided war's "More in the rules"). */
+  rulesAt: string | null;
+  openRules(at?: string): void;
   toggleScore(): void;
   /** Show a toast. Pass English: the text is translated here (command errors from the simulation or a host, client messages). */
   say(text: string): void;
@@ -214,6 +217,8 @@ export const useUi = create<Ui>((set, get) => ({
   selectSea: (seaSel) => { set({ seaSel, fleet: -1 }); Sfx.click(); },
   setFortMarker: (fortMarker) => set({ fortMarker }),
   cancelOrder: () => set({ orderMode: false }),
+  rulesAt: null,
+  openRules: (at) => { set({ rulesAt: at ?? null }); get().setOverlay('rules'); },
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
   say: (text) => set({ toast: { text: tx(text), id: ++feedId } }),

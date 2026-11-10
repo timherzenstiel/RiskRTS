@@ -1,9 +1,9 @@
 // Rules pages (design-command §5.5): one page per system, every number read from the same constants the simulation uses,
 // so the pages never drift from the game.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { WAR,
   AIR_RANGE, ASSEMBLE, ATTACK_RATIO, BUDGET_MAX, CORPS_CAP, COST, CUT_MORALE, CUT_WEAR, DENY_WEEKS, DIG_IN, FALLBACK_RATIO, MANPOWER, MAX_REQ, MAX_SPIES, MIN_ATTACK,
-  REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, GEN, OP, START_GENERALS, FACTIONS, BAD_TRAITS, WORK_MULT, WW_INCOME, XP_DMG, XP_MAX, CAP, DRAW, ECON, LEVY_COST, OVER, REPL, WOUNDED,
+  MAX_TRENCH, MAX_SAND, MAX_WIRE, TRENCH_COST, STANCE_DEALT, STANCE_TAKEN, REPORT_FRESH, REPORT_OLD, RESERVE_REACH, SAFE_RATIO, SHELLS, STALE_DAYS, TICK_SECONDS, TRAITS, TRAIT_KEYS, GEN, OP, START_GENERALS, FACTIONS, BAD_TRAITS, WORK_MULT, WW_INCOME, XP_DMG, XP_MAX, CAP, DRAW, ECON, LEVY_COST, OVER, REPL, WOUNDED,
 } from '@riskrts/shared';
 import { useUi } from '../game/store';
 import { Modal } from './Modal';
@@ -11,12 +11,14 @@ import { click } from './actions';
 import { t, tx } from '../i18n';
 import { rich } from './LangPicker';
 
-const PAGES = ['Fronts', 'Corps', 'Commanders', 'Scouting', 'Supply & men'] as const;
+const PAGES = ['Basics', 'Fronts', 'Corps', 'Commanders', 'Scouting', 'Supply & men'] as const;
 const pct = (x: number) => `${Math.round(x * 100)} %`;
 
 export function RulesSheet() {
   const [page, setPage] = useState<number>(0);
   const close = () => { click(); useUi.getState().setOverlay(null); };
+  // opened at a section of the Basics (from the guided war): scroll it into view once
+  useEffect(() => { const at = useUi.getState().rulesAt; if (!at) return; useUi.setState({ rulesAt: null }); setPage(0); setTimeout(() => document.getElementById(at)?.scrollIntoView({ block: 'start' }), 50); }, []);
   return (
     <Modal label={t('Rules')} onClose={close}>
       <div className="kicker">{t('Field service regulations')}</div><h2>{t('Rules')}</h2>
@@ -25,6 +27,46 @@ export function RulesSheet() {
       </div>
       <div className="rules-page">
         {page === 0 && <>
+          <p className="rules-lead">{t('The ideas behind every order, in plain words. The other pages hold the exact numbers.')}</p>
+          <h3 id="b-map">{t('Regions and borders')}</h3>
+          <p>{t('The map is made of regions. Each region has a centre and a post on every border with a neighbour (and on each coast). Click a region to select it: the command bar at the top of the sidebar then lists what you can do there, each with its key. Click a border line or its chip on the map to open the border card: the forces on both sides of that border and what you can do there.')}</p>
+          <h3 id="b-reserve">{t('Reserve and corps')}</h3>
+          <p>{rich(t('New battalions arrive by themselves in their region\'s <b>reserve</b>, after a week of training (Recruit… (R), or the keys 1–5 with a region selected). The reserve stays at the region\'s centre: it counts for the region\'s defence, but it cannot be sent anywhere as a unit.'))}</p>
+          <p>{rich(t('<b>Form corps from reserve</b> (J) puts the whole reserve of the selected region into one corps, up to {0} battalions; anything beyond that waits for the next click. A corps can be moved, dug in, sent to attack and handed to a commander, and it keeps its men, morale and experience wherever it goes.', CORPS_CAP))}</p>
+          <h3 id="b-move">{t('Moving corps')}</h3>
+          <p>{rich(t('Select a corps (in the Forces panel, or click it on the map), press <b>Move</b> (M) and click a border or one of your regions on the map; right-clicking the target does the same. Or open a border card and use <b>Send corps…</b>: it lists the corps that can reach that border, each with a Send button. Corps march over the map and take time to arrive. Move troops (M) on a selected region sends a share of its troops to a neighbouring region.'))}</p>
+          <h3 id="b-dig">{t('Digging in and fortifying')}</h3>
+          <p>{rich(t('<b>Dig in</b> (H) on a corps at a border adds one trench level on that border. It costs Production ({0}), takes effect at once, and goes up to {1} levels. A corps that holds a border for {2} s also digs one level deeper by itself.', TRENCH_COST.join(' / '), MAX_TRENCH, DIG_IN))}</p>
+          <p>{rich(t('<b>Fortify…</b> in the border card adds more: sandbags (up to {0} rows) and barbed wire (up to {1} belts, which also slows attackers down while they cut through it), and fixed defences such as MG nests and bunkers. Field works only help the defenders, and they belong to the border: they stay when the corps leaves.', MAX_SAND, MAX_WIRE))}</p>
+          <table className="ledger"><tbody>
+            <tr><td>{t('Each trench level')}</td><td>+{pct(WORK_MULT.trench)} {t('defence')}</td></tr>
+            <tr><td>{t('Each sandbag row')}</td><td>+{pct(WORK_MULT.sand)} {t('defence')}</td></tr>
+            <tr><td>{t('Each wire belt')}</td><td>+{pct(WORK_MULT.wire)} {t('defence')}</td></tr>
+          </tbody></table>
+          <h3 id="b-attack">{t('Attacking')}</h3>
+          <p>{rich(t('Select corps, press <b>Attack</b> (K) and click an enemy region across a border, or use Attack across in the border card. The corps first assemble on the border ({0} s), then the battle begins. The first fight is for the enemy\'s first line on that border; once it falls you can carry the attack on into the depth of the region and take it.', ASSEMBLE))}</p>
+          <h3 id="b-battle">{t('In a battle')}</h3>
+          <p>{t('A battle opens its card with both sides\' strength and the levers that are yours to pull:')}</p>
+          <table className="ledger"><tbody>
+            <tr><td>{t('Barrage')}</td><td>{t('Hold fire saves shells and hides your strength; steady fire uses about one shell per battery every 10 s; a heavy barrage gives 80 % more fire and suppression for twice the shells.')}</td></tr>
+            <tr><td>{t('Over the top')}</td><td>{t('The attackers leave the start line now instead of waiting.')}</td></tr>
+            <tr><td>{t('Stance · Aggressive')}</td><td>{t('+{0} damage dealt, +{1} losses', pct(STANCE_DEALT[1] - 1), pct(STANCE_TAKEN[1] - 1))}</td></tr>
+            <tr><td>{t('Stance · Defensive')}</td><td>{t('−{0} losses, never counter-attacks', pct(1 - STANCE_TAKEN[2]))}</td></tr>
+            <tr><td>{t('Stance · Hold')}</td><td>{t('No retreat; morale falls 50 % faster')}</td></tr>
+            <tr><td>{t('Reinforce · Withdraw')}</td><td>{t('Send half the troops of a neighbouring region in, or fall back.')}</td></tr>
+          </tbody></table>
+          <h3 id="b-cmd">{t('Commanders and requests')}</h3>
+          <p>{rich(t('<b>Hand to a commander</b> (L) forms an army from corps on a front. The commander then moves his corps along that front by himself and asks you for what he may not decide: more men, field works, a patrol, an attack. His requests arrive in the <b>Inbox</b> of the Staff panel; grant or refuse each. His mandate (Hold, Defend, Attack) sets how much he does alone; on Attack he plans operations and sends you the plan to approve. Every army needs a general, and you have only a few.'))}</p>
+          <h3 id="b-econ">{t('Production, shells and men')}</h3>
+          <p>{rich(t('Every week ({0} s) your regions with a route home pay <b>Production</b> (top bar). You spend it on recruits, buildings, field works and scouting. <b>Shells</b> are made from part of your factory output; your guns use them in every battle, more on a heavy barrage. <b>Men</b> come from the manpower pool of your home regions; part of the casualties come back to it.', TICK_SECONDS))}</p>
+          <h3 id="b-supply">{t('Supply')}</h3>
+          <p>{rich(t('Each region can feed only so many battalions. A region over its capacity costs its troops morale every week and gets no replacements; far over, they lose men. The <b>Supply</b> map mode (B) shows it: red regions are over capacity. Move corps out, or raise the capacity with depots and rail links.'))}</p>
+          <h3 id="b-home">{t('Home front')}</h3>
+          <p>{t('War weariness shows how tired your nation is of the war. Losses, conscription and broken treaties raise it; quiet weeks let it fade. It cuts Production and morale, and very high it brings strikes and uprisings.')}</p>
+          <h3 id="b-time">{t('Time')}</h3>
+          <p>{t('A week is {0} s. The space bar pauses; the buttons at the top right set the speed. The game also pauses by itself for the events your difficulty picks (change them in the Inbox panel). Most orders can be given while paused.', TICK_SECONDS)}</p>
+        </>}
+        {page === 1 && <>
           <h3>{t('Who is at war')}</h3>
           <p>{t('Every power is at war with every other power it has no treaty with. A ceasefire, non-aggression pact or alliance ends that until it lapses or is broken.')}</p>
           <h3>{t('Difficulty')}</h3>
@@ -44,7 +86,7 @@ export function RulesSheet() {
           <h3>{t('What we know')}</h3>
           <p>{t('Across our own borders we see an estimate in men. A patrol, flight or spy brings an exact report, which counts as old after {0} days.', STALE_DAYS)}</p>
         </>}
-        {page === 1 && <>
+        {page === 2 && <>
           <h3>{t('Corps')}</h3>
           <p>{rich(t('A corps holds at most <b>{0} battalions</b>; larger forces are several corps on one post (the centre, a border or a coast). It keeps its own men, morale and experience while it marches, sails and fights. Battalions in no corps are the region\'s depot.', CORPS_CAP))}</p>
           <table className="ledger"><tbody>
@@ -56,7 +98,7 @@ export function RulesSheet() {
           <h3>{t('Who moves them')}</h3>
           <p>{rich(t('Regions on <b>Auto</b> arrange their reserve and the corps they raised themselves. Corps you move, attack with, split, merge or form are yours (✋): Auto leaves them alone. Corps in an army are moved by its commander unless you take one by hand.'))}</p>
         </>}
-        {page === 2 && <>
+        {page === 3 && <>
           <h3>{t('Armies and commanders')}</h3>
           <p>{t('An army holds a front (a list of your regions). Its commander shifts his corps to the borders that need them – from quiet, peaceful or safe posts (safe: {0}× our strength) and from his reserve – by himself. Everything else he asks you for, at most {1} requests at a time; a denied request rests for {2} weeks.', SAFE_RATIO, MAX_REQ, DENY_WEEKS)}</p>
           <table className="ledger"><tbody>
@@ -78,7 +120,7 @@ export function RulesSheet() {
           <h3>{t('Traits')}</h3>
           <table className="ledger"><tbody>{TRAIT_KEYS.map(k => <tr key={k}><td>{tx(TRAITS[k].name)}{BAD_TRAITS.includes(k) ? ' ' + t('(bad)') : ''}</td><td>{tx(TRAITS[k].desc)}</td></tr>)}</tbody></table>
         </>}
-        {page === 3 && <>
+        {page === 4 && <>
           <table className="ledger"><tbody>
             <tr><td>{t('Cavalry patrol · one border')}</td><td>{t('{0} Production', COST.patrol)}</td></tr>
             <tr><td>{t('Reconnaissance flight · up to {0} borders, needs an airfield', AIR_RANGE)}</td><td>{t('{0} Production', COST.recon)}</td></tr>
@@ -87,7 +129,7 @@ export function RulesSheet() {
           </tbody></table>
           <p>{t('Patrols are caught more often by MG nests, bunkers and wire on the border they cross; flights by anti-air guns. Commanders ask for a look when a border is not safe and the report is older than {0} days.', REPORT_OLD)}</p>
         </>}
-        {page === 4 && <>
+        {page === 5 && <>
           <h3>{t('The week')}</h3>
           <p>{rich(t('Every {0} s is a week: Production, shells and new men arrive. Regions pay only with a route home – own land (or a sea lane between own regions) to the capital, a factory or home territory. Rail all the way is a <b>Rail</b> route, otherwise <b>Road</b>; none is <b>Cut off</b>.', TICK_SECONDS))}</p>
           <h3>{t('Supply capacity')}</h3>

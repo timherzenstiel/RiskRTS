@@ -34,9 +34,9 @@ function goal(g: GameState, me: number, key: string): { text: string; how: strin
   const army = (g.hq ?? []).find(h => h.owner === me);
   const staff = () => ui().setPanel('staff');
   switch (key) {
-    case 'corps2': return { text: t('Form 2 corps from the reserve in {0}', home), how: t('Click {0} on the map, then press "Form corps from reserve" in the command bar at the top left, twice.', home),
+    case 'corps2': return { text: t('Form a corps from the reserve in {0}', home), how: t('Click {0} on the map, then press "Form corps from reserve" in the command bar at the top left. One click puts the whole reserve into one corps.', home),
       open: () => fly(), point: { sel: '[data-cmd="form"]', region: T.home, label: t('Click {0}', home) } };
-    case 'post': return { text: t('Move one of them to the border with {0}', foe), how: t('"Show me" opens the border card with a list of your corps: press Send next to one. Any time later: select a corps, press Move (M) and click a border on the map.'),
+    case 'post': return { text: t('Move a corps to the border with {0}', foe), how: t('"Show me" opens the border card with a list of your corps: press Send next to one. Any time later: select a corps, press Move (M) and click a border on the map.'),
       open: () => border('send'), point: { ...atBorder, sel: '.bc-send .buy, [data-cmd="send"]', label: t('This border') } };
     case 'trench': return { text: t('Dig field works on the border with {0}', foe), how: t('In the border card, press a work under Fortify. Or select the corps on the border and press Dig in (H).'),
       open: () => border('fort'), point: { ...atBorder, sel: '.bcard .cm-b:not(:disabled), [data-cmd="dig"]', label: t('Dig in here') } };

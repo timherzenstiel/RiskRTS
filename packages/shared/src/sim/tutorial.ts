@@ -75,7 +75,7 @@ function enter(g: GameState, t: Tut, stage: number) {
 function done(g: GameState, t: Tut, goal: string): boolean {
   const weeks = (g.time - t.t0) / 20;
   switch (goal) {
-    case 'corps2': return corpsOf(g, t.me) >= t.c0 + 2;
+    case 'corps2': return corpsOf(g, t.me) >= t.c0 + 1;
     case 'post': return atBorder(g, t) >= t.p0 + 1;
     case 'trench': return worksOn(g, t) > t.w0;
     case 'hold': return !!t.flags.held || weeks >= TUT.holdWeeks;

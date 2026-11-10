@@ -6,10 +6,12 @@ import { coastKey, isCoast, zoneOfKey } from './zones';
 export interface SectorPt { x: number; z: number; /** unit tangent along the border, for spacing several defences */ ux: number; uz: number; tile: number }
 
 const cache = new Map<string, SectorPt>();
+/** Own tiles along each land border, by `region|neighbour`. */
+const edge = new Map<string, number[]>();
 let built: World | null = null;
 
 function build(w: World) {
-  built = w; cache.clear();
+  built = w; cache.clear(); edge.clear();
   const { land, terrOf } = w, nb = [0, 0, 0, 0];
   const pts = new Map<string, number[]>();
   for (let i = 0; i < N; i++) {
@@ -22,6 +24,7 @@ function build(w: World) {
     // a coast: the coast tile of the region nearest the middle of its coast on that zone
     if (isCoast(n)) tiles = [r.coast[zoneOfKey(n)].tile];
     else if (!tiles?.length) tiles = [r.anchor];
+    else edge.set(key, tiles);
     let mx = 0, mz = 0; for (const i of tiles) { mx += tx(i % COLS); mz += tz((i / COLS) | 0); } mx /= tiles.length; mz /= tiles.length;
     let pick = tiles[0], bd = 1e9; for (const i of tiles) { const d = (tx(i % COLS) - mx) ** 2 + (tz((i / COLS) | 0) - mz) ** 2; if (d < bd) { bd = d; pick = i; } }
     let x = tx(pick % COLS), z = tz((pick / COLS) | 0);
@@ -41,6 +44,22 @@ export function sectorPoint(w: World, region: number, sector: number): SectorPt 
   const r = w.regions[region];
   if (sector < 0) return { x: r.cx + .35, z: r.cz + .32, ux: 1, uz: 0, tile: r.anchor };
   return cache.get(region + '|' + sector) ?? { x: r.cx, z: r.cz, ux: 1, uz: 0, tile: r.anchor };
+}
+
+/**
+ * The border or coast of `region` a map point belongs to, for orders given by clicking the map: the sector whose border runs
+ * nearest to the point (anywhere along it, not only at its middle), or -1 (the centre) when the point lies nearer the centre.
+ */
+export function sectorAt(w: World, region: number, x: number, z: number): number {
+  if (built !== w) build(w);
+  const r = w.regions[region]; let best = -1, bd = Math.hypot(wrapDx(x, r.cx), z - r.cz) * .8;
+  for (const s of r.sectors) {
+    // a coast counts a little further away, so a point where a land border meets the sea goes to the land border
+    const p = sectorPoint(w, region, s); let d = Math.hypot(wrapDx(x, p.x), z - p.z) + (isCoast(s) ? .5 : 0);
+    for (const i of edge.get(region + '|' + s) ?? []) { const e = Math.hypot(wrapDx(x, tx(i % COLS)), z - tz((i / COLS) | 0)); if (e < d) d = e; }
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
 }
 
 /** Where a battle is fought on the map: on the border it comes over (the middle of the shared border), or the region anchor. */

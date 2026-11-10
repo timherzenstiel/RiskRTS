@@ -22,7 +22,6 @@ describe('the guided first war', () => {
     // 1 · Mobilise: form two corps, move one to the threatened border
     home.units.inf += 4; home.men.inf += 400;
     expect(applyCommand(g, me, { t: 'form', region: t.home, u: { inf: 1 } })).toBeNull();
-    expect(applyCommand(g, me, { t: 'form', region: t.home, u: { inf: 1 } })).toBeNull();
     step(g, .05); expect(t.ok).toEqual([0]);
     const c = corpsIn(home).filter(x => x.p !== t.front).at(-1)!;
     expect(applyCommand(g, me, { t: 'moveCorps', region: t.home, id: c.id, to: t.home, toPost: t.front })).toBeNull();

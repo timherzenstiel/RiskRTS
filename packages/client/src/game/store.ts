@@ -148,6 +148,9 @@ interface Ui {
   setAutoPause(p: Partial<AutoPause>): void;
   /** Stop the game for a reason the player picked: pause (solo), or call a pause vote (multiplayer). */
   autoPauseFor(why: PauseWhy): void;
+  /** An attack waiting for its goal (design-optimize §3.4): the target, where on screen it was ordered, and what attacks. */
+  attackAsk: { target: number; x: number; y: number; from?: number } | null;
+  askAttack(a: Ui['attackAsk']): void;
   /** Why the game paused itself ('' when the player paused it), for the pause banner. */
   pauseWhy: string;
   focusInbox(key: string | null): void;
@@ -180,7 +183,7 @@ function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') 
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, relieveFor: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, tutPoint: null, overlay: null, scoreOpen: false, reportId: -1,
-  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), pauseWhy: '', wwWeek: null,
+  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), pauseWhy: '', attackAsk: null, wwWeek: null,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -190,7 +193,7 @@ export const useUi = create<Ui>((set, get) => ({
   startSession: (session) => { get().session?.destroy(); set({ session, screen: 'game', sel: -1, hover: -1, feed: [], log: [], tut: 0, orderMode: false, orderKind: 'march', fleet: -1, seaSel: -1, fortMarker: null, tutPoint: null, overlay: 'orders', tab: 'over', scoreOpen: false, mode: 0, layer: 0, modeSet: false, panel: null, dismissed: {}, border: null, corps: [], armySel: -1, trained: {}, inboxFocus: null, toasts: [], wwWeek: null });
     session.onError = (m) => get().say(m); },
   leaveGame: () => { Radio.reset(); get().session?.destroy(); set({ session: null, screen: 'title', overlay: null, sel: -1, feed: [], log: [] }); },
-  select: (id) => { const s = get().session; set({ sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], armySel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
+  select: (id) => { const s = get().session; set({ attackAsk: null, sel: id, orderMode: false, fortMarker: null, fleet: -1, seaSel: -1, corps: [], armySel: -1, border: get().border && get().border![0] === id ? get().border : null }); if (id >= 0 && s && s.state.regions[id].owner === s.me && get().tut < 1) set({ tut: 1 }); Sfx.click(); },
   setHover: (hover) => { if (hover !== get().hover) set({ hover }); },
   setTab: (tab) => set({ tab }),
   setSendFrac: (sendFrac) => set({ sendFrac }),
@@ -224,6 +227,7 @@ export const useUi = create<Ui>((set, get) => ({
   setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
   say: (text) => set({ toast: { text: tx(text), id: ++feedId } }),
+  askAttack: (attackAsk) => set({ attackAsk }),
   setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; set({ pauseWhy: '' }); get().bump(); } },
   setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },

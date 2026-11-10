@@ -88,7 +88,7 @@ function corpsVerbs(g: GameState, me: number, ids: number[]): Verb[] {
   const nr = found.every(x => x.c.nr);
   const v: Verb[] = [
     { id: 'move', label: t('Move'), key: 'm', run: target(null), on: mode, title: t('Then click an own region or border on the map (or right-click it straight away)') },
-    { id: 'atk', label: goal === 2 ? t('Attack · invade') : t('Attack · first line'), key: 'k', danger: true, run: target(goal), off: canAtk ? undefined : t('None of them borders an enemy'), title: t('Then click an enemy region next to them (or right-click it straight away)') },
+    { id: 'atk', label: t('Attack…'), key: 'k', danger: true, run: target(goal), off: canAtk ? undefined : t('None of them borders an enemy'), title: t('Then click an enemy region next to them (or right-click it straight away)') },
     { id: 'dig', label: digCost ? t('Dig in · {0}', digCost) : t('Dig in'), key: 'h', run: () => { for (const x of posts) if (fortCost(x.r, 'trench', x.c.p, g) !== null) ui().fortify(x.r.id, 'trench', x.c.p); },
       off: !posts.length ? t('They stand in the centre, not on a border') : digMax ? t('The trench is as deep as it goes') : g.factions[me].supply < digCost ? t('{0} Production short', digCost - g.factions[me].supply) : undefined,
       title: t('Deepen the trench on the border each corps stands on') },

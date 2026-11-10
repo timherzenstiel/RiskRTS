@@ -7,6 +7,7 @@ import { useUi } from '../game/store';
 import { rendererRef } from './refs';
 import { t } from '../i18n';
 import { orderCorps } from './Forces';
+import { lastPointer } from './AttackAsk';
 
 export function Stage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,6 +51,8 @@ export function Stage() {
             if (coastal && g.regions[id].owner !== me) { ui().order({ t: 'landing', from: sel, to: id, frac: sendFrac, goal }); return; }
             ui().say(`${W.regions[id].name} does not border ${W.regions[sel].name}. Infantry and tanks need a direct border; aircraft reach two borders.`); return;
           }
+          // an attack over a land border asks for its goal first; a march inside own land goes at once
+          if (g.regions[id].owner !== me && W.regions[sel].land.includes(id)) { const p = lastPointer(); ui().askAttack({ target: id, x: p.x, y: p.y, from: sel }); return; }
           ui().march(sel, id);
         },
         onHover: (id) => ui().setHover(id),

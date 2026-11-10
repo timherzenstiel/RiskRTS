@@ -14,6 +14,7 @@ import { startSolo } from './SoloSetup';
 export function Title() {
   const [name, setName] = useState(() => lsGet(NAME_KEY) ?? '');
   const install = useInstall(); const caps = useMemo(capabilities, []);
+  const tutDone = lsGet('f14tutdone') === '1';
   const go = (s: 'solo' | 'host' | 'join' | 'server') => { click(); useUi.getState().setScreen(s); };
   const cont = () => {
     Sfx.init(); const raw = lsGet(SAVE_KEY); const s = raw ? HostSession.restore(raw) : null; const ui = useUi.getState();
@@ -37,9 +38,9 @@ export function Title() {
           <input value={name} maxLength={20} placeholder={t('Commander')} autoComplete="nickname" onChange={e => { setName(e.target.value); lsSet(NAME_KEY, e.target.value); }} /></label>
         <div className="menu-btns">
           {hasSave() && <button className="btn wide" onClick={cont}>{t('Continue saved war')}</button>}
-          <button className={'btn guided wide' + (hasSave() ? '' : ' primary')} onClick={() => { click(); startSolo(TUT.me, 0, undefined, true); }} title={t('Play {0} through six short stages that teach the game one system at a time. The other powers hold back until the first battle.', FACTIONS[TUT.me].name)}>
+          <button className={'btn guided wide' + (hasSave() || tutDone ? '' : ' primary')} onClick={() => { click(); startSolo(TUT.me, 0, undefined, true); }} title={t('Play {0} through six short stages that teach the game one system at a time. The other powers hold back until the first battle.', FACTIONS[TUT.me].name)}>
             <b>{t('First war (guided)')}</b><small>{t('New here? {0} · six stages · Recruit', tx(FACTIONS[TUT.me].short))}</small></button>
-          <button className={'btn wide' + (hasSave() ? ' primary' : '')} onClick={() => go('solo')}>{t('Single player')}</button>
+          <button className={'btn wide' + (hasSave() || tutDone ? ' primary' : '')} onClick={() => go('solo')}>{t('Single player')}</button>
           <div className="row two">
             <button className="btn" disabled={!caps.webrtc} onClick={() => go('host')}>{t('Host multiplayer')}</button>
             <button className="btn" disabled={!caps.webrtc} onClick={() => go('join')}>{t('Join with code')}</button>

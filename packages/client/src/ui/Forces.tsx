@@ -6,6 +6,7 @@ import {
   frontsOf, fullMen, groundUnits, groupName, menTotal, sectorPoint, wrapDx, type Army, type Corps, type GameState, type Order, type RegionState, type Stance, type Units, type World,
 } from '@riskrts/shared';
 import { useState } from 'react';
+import { lastPointer } from './AttackAsk';
 import { useSim, useUi } from '../game/store';
 import { Sfx } from '../audio/sfx';
 import { click } from './actions';
@@ -52,9 +53,14 @@ function corpsAway(g: GameState, me: number): { tag: NonNullable<Army['ct']>; wh
 export const corpsTitle = (me: number, r: RegionState, c: Corps) => c.res ? t('Reserve {0}', buildWorld().regions[r.id].name) : groupName(me, 1, c.n);
 
 /** Send the selected corps to region `target` (own: move to the post clicked; enemy: attack). */
-export function orderCorps(target: number, pt?: { x: number; z: number }) {
+export function orderCorps(target: number, pt?: { x: number; z: number }, sure = false) {
   const ui = useUi.getState(), s = ui.session; if (!s) return;
   const W = buildWorld(), g = s.state, me = s.me, T = g.regions[target];
+  // an attack asks for its goal first, on a card at the cursor (design-optimize §3.4)
+  if (T.owner !== me && !sure) {
+    if (!ui.corps.some(id => { const f = lookCorps(g, me, id); return f && W.regions[f.r.id].land.includes(target); })) { ui.say('None of the selected corps borders that region. A corps attacks across a direct border.'); Sfx.deny(); return; }
+    const p = lastPointer(); ui.askAttack({ target, x: p.x, y: p.y }); return;
+  }
   let ok = 0, err: string | null = null;
   for (const id of ui.corps) {
     const f = lookCorps(g, me, id); if (!f) continue;
@@ -291,12 +297,6 @@ export function CorpsCard() {
         </>
       )}
       {found.some(x => !x.c.res) && <CorpsArmyRow ids={found.filter(x => !x.c.res).map(x => x.c.id)} />}
-      <div className="lv-row"><span className="lv-l" title={t('What attacks ordered by right-click aim for')}>{t('Attack goal')}</span>
-        <div className="seg" role="group" aria-label={t('Attack goal')}>
-          <button aria-pressed={goal === 1} onClick={() => { click(); ui().setGoal(1); }}>{t('First line')}</button>
-          <button aria-pressed={goal === 2} onClick={() => { click(); ui().setGoal(2); }}>{t('Invade')}</button>
-        </div>
-      </div>
     </section>
   );
 }

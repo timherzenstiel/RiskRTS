@@ -1,5 +1,6 @@
 // The guided first war (design-play §6): the objective list top left with a "Show me" for each objective, what each stage
 // unlocks (rail buttons and map modes stay hidden until then), and a card when a new stage opens.
+import { lsSet } from './storage';
 import { useEffect, useState } from 'react';
 import { FACTIONS, TUT_STAGES, buildWorld, loadRatio, type GameState } from '@riskrts/shared';
 import { eventTaps, useSim, useUi, type TutPoint } from '../game/store';
@@ -47,7 +48,7 @@ function goal(g: GameState, me: number, key: string): { text: string; how: strin
     case 'army': return { text: t('Appoint a commander for the front facing {0}', foe), how: t('"Show me" selects the border: press "Hand to a commander" (L) in the command bar.'),
       open: () => border(''), point: { ...atBorder, sel: '[data-cmd="cmd"], [data-cmd="army"]', label: t('This border') } };
     case 'reply': return { text: t('Answer his first request in the Inbox'), how: t('Requests arrive in the Staff panel on the left rail. Grant or refuse one.'),
-      open: staff, point: { sel: '[data-panel="staff"]:not([aria-pressed="true"]), [data-tut="req"] .btn:not(:disabled)' } };
+      open: staff, point: { sel: '[data-panel="staff"]:not([aria-pressed="true"]), [data-group~="staff"]:not(.on), [data-tut="req"] .btn:not(:disabled)' } };
     case 'mode': return { text: t('Open the Supply map mode'), how: t('Press the Supply button in the map modes at the top of the sidebar, or the key B.'), open: () => {}, point: { sel: '[data-mode="3"]' } };
     case 'cap': {
       const over = g.regions.find(r => r.owner === me && loadRatio(g, r) > 1);
@@ -57,7 +58,7 @@ function goal(g: GameState, me: number, key: string): { text: string; how: strin
     case 'attack': return { text: t('Give an army the Attack order'), how: t('Open your army (Staff panel or click its commander) and press Attack.'),
       open: () => { if (army) ui().selectArmy(army.id); else staff(); }, point: { sel: '[data-tut="mand2"], [data-cmd="m2"]' } };
     case 'take': return { text: t('Take one region: approve his plan, or attack yourself'), how: t('Approve the plan in the Staff panel. Or select corps, press Attack (K) and click an enemy region.'),
-      open: staff, point: { sel: '[data-panel="staff"]:not([aria-pressed="true"]), [data-tut="req"] .btn.primary, [data-tut="req"] .btn.danger', region: T.front, label: t('Take this region') } };
+      open: staff, point: { sel: '[data-panel="staff"]:not([aria-pressed="true"]), [data-group~="staff"]:not(.on), [data-tut="req"] .btn.primary, [data-tut="req"] .btn.danger', region: T.front, label: t('Take this region') } };
     default: return { text: key, how: '', open: () => {}, point: { sel: '' } };
   }
 }
@@ -111,6 +112,7 @@ export function Objectives() {
 // a new stage: a card with its name and first objective; the end of the guidance: one more
 eventTaps.push((g, e, me) => {
   if (e.k !== 'tut' || g.tut?.me !== me) return;
+  if (e.stage >= DONE) lsSet('f14tutdone', '1');
   const m = e.stage >= DONE
     ? { title: t('The guided war is over'), text: t('Every panel is open now. The war goes on: good luck.'), tone: 'good' as const }
     : { title: t('Stage {0} · {1}', e.stage + 1, t(STAGE_NAME[e.stage])), text: t(STAGE_WHY[e.stage]), tone: 'me' as const };

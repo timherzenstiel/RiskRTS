@@ -48,7 +48,7 @@ describe('the staff', () => {
     expect((g.hq ?? []).some(h => h.owner === me && h.front.includes(cap.id))).toBe(true);
   });
 
-  it('hands troops the player moved back to the general after a week of standing still', () => {
+  it('leaves troops the player put on a border there until the front gets a new order', () => {
     const { g, me, cap } = game();
     run(g, 10);
     const c = corpsIn(cap).find(x => x.p >= 0 && x.p < 1000)!;
@@ -57,6 +57,8 @@ describe('the staff', () => {
     run(g, 15);
     expect(corpsIn(cap).some(x => x.id === c.id && x.man)).toBe(true);
     run(g, 60);
+    expect(corpsIn(cap).some(x => x.id === c.id && x.man && x.p === other)).toBe(true);
+    expect(applyCommand(g, me, { t: 'front', region: cap.id, order: 'hold' })).toBeNull();
     expect(corpsIn(cap).some(x => x.man)).toBe(false);
     expect(groundUnits(cap.units)).toBeGreaterThan(0); void depotOf;
   });

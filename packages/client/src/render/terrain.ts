@@ -75,6 +75,10 @@ export function computeHeights(w: World): Float32Array {
 const enc = (v: number) => Math.round(Math.pow(clamp(v, 0, 1), 1 / 2.2) * 255);
 const nb4 = (i: number, out: number[]) => { const c = i % COLS; out[0] = c > 0 ? i - 1 : -1; out[1] = c < COLS - 1 ? i + 1 : -1; out[2] = i >= COLS ? i - COLS : -1; out[3] = i + COLS < N ? i + COLS : -1; return out; };
 
+/** How strongly the owner's colour covers the ground and the woods on the strategic map, how dark the ink between powers is,
+ *  and the line around the viewer's own land. */
+const OWNER_WASH = .6, TREE_WASH = .42, INK = .3, OWN_EDGE = new THREE.Color(.96, .9, .7);
+
 /** Shared uniform: 0 = full faction colouring (strategic view), 1 = natural terrain with coloured borders only (close-up). */
 export const uNear = { value: 0 };
 
@@ -111,7 +115,8 @@ ${COAST_GLSL}`)
   vec3 _s=pow(texture2D(uStrat,_t+_w*.0009).rgb,vec3(2.2)), _n=pow(texture2D(uNatL,_t+_w*.0012).rgb,vec3(2.2));
   vec3 _c=mix(_s,_n,uNear);
   float _m=fb(vWP.xz*3.1), _m2=fb(vWP.xz*15.);
-  _c*=(.86+.34*_m+.14*(_m2-.5))*mix(1.38,1.,uNear);
+  // the strategic map is a calm wash (the owner colour has to read); the brush noise comes in with the close-up ground
+  _c*=mix(.95+.12*_m+.04*(_m2-.5),.86+.34*_m+.14*(_m2-.5),uNear)*mix(1.4,1.,uNear);
   float _sl=1.-normalize(vWN).y;
   vec3 _rock=mix(vec3(.21,.15,.095),vec3(.105,.085,.065),fn(vWP.xz*22.))*(.8+.3*step(.5,fract(vWP.y*60.+_m*2.)));
   _c=mix(_c,mix(_rock,_c,.35*(1.-uNear)),smoothstep(.2,.5,_sl));
@@ -509,10 +514,13 @@ export class Terrain {
    * Recolour one region. `hl`: 0 none, 1 hover, 2 selected, 3 valid attack target. `owners` is the current owner of every region
    * (needed for border shading against neighbours).
    */
+  /** The power the player looks through (-1 none): its land is washed lighter and outlined in cream (design-optimize §5.1). */
+  viewer = -1;
+
   paintRegion(rid: number, owners: ArrayLike<number>, hl: 0 | 1 | 2 | 3, hot?: Map<number, number>, sup?: number) {
     // Supply mode: own land tinted green / yellow / orange / red by load against capacity; other land dimmed
     const st = sup === undefined ? null : sup < 0 ? null : SUP_COL[Math.min(3, sup)];
-    const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE;
+    const reg = this.world.regions[rid], owner = owners[rid], fc = facCol[owner] ?? WHITE, mine = owner >= 0 && owner === this.viewer;
     // Fronts mode: a bright band in the owner's colour along every border with a power it is at war with (wider where a battle
     // burns), so each war line shows both powers' colours side by side; the rest of the land is dimmed a little
     let band: Map<number, number> | null = null;
@@ -532,11 +540,17 @@ export class Terrain {
       if (river[i]) { r += (RIVERC.r - r) * .72; g += (RIVERC.g - g) * .72; b += (RIVERC.b - b) * .72; nr *= .9; ng *= .95; nbb *= .9; }
       else if (this.cityT[i]) { nr += (CITYC.r - nr) * .35; ng += (CITYC.g - ng) * .35; nbb += (CITYC.b - nbb) * .35; r = nr; g = ng; b = nbb; }
       else if (this.roadT[i]) { nr += (ROADC.r - nr) * .3; ng += (ROADC.g - ng) * .3; nbb += (ROADC.b - nbb) * .3; r = nr; g = ng; b = nbb; }
-      r += (fc.r - r) * .46; g += (fc.g - g) * .46; b += (fc.b - b) * .46;
+      // the owner's colour carries the political map; our own land is a shade lighter
+      r += (fc.r - r) * OWNER_WASH; g += (fc.g - g) * OWNER_WASH; b += (fc.b - b) * OWNER_WASH;
+      if (mine) { r += (1 - r) * .1; g += (1 - g) * .1; b += (1 - b) * .1; }
       // close-up: natural ground with a light owner tint
       const nb = borderNb[i];
       let pr = nr, pg = ng, pb = nbb;
-      if (nb >= 0) { const m = owners[nb] === owner ? .8 : .52; r = fc.r * m; g = fc.g * m; b = fc.b * m; if (owners[nb] !== owner) { nr = r; ng = g; nbb = b; } }
+      if (nb >= 0) {
+        // borders: a faint line between two regions of one power, dark ink between powers, cream around our own land
+        if (owners[nb] === owner) { r = fc.r * .84; g = fc.g * .84; b = fc.b * .84; }
+        else { if (mine) { r = OWN_EDGE.r; g = OWN_EDGE.g; b = OWN_EDGE.b; } else { r = fc.r * INK; g = fc.g * INK; b = fc.b * INK; } nr = r; ng = g; nbb = b; }
+      }
       if (band) {
         const d = band.get(i);
         if (d === undefined) { r *= .78; g *= .78; b *= .78; }
@@ -562,7 +576,8 @@ export class Terrain {
       const hi = hl === 2 ? .25 : hl === 1 ? .1 : 0, tb = this.treeBase;
       for (const k of this.treesOf[rid]) {
         let r = tb[k * 3], g = tb[k * 3 + 1], b = tb[k * 3 + 2];
-        r += (fc.r - r) * .16; g += (fc.g - g) * .16; b += (fc.b - b) * .16;
+        // woods take the owner's colour too, or they read as black dots on the political map
+        r += (fc.r * 1.1 - r) * TREE_WASH; g += (fc.g * 1.1 - g) * TREE_WASH; b += (fc.b * 1.1 - b) * TREE_WASH;
         if (hi) { r += (1 - r) * hi; g += (1 - g) * hi; b += (1 - b) * hi; }
         T[k * 3] = r; T[k * 3 + 1] = g; T[k * 3 + 2] = b;
       }

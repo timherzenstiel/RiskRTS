@@ -11,9 +11,14 @@ export interface InputHost {
   regionAt(clientX: number, clientY: number): number;
   orderMode(): boolean;
   onSelect(id: number): void;
-  onOrder(id: number): void;
+  /** `fast`: Shift was held (an attack goes at once, without its card). */
+  onOrder(id: number, fast?: boolean): void;
+  /** Shift + drag drew a box (client pixels); `add` keeps the current selection. */
+  onBox?(x0: number, y0: number, x1: number, y1: number): void;
   onHover(id: number): void;
   onDoubleClick(id: number): void;
+  /** A zoom band key was pressed (default: zoom at the cursor). */
+  band?(b: number): void;
 }
 
 const PAN_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
@@ -21,7 +26,7 @@ const PAN_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft
 export class Input {
   private readonly keys = new Set<string>();
   private readonly ptrs = new Map<number, { x: number; y: number }>();
-  private down: { x: number; y: number; b: number } | null = null;
+  private down: { x: number; y: number; b: number; shift?: boolean } | null = null;
   private dragging = false;
   private pinch = 0;
   private readonly a = new THREE.Vector3();
@@ -39,7 +44,7 @@ export class Input {
     on(c, 'pointerdown', (e) => {
       try { c.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
       this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (this.ptrs.size === 1) { this.down = { x: e.clientX, y: e.clientY, b: e.button }; this.dragging = false; }
+      if (this.ptrs.size === 1) { this.down = { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey && e.pointerType === 'mouse' }; this.dragging = false; }
       if (this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()]; this.pinch = Math.hypot(p.x - q.x, p.y - q.y); this.dragging = true; }
     });
     on(c, 'pointermove', (e) => this.move(e));
@@ -58,7 +63,7 @@ export class Input {
       const k = e.key.toLowerCase(); if (PAN_KEYS.has(k)) this.keys.add(k);
       // zoom bands: Z theatre, X front, C battle, V close (at the cursor when it is over the map)
       const b = BANDS.findIndex(x => x.key === k);
-      if (b >= 0) { this.zoomBand(b); return; }
+      if (b >= 0) { this.h.band ? this.h.band(b) : this.zoomBand(b); return; }
       if (k === '+' || k === '=' || k === '-') { const r = h.rig; r.gdist = clamp(r.gdist * (k === '-' ? 1.5 : 1 / 1.5), MIN_DIST, MAX_DIST); }
     });
     on(c, 'pointermove', (e) => { this.hoverAt = { x: e.clientX, y: e.clientY }; });
@@ -68,6 +73,8 @@ export class Input {
   }
 
   private hoverAt: { x: number; y: number } | null = null;
+  /** Whether the pointer is over the map. */
+  get overMap() { return !!this.hoverAt; }
 
   /** Fly to a zoom band, keeping the point under the cursor (or the screen centre) in place. */
   zoomBand(b: number) {
@@ -99,8 +106,11 @@ export class Input {
       this.pinch = d; return;
     }
     if (this.down && (this.down.b === 0 || this.down.b === 1)) {
-      if (!this.dragging && Math.hypot(cur.x - this.down.x, cur.y - this.down.y) > 6) { this.dragging = true; c.classList.add('drag'); }
-      if (this.dragging) {
+      const box = this.down.b === 0 && this.down.shift && !!h.onBox;
+      if (!this.dragging && Math.hypot(cur.x - this.down.x, cur.y - this.down.y) > 6) { this.dragging = true; if (!box) c.classList.add('drag'); }
+      // Shift + drag draws a selection box instead of moving the map (design-optimize §4.4)
+      if (this.dragging && box) this.drawBox(this.down.x, this.down.y, cur.x, cur.y);
+      else if (this.dragging) {
         const r = c.getBoundingClientRect();
         if (h.rig.screenToWorld(prev.x, prev.y, r, this.a) && h.rig.screenToWorld(cur.x, cur.y, r, this.b)) {
           const dx = wrapDx(this.b.x, this.a.x), dz = this.a.z - this.b.z; h.rig.gx += dx; h.rig.gz += dz; h.rig.tx += dx; h.rig.tz += dz;
@@ -115,11 +125,18 @@ export class Input {
     if (!this.ptrs.has(e.pointerId)) return;
     if (this.ptrs.size === 1 && this.down && !this.dragging) {
       const id = h.regionAt(e.clientX, e.clientY);
-      if (this.down.b === 2 || (this.down.b === 0 && h.orderMode())) h.onOrder(id); else if (this.down.b === 0) h.onSelect(id);
+      if (this.down.b === 2 || (this.down.b === 0 && h.orderMode())) h.onOrder(id, e.shiftKey); else if (this.down.b === 0) h.onSelect(id);
     }
+    if (this.boxEl) { const d = this.down; this.boxEl.remove(); this.boxEl = null; if (d && this.dragging) h.onBox?.(Math.min(d.x, e.clientX), Math.min(d.y, e.clientY), Math.max(d.x, e.clientX), Math.max(d.y, e.clientY)); }
     this.ptrs.delete(e.pointerId);
     if (!this.ptrs.size) { this.down = null; this.dragging = false; h.canvas.classList.remove('drag'); }
   }
 
-  dispose() { for (const f of this.cleanup) f(); this.cleanup.length = 0; this.keys.clear(); this.ptrs.clear(); }
+  private boxEl: HTMLDivElement | null = null;
+  private drawBox(x0: number, y0: number, x1: number, y1: number) {
+    if (!this.boxEl) { this.boxEl = document.createElement('div'); this.boxEl.id = 'selbox'; document.body.appendChild(this.boxEl); }
+    const s = this.boxEl.style; s.left = Math.min(x0, x1) + 'px'; s.top = Math.min(y0, y1) + 'px'; s.width = Math.abs(x1 - x0) + 'px'; s.height = Math.abs(y1 - y0) + 'px';
+  }
+
+  dispose() { this.boxEl?.remove(); this.boxEl = null; for (const f of this.cleanup) f(); this.cleanup.length = 0; this.keys.clear(); this.ptrs.clear(); }
 }

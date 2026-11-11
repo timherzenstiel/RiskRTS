@@ -1,5 +1,6 @@
 // Seeing the situation (design-command §1, §5): the left rail of panels, the Situation panel (our wars, borders in danger,
 // other wars), the border card opened from a balance chip, and the alerts queue.
+import { useState } from 'react';
 import { OVER, capacity, load, worksAt, type RegionState, AIR_RANGE, COST, FACTIONS, TREATY_NAMES, activeSpies, borderBalance, borderLabel, buildWorld, corpsAtPost, groundUnits, groupName, hops, hostileBorders, income, marchEta, techOn, treatyOf, type Balance, type Battle, type GameState } from '@riskrts/shared';
 import { useSim, useUi, type Overlay, type Panel } from '../game/store';
 import { click } from './actions';
@@ -13,7 +14,8 @@ import { inboxOf } from './Inbox';
 import { FortGrid } from './DrawerTabs';
 import { cutReason } from './Logistics';
 import { FrontsList } from './Generals';
-import { WarStory } from './Story';
+import { WarStory, useStory } from './Story';
+import { inLane, laneOn } from './lane';
 import { unlocked } from './Tutorial';
 
 const roman = (n: number) => ['', 'I', 'II', 'III'][n] ?? '';
@@ -28,36 +30,81 @@ function openBorder(b: { region: number; sector: number }) {
   rendererRef.current?.flyTo(b.region, 22);
 }
 
+/** A region whose loss would hurt at once: the capital, or one with a factory, barracks or port. */
+const vital = (g: GameState, region: number, me: number) => { const r = g.regions[region]; return r.capitalOf === me || r.factory || r.barracks || !!r.port; };
+
 // ---------------------------------------------------------------- left rail
 
 const RailIcon = ({ d }: { d: string }) => <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
 
-/** Panels and national sheets, one button each, down the left edge of the map. */
+/**
+ * The left rail (design-optimize §4.5): five groups instead of ten buttons. A group opens the member last used; with one of
+ * its panels open, a strip above the panel switches between the members. A group of sheets only (Files) opens a short menu.
+ */
+type Member = { k: NonNullable<Panel> | NonNullable<Overlay>; sheet?: boolean; label: string; title: string };
+const GROUPS: { id: string; label: string; icon: React.ReactNode; members: Member[] }[] = [
+  { id: 'sit', label: 'Situation', icon: <SwordsIcon size={22} />, members: [
+    { k: 'situation', label: 'Situation', title: 'Situation: wars, fronts and borders in danger' },
+    { k: 'staff', label: 'Inbox', title: 'Inbox: every decision waiting for you (G)' }] },
+  { id: 'forces', label: 'Forces', icon: <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />, members: [
+    { k: 'forces', label: 'Army', title: 'Forces: your corps and armies (O)' },
+    { k: 'navy', label: 'Navy', title: 'Navy: fleets and ports' }] },
+  { id: 'economy', label: 'Economy', icon: <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />, members: [
+    { k: 'economy', label: 'Economy', title: 'Economy: Production, shells, men, conscription and the nation' }] },
+  { id: 'abroad', label: 'Abroad', icon: <RailIcon d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" />, members: [
+    { k: 'intel', label: 'Intel', title: 'Intel: agents, scouts and what we know' },
+    { k: 'diplomacy', sheet: true, label: 'Diplomacy', title: 'Diplomacy: treaties and messages' }] },
+  { id: 'files', label: 'Files', icon: <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, members: [
+    { k: 'reports', sheet: true, label: 'Reports', title: 'After-action reports of the last battles, and the paper' },
+    { k: 'calendar', sheet: true, label: 'Calendar', title: 'War calendar: unlocks, rushes and doctrines' },
+    { k: 'rules', sheet: true, label: 'Rules', title: 'Rules: how fronts, corps, commanders, scouting, supply and men work, with the numbers' }] },
+];
+/** The member of each group opened last. */
+const lastOf: Record<string, string> = {};
+
 export function LeftRail() {
   const panel = useUi(s => s.panel), overlay = useUi(s => s.overlay), ui = useUi.getState;
+  const paper = useStory(x => x.fresh); const [menu, setMenu] = useState('');
   const sim = useSim(); if (!sim) return null;
-  const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3).length, inbox = inboxOf(sim.g, sim.me), staff = { n: inbox.length, crit: inbox.some(x => x.urg > 0) };
-  const p = (k: Panel, label: string, icon: React.ReactNode, badge?: number, what = '{0} borders in danger', calm = false, title = label, pulse = false) => !unlocked(sim.g, k ?? '') ? null : (
-    <button data-panel={k} className={'rb' + (panel === k ? ' on' : '') + (pulse ? ' pulse' : '')} aria-pressed={panel === k} title={t(title)} onClick={() => { Sfx.clunk(); ui().setPanel(panel === k ? null : k); }}>
-      {icon}<span>{t(label)}</span>{badge ? <em className={'rbadge' + (calm ? ' calm' : '')} aria-label={t(what, badge)}>{badge}</em> : null}
-    </button>
-  );
-  const o = (k: Overlay, label: string, icon: React.ReactNode, title: string) => !unlocked(sim.g, k ?? '') ? null : (
-    <button data-panel={k} className={'rb' + (overlay === k ? ' on' : '')} title={t(title)} onClick={() => { Sfx.clunk(); ui().setOverlay(k); }}>{icon}<span>{t(label)}</span></button>
-  );
+  const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3 && (b.massing || vital(sim.g, b.region, sim.me))).length, inbox = inboxOf(sim.g, sim.me), crit = inbox.some(x => x.urg > 0);
+  const count = (k: string) => k === 'situation' ? danger : k === 'staff' ? inbox.length : k === 'reports' && paper !== null ? -1 : 0;
+  const open = (grp: string, m: Member) => { Sfx.clunk(); lastOf[grp] = m.k; setMenu(''); if (m.sheet) ui().setOverlay(m.k as Overlay); else ui().setPanel(m.k as Panel); };
+  const groups = GROUPS.map(G => ({ ...G, members: G.members.filter(m => unlocked(sim.g, m.k)) })).filter(G => G.members.length);
+  const cur = groups.find(G => G.members.some(m => !m.sheet && m.k === panel));
   return (
-    <nav id="rail" className="plate" aria-label={t('War Office panels')}>
-      {p('situation', 'Situation', <SwordsIcon size={22} />, danger)}
-      {p('staff', 'Inbox', <RailIcon d="M4 6h16v12H4zM4 6l8 6 8-6" />, staff.n, '{0} decisions waiting', !staff.crit, 'Inbox: every decision waiting for you (G)', staff.crit && panel !== 'staff')}
-      {p('forces', 'Forces', <RailIcon d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5" />, 0, undefined, false, 'Forces: your corps and armies (O)')}
-      {p('economy', 'Economy', <RailIcon d="M4 20V10M10 20V4M16 20v-8M22 20H2" />, 0, undefined, false, 'Economy: Production, shells, men, conscription and the nation')}
-      {p('navy', 'Navy', <RailIcon d="M12 3v14M7 8h10M4 14c2 4 5 6 8 6s6-2 8-6" />)}
-      {p('intel', 'Intel', <RailIcon d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" />)}
-      {o('reports', 'Reports', <RailIcon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" />, 'After-action reports of the last battles')}
-      {o('diplomacy', 'Diplo', <HandshakeIcon />, 'Diplomacy: treaties and messages')}
-      {o('rules', 'Rules', <RailIcon d="M5 4h11l3 3v13H5zM9 9h7M9 13h7M9 17h4" />, 'Rules: how fronts, corps, commanders, scouting, supply and men work, with the numbers')}
-      {o('calendar', 'Calendar', <RailIcon d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4" />, 'War calendar: unlocks, rushes and doctrines')}
-    </nav>
+    <>
+      <nav id="rail" className="plate" aria-label={t('War Office panels')}>
+        {groups.map(G => {
+          const on = G === cur || G.members.some(m => m.sheet && m.k === overlay) || menu === G.id, first = G.members.find(m => m.k === lastOf[G.id]) ?? G.members[0];
+          const n = G.id === 'sit' ? (inbox.length || danger) : G.members.some(m => count(m.k) < 0) ? -1 : 0, hot = G.id === 'sit' && crit;
+          const click2 = () => {
+            if (G === cur) { Sfx.clunk(); ui().setPanel(null); return; }
+            // sheets cover the screen: a group of sheets offers its members first
+            if (G.members.length > 1 && G.members.every(m => m.sheet)) { Sfx.clunk(); setMenu(menu === G.id ? '' : G.id); return; }
+            open(G.id, first.sheet && G.members.some(m => !m.sheet) ? G.members.find(m => !m.sheet)! : first);
+          };
+          return (
+            <div key={G.id} className="rg">
+              <button data-panel={G.members[0].k} data-group={G.members.map(m => m.k).join(' ')} className={'rb' + (on ? ' on' : '') + (hot && !on ? ' pulse' : '')} aria-pressed={on} title={G.members.map(m => t(m.label)).join(' · ')} onClick={click2}>
+                {G.icon}<span>{t(G.label)}</span>{n ? <em className={'rbadge' + (hot ? '' : ' calm')} aria-label={n > 0 ? t('{0} waiting', n) : t('A new paper is out')}>{n > 0 ? n : '•'}</em> : null}
+              </button>
+              {menu === G.id && (
+                <div className="rmenu plate" role="menu">
+                  {G.members.map(m => <button key={m.k} role="menuitem" data-panel={m.k} title={t(m.title)} onClick={() => open(G.id, m)}>{t(m.label)}{count(m.k) < 0 ? <em className="rdot" aria-hidden="true">•</em> : null}</button>)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+      {cur && cur.members.length > 1 && (
+        <div id="ptabs" role="tablist" aria-label={t(cur.label)}>
+          {cur.members.map(m => { const c = count(m.k); return (
+            <button key={m.k} role="tab" data-panel={m.k} aria-selected={m.k === panel} aria-pressed={m.k === panel} title={t(m.title)} onClick={() => open(cur.id, m)}>{t(m.label)}{c > 0 ? <em className={m.k === 'staff' && crit ? 'hot' : ''}>{c}</em> : null}{m.sheet ? ' …' : ''}</button>
+          ); })}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -279,7 +326,9 @@ function alertsOf(g: GameState, me: number): Alert[] {
     key: 'atk' + b.id, level: 2, title: t('{0} under attack', W.regions[b.region].name), text: b.from >= 0 ? t('{0} attacks {1}', FACTIONS[b.attacker]?.name ?? 'The enemy', borderLabel(W, b.from)) : t('{0} attacks', FACTIONS[b.attacker]?.name ?? 'The enemy'), act: t('Go'),
     go: () => { useUi.getState().select(b.region); rendererRef.current?.flyToBattle(b.id, 8); },
   });
-  for (const b of hostileBorders(g, me)) if (b.massing || b.danger === 3) out.push({
+  // weak borders are reported where there is something to lose (capital, factory, barracks, port); elsewhere only when troops
+  // mass across (a colony with two battalions cannot man every border)
+  for (const b of hostileBorders(g, me)) if ((b.massing && (b.nb >= 0 || b.their.btl[1] + b.their.reserve[1] + b.their.incoming > 0)) || (b.danger === 3 && vital(g, b.region, me))) out.push({
     key: 'bd' + b.region + '|' + b.sector, level: b.massing ? 2 : 1, title: t(b.massing ? 'Massing at {0} – {1}' : 'Weak border: {0} – {1}', W.regions[b.region].name, b.nb >= 0 ? W.regions[b.nb].name : borderLabel(W, b.sector)),
     text: tn('ours {0} : theirs {1}', b.own.btl[0] + b.own.reserve[0], { raw: b.know ? rng([b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]]) : '?' }), act: t('Open'), go: () => openBorder(b),
   });
@@ -302,9 +351,9 @@ export function Alerts() {
   const sim = useSim(); const dismissed = useUi(s => s.dismissed);
   if (!sim || sim.g.over) return null;
   const { g, me } = sim, ui = useUi.getState;
-  const list = alertsOf(g, me).filter(a => (dismissed[a.key] ?? -1) < g.time).slice(0, 4);
+  const all = alertsOf(g, me).filter(a => (dismissed[a.key] ?? -1) < g.time), lane = laneOn(), list = all.slice(0, lane ? 2 : 4), more = all.length - list.length;
   if (!list.length) return null;
-  return (
+  return inLane('alert',
     <div id="alerts" aria-label={t('Alerts')} aria-live="polite">
       {list.map(a => (
         <div key={a.key} className={'alert-i plate l' + a.level}>
@@ -313,6 +362,7 @@ export function Alerts() {
           <button className="x" aria-label={t('Dismiss')} title={t('Dismiss for a minute')} onClick={() => ui().dismiss(a.key, g.time + 60)}><CloseIcon /></button>
         </div>
       ))}
+      {lane && more > 0 && <button className="lnk lane-more" onClick={() => { click(); ui().setPanel('situation'); }}>{t('{0} more in Situation', more)}</button>}
     </div>
   );
 }

@@ -8,11 +8,16 @@ import { battleAnchor, frontLevels, hostileBorders, OVER, capacity, load, type B
 import { getLang, langVersion, t, tx } from '../i18n';
 import { pins } from '../game/pins';
 
+/** Where a token may step to when its place is taken, in units of its own size. */
+/** Rough pixel sizes of the tokens that keep clear of each other. */
+const BOX_REGION = [50, 46] as const, BOX_REGION_SM = [36, 22] as const, BOX_CORPS = [54, 22] as const, BOX_CHIP = [76, 24] as const;
+const STEP: readonly (readonly [number, number])[] = [[0, 0], [0, -1], [1, 0], [-1, 0], [0, 1], [1, -1], [-1, -1], [0, -2]];
+
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
 function garrisonLabel(r: GameState['regions'][number], merged = false) {
   const v = r.vis ?? 3, n = r.cs && !merged ? totalUnits(mainOf(r)) : totalUnits(r.units);
   if (v >= 3) return String(n);
-  if (r.est) return r.est[1] > 0 ? `~${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '~0';
+  if (r.est) return r.est[1] > 0 ? `≈${Math.max(1, Math.round((r.est[0] + r.est[1]) / 200))}` : '≈0';
   if (v === 2) return `${n}?`;
   return '?';
 }
@@ -31,7 +36,7 @@ function sumCorps(list: Corps[]): Corps {
   return { id: list[0].id, n: list[0].n, p: list[0].p, u, m: emptyUnits(), mor: 0, est: est ? [lo, hi] : undefined, ord: ord as Corps['ord'], ready: ready === Infinity ? undefined : ready, now, since: since === Infinity ? undefined : since };
 }
 
-interface RegionLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; bd: HTMLSpanElement; pp: HTMLSpanElement; pips: string; badges: string; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string; st?: boolean }
+interface RegionLabel { mine?: boolean; el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; bd: HTMLSpanElement; pp: HTMLSpanElement; pips: string; badges: string; count: string; color: string; sel: boolean; tg: boolean; sm: boolean; names: boolean; shown: boolean; tf: string; st?: boolean }
 interface CorpsLabel { el: HTMLDivElement; n: HTMLSpanElement; nm: HTMLSpanElement; key: string; shown: boolean; tf: string; seen: number }
 
 /** Map symbols of the unit types (staff-map style): a crossed box for infantry, a ringed dot for MGs, a dot for guns, an oval for tanks. */
@@ -131,11 +136,24 @@ export class Labels {
     });
   }
 
-  private place(l: { el: HTMLElement; shown: boolean; tf: string }, ctx: LabelContext, x: number, y: number, z: number) {
+  /** Screen boxes of the tokens placed this frame (x0, y0, x1, y1), so later ones can step aside (design-optimize §5.3). */
+  private readonly boxes: number[] = [];
+  /**
+   * Put a label at a world point. With `box` (its rough width and height in pixels) the label steps aside when it would cover a
+   * token placed earlier this frame: up, right, left, down, in that order.
+   */
+  private place(l: { el: HTMLElement; shown: boolean; tf: string }, ctx: LabelContext, x: number, y: number, z: number, box?: readonly [number, number]) {
     ctx.cam.project(x, y, z, ctx.w, ctx.h, P, v3);
     if (P.z > 1 || P.x < -80 || P.x > ctx.w + 80 || P.y < -40 || P.y > ctx.h + 40) { this.hide(l); return; }
     if (!l.shown) { l.el.style.display = ''; l.shown = true; }
-    const tf = `translate(${P.x | 0}px,${P.y | 0}px) translate(-50%,-100%)`;
+    let px = P.x | 0, py = P.y | 0;
+    if (box) {
+      const [w, h] = box, B = this.boxes;
+      const free = (cx: number, cy: number) => { const x0 = cx - w / 2, y0 = cy - h, x1 = cx + w / 2, y1 = cy; for (let i = 0; i < B.length; i += 4) if (x0 < B[i + 2] && x1 > B[i] && y0 < B[i + 3] && y1 > B[i + 1]) return false; return true; };
+      for (const [dx, dy] of STEP) { const cx = px + dx * (w + 3), cy = py + dy * (h + 3); if (free(cx, cy)) { px = cx; py = cy; break; } }
+      B.push(px - w / 2, py - h, px + w / 2, py);
+    }
+    const tf = `translate(${px}px,${py}px) translate(-50%,-100%)`;
     if (tf !== l.tf) { l.tf = tf; l.el.style.transform = tf; }
   }
   private hide(l: { el: HTMLElement; shown: boolean }) { if (l.shown) { l.el.style.display = 'none'; l.shown = false; } }
@@ -167,6 +185,7 @@ export class Labels {
 
   update(ctx: LabelContext) {
     if (this.lv !== langVersion()) { this.lv = langVersion(); this.relabel(); }
+    this.boxes.length = 0;
     this.drawPin(ctx);
     const { g, cam } = ctx, dist = cam.dist, showNames = dist < 40, sm = dist > 95;
     this.regions.forEach((l, i) => {
@@ -174,6 +193,7 @@ export class Labels {
       if (!rs || rs.battle >= 0) { this.hide(l); return; }
       const color = FACTIONS[rs.owner]?.color ?? '#888';
       if (color !== l.color) { l.color = color; l.el.style.setProperty('--c', color); }
+      const mine = rs.owner === ctx.me && ctx.me >= 0; if (mine !== !!l.mine) { l.mine = mine; l.el.classList.toggle('mine', mine); }
       // Supply mode: own regions show load / capacity, coloured by how full they are
       const sup = this.mode === 3 && g && rs.owner === ctx.me && ctx.me >= 0 ? supplyLabel(g, rs) : null;
       const s = sup ? sup[0] : this.mode === 4 ? intelLabel(rs) : garrisonLabel(rs, this.band === 0); if (s !== l.count) { l.count = s; l.n.textContent = s; l.el.dataset.v = String(rs.vis ?? 3); }
@@ -196,7 +216,7 @@ export class Labels {
         if (full) pips = `<i class="ps" style="--v:${st.toFixed(2)};--h:${Math.round(st * 110)}"></i><i class="pm" style="--v:${mo.toFixed(2)};--h:${Math.round(mo * 110)}"></i>`;
       }
       if (pips !== l.pips) { l.pips = pips; l.pp.innerHTML = pips; }
-      this.place(l, ctx, def.cx, ctx.anchorH(i) + 1.05, def.cz);
+      this.place(l, ctx, def.cx, ctx.anchorH(i) + 1.05, def.cz, sm ? BOX_REGION_SM : BOX_REGION);
     });
     this.cities.forEach((c, i) => {
       const l = this.cityLabels[i], lim = c.size === 3 ? 30 : c.size === 2 ? 20 : 11;
@@ -302,9 +322,10 @@ export class Labels {
         }
         l.seen = ctx.frame;
         const on = r.owner === ctx.me && list.some(c => ctx.corps.includes(c.id));
+        const mine = r.owner === ctx.me && ctx.me >= 0; if (mine !== l.el.classList.contains('mine')) l.el.classList.toggle('mine', mine);
         this.corpsText(l, g, r.owner, sumCorps(list), dist < 32 || r.id === ctx.sel || on, list.length, on);
         const p = sectorPoint(this.world, r.id, post);
-        this.place(l, ctx, p.x, ctx.anchorH(r.id) + .55, p.z);
+        this.place(l, ctx, p.x, ctx.anchorH(r.id) + .55, p.z, BOX_CORPS);
       }
     }
     for (const [k, l] of this.corps) if (l.seen !== ctx.frame) { l.el.remove(); this.corps.delete(k); }
@@ -328,7 +349,7 @@ export class Labels {
         const p = sectorPoint(this.world, b.region, b.sector), R = this.world.regions[b.region];
         // a little inside our side of the border, so the chips of the two sides do not overlap
         const dx = R.cx - p.x, dz = R.cz - p.z, L = Math.hypot(dx, dz) || 1, k = Math.min(.6, L * .3);
-        this.place(l, ctx, p.x + dx / L * k, ctx.anchorH(b.region) + .7, p.z + dz / L * k);
+        this.place(l, ctx, p.x + dx / L * k, ctx.anchorH(b.region) + .7, p.z + dz / L * k, BOX_CHIP);
       }
     }
     for (const [k, l] of this.chips) if (l.seen !== ctx.frame) { l.el.remove(); this.chips.delete(k); }
@@ -399,7 +420,7 @@ export class Labels {
 
   /** Text and state classes of a corps marker: symbol, battalions (or the estimate), name up close, holding / assembling / attacking. */
   private corpsText(l: CorpsLabel, g: GameState, f: number, c: Corps, named: boolean, many = 1, on = false) {
-    const n = groundUnits(c.u), est = c.est ? `~${Math.max(1, Math.round((c.est[0] + c.est[1]) / 200))}` : String(n);
+    const n = groundUnits(c.u), est = c.est ? `≈${Math.max(1, Math.round((c.est[0] + c.est[1]) / 200))}` : String(n);
     const ord = c.ord ?? 0, left = ord >= 1 ? Math.max(0, (c.ready ?? 0) - g.time) : 0;
     const dug = ord === 0 && c.since !== undefined && g.time - c.since >= 40;
     const state = ord >= 1 ? (left > 0 && !c.now ? 'asm' : 'atk') : dug ? 'dug' : 'hold';
@@ -480,8 +501,9 @@ function intelLabel(r: GameState['regions'][number]) {
   return '?';
 }
 
-const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `~${a[0]}–${a[1]}`;
-/** Text, danger class and tooltip of a balance chip: our battalions | ratio bar | theirs (exact, estimate, report date or ?). */
+// an estimate shows as a range; the range itself says it is one
+const rng = (a: [number, number]) => a[0] === a[1] ? String(a[0]) : `${a[0]}–${a[1]}`;
+/** Text, danger class and tooltip of a balance chip: our battalions : theirs (exact, a range, or ?). */
 function chipText(l: ChipLabel, b: Balance, W: World) {
   const own = b.own.btl[0] + b.own.reserve[0], th: [number, number] = [b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]];
   const their = b.know === 0 ? '?' : rng(th) + (b.their.incoming ? ` +${b.their.incoming}` : '');
@@ -489,7 +511,8 @@ function chipText(l: ChipLabel, b: Balance, W: World) {
   const key = own + '|' + their + '|' + b.danger + '|' + fill.toFixed(2) + (b.know === 2 ? b.day : '') + (b.massing ? 'm' : '');
   if (key === l.key) return; l.key = key;
   l.el.className = 'bal d' + (b.danger < 0 ? 'u' : b.danger) + (b.massing ? ' mass' : '') + (b.know === 2 ? ' old' : '');
-  l.el.innerHTML = `<b>${own}</b><i style="--f:${fill.toFixed(2)}"></i><b>${their}</b>`;
+  // ours : theirs (design-optimize §4.6); the frame colour carries the balance
+  l.el.innerHTML = `<b class="o">${own}</b><u>:</u><b>${their}</b>`;
   const where = b.nb >= 0 ? t('Border with {0}', W.regions[b.nb].name) : t('Coast');
   const why = b.danger < 0 ? t('Nothing known of the other side: send a patrol or a reconnaissance flight.') : b.massing ? t('Troops across the border are assembling for an attack.') : [t('Safe: we are clearly stronger.'), t('About even.'), t('They may be stronger.'), t('In danger: they are much stronger.')][b.danger];
   const ours = t('Ours: {0} btl on the border', b.own.btl[0]) + (b.own.reserve[0] ? t(' + {0} from the reserve', b.own.reserve[0]) : '') + (b.own.trench ? ', ' + t('trench {0}', 'I'.repeat(Math.min(3, b.own.trench))) : '') + (b.own.wire ? ', ' + t('wire') : '') + (b.own.defs ? ', ' + (b.own.defs > 1 ? t('{0} defences', b.own.defs) : t('{0} defence', b.own.defs)) : '');

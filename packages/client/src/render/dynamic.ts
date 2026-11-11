@@ -24,10 +24,22 @@ const BLD = .5;
 /** Dark outline under the attack arrows, so a grey or purple arrow still reads on land of the same colour. */
 const INK = new THREE.Color(.04, .035, .03);
 
+/**
+ * How much larger than life troop figures are drawn at camera distance `dist`: life size up close, growing with the distance
+ * from the battle band outwards so a figure stays roughly a dozen pixels tall, capped where the map shows whole continents.
+ */
+export const unitScale = (dist: number) => Math.max(1, Math.min(11, dist / 6));
+/** Formations spread less than their figures grow, so a corps stays a compact block. */
+const spread = (k: number) => 1 + (k - 1) * .55;
+/** Beyond this camera distance the map shows continents: no figures, the tokens carry the numbers. */
+const UNIT_FAR = 105;
+
 export class DynamicDraw {
   private factT = 0; private holdT = 0;
   /** Camera distance of the frame being drawn. */
   private dist = 99;
+  /** Scale of troop figures for this frame (see unitScale). */
+  private unitK = 1;
   /** Highlighted sector while the fortify tab is open: [region, sector] or null. */
   marker: [number, number] | null = null;
   /** Map layer (0 all, 1 troops, 2 industry) and the selected region (its borders always show their front lines). */
@@ -38,7 +50,9 @@ export class DynamicDraw {
 
   /** Garrison figures, flags, factories, barracks, airfields, trenches and fixed defences. */
   regions(g: GameState, rig: CameraRig, T: number) {
-    const m = this.m, near = rig.dist < 26, cull = rig.dist * 3 + 8, S = MAP_S; this.dist = rig.dist;
+    const m = this.m, near = rig.dist < 26, cull = rig.dist * 3 + 8; this.dist = rig.dist;
+    // troops keep about the same size on screen from the battle band outwards, so a corps reads as a block of men at front zoom
+    const UK = this.unitK = unitScale(rig.dist), S = MAP_S * UK;
     for (const def of this.world.regions) {
       const t = g.regions[def.id], x = def.cx, z = def.cz;
       if (Math.abs(x - rig.tx) > cull || Math.abs(z - rig.tz) > cull) continue;
@@ -73,10 +87,11 @@ export class DynamicDraw {
       if (this.layer !== 2) this.frontLines(g, def.id, y, rig.dist);
       if (this.layer === 2) continue;
       // the main army in the middle, each corps at its border (a region in battle keeps only what is not fighting)
-      if (t.battle < 0 || !near) this.garrison(x, y, z, f, t.cs ? mainOf(t) : t.units, S);
+      if (rig.dist > UNIT_FAR) continue;
+      if (t.battle < 0 || !near) this.garrison(x, y, z, f, t.cs ? mainOf(t) : t.units, S, 0, UK);
       if (t.cs) for (const ks of new Set(t.cs.filter(c => c.p >= 0).map(c => c.p))) {
-        const p = sectorPoint(this.world, def.id, ks), dx = x - p.x, dz = z - p.z, L = Math.hypot(dx, dz) || 1, px = p.x + dx / L * .22, pz = p.z + dz / L * .22;
-        this.garrison(px, this.hAt(px, pz, y), pz, f, postUnits(t, ks), S * .9, Math.atan2(-dx, -dz));
+        const p = sectorPoint(this.world, def.id, ks), dx = x - p.x, dz = z - p.z, L = Math.hypot(dx, dz) || 1, back = Math.min(L * .45, .22 * spread(UK)), px = p.x + dx / L * back, pz = p.z + dz / L * back;
+        this.garrison(px, this.hAt(px, pz, y), pz, f, postUnits(t, ks), S * .9, Math.atan2(-dx, -dz), UK);
       }
     }
   }
@@ -120,15 +135,27 @@ export class DynamicDraw {
   }
 
   /** A small formation: up to 12 riflemen, then gun teams, field guns and tanks beside them. */
-  private garrison(x: number, y: number, z: number, f: number, u: Units, S: number, face = 0) {
-    const m = this.m, co = Math.cos(face), si = Math.sin(face);
+  /**
+   * A group of troops at its post. `k` is the zoom scale of the figures (1 up close): further out the formation is drawn with
+   * fewer, larger figures on a plate in the owner's colour, so it reads as that power's troops (design-optimize §5.4).
+   */
+  private garrison(x: number, y: number, z: number, f: number, u: Units, S: number, face = 0, k = 1) {
+    const m = this.m, co = Math.cos(face), si = Math.sin(face), far = k > 1.35, sk = spread(k);
     // local (lx along the line, lz forward) to world
-    const at = (lx: number, lz: number): [number, number] => [x + lx * co + lz * si, z - lx * si + lz * co];
-    const inf = u.inf ? Math.min(12, Math.max(1, Math.ceil(u.inf / 2))) : 0, cols = 4, sp = .055;
-    for (let k = 0; k < inf; k++) { const cx = (k % cols) - (cols - 1) / 2, cz = Math.floor(k / cols); const [wx, wz] = at(cx * sp, .05 - cz * sp); m.soldier(wx, y, wz, face, f, S, false, 0); }
-    for (let k = 0; k < Math.min(3, u.mg); k++) { const [wx, wz] = at(-.09 + k * .09, .12); m.unit('mg', wx, y, wz, face, f, S * .9, 0, 0); }
-    for (let k = 0; k < Math.min(3, u.art); k++) { const [wx, wz] = at(-.28, -.02 - k * .1); m.unit('art', wx, y, wz, face + .35, f, S * .9, 0, 0); }
-    for (let k = 0; k < Math.min(3, u.tank); k++) { const [wx, wz] = at(.3, -.02 - k * .13); m.unit('tank', wx, y, wz, face - .4, f, S * .9, 0, 0); }
+    const at = (lx: number, lz: number): [number, number] => [x + lx * sk * co + lz * sk * si, z - lx * sk * si + lz * sk * co];
+    const inf = u.inf ? Math.min(far ? 6 : 12, Math.max(far ? 2 : 1, far ? u.inf : Math.ceil(u.inf / 2))) : 0, cols = far ? 3 : 4, sp = .055, heavy = far ? 2 : 3;
+    const nM = Math.min(heavy, u.mg), nA = Math.min(heavy, u.art), nT = Math.min(heavy, u.tank);
+    if (far && f >= 0 && inf + nM + nA + nT > 0) {
+      // the plate: a dark rim, then the owner's colour (ours brighter), lying on the ground under the formation
+      const w = (.22 + (nA ? .16 : 0) + (nT ? .18 : 0)) * sk, d = (.12 + Math.ceil(inf / cols) * sp + (nM ? .06 : 0)) * sk, cx = ((nT ? .09 : 0) - (nA ? .08 : 0)) * sk, cz = .03 * sk;
+      const px = x + cx * co + cz * si, pz = z - cx * si + cz * co, own = f === this.me;
+      m.part(px, y + .012, pz, face, 0, 0, 0, w + .05 * sk, .012, d + .05 * sk, INK, m.glowPool);
+      m.part(px, y + .02, pz, face, 0, 0, 0, w, .012, d, own ? facCol[f] : this.dimCol(f), m.glowPool);
+    }
+    for (let i = 0; i < inf; i++) { const cx = (i % cols) - (cols - 1) / 2, cz = Math.floor(i / cols); const [wx, wz] = at(cx * sp, .05 - cz * sp); m.soldier(wx, y, wz, face, f, S, false, 0); }
+    for (let i = 0; i < nM; i++) { const [wx, wz] = at(-.09 + i * .09, .12); m.unit('mg', wx, y, wz, face, f, S * .9, 0, 0); }
+    for (let i = 0; i < nA; i++) { const [wx, wz] = at(-.28, -.02 - i * .1); m.unit('art', wx, y, wz, face + .35, f, S * .9, 0, 0); }
+    for (let i = 0; i < nT; i++) { const [wx, wz] = at(.3, -.02 - i * .13); m.unit('tank', wx, y, wz, face - .4, f, S * .9, 0, 0); }
   }
 
   /** Fixed defences stand on their border sector, facing the neighbour they guard. */
@@ -277,32 +304,33 @@ export class DynamicDraw {
    * Figures are roughly one per unit (capped), so a big army reads as a long column.
    */
   private column(a: GameState['armies'][number], x: number, z: number, face: number, T: number) {
-    const m = this.m, S = MAP_S, u = a.units, c = Math.cos(face), s = Math.sin(face), f = a.owner;
+    // on the march the figures grow with the zoom like garrisons do, and the column thins out so it keeps its length on screen
+    const zk = this.unitK, far = zk > 1.35, m = this.m, S = MAP_S * zk, u = a.units, c = Math.cos(face), s = Math.sin(face), f = a.owner;
     const y0 = lerp(this.terrain.anchorH(a.from), this.terrain.anchorH(a.to), a.t);
-    const nT = Math.min(8, u.tank), nI = Math.min(45, u.inf), nM = Math.min(6, u.mg), nA = Math.min(5, u.art);
-    const TS = .15, IS = .055, MS = .085, AS = .14;
+    const nT = Math.min(far ? 2 : 8, u.tank), nI = Math.min(far ? 9 : 45, far ? u.inf * 2 : u.inf), nM = Math.min(far ? 2 : 6, u.mg), nA = Math.min(far ? 2 : 5, u.art);
+    const sk = spread(zk), TS = .15 * sk, IS = .07 * sk, MS = .085 * sk, AS = .14 * sk;
     const len = Math.ceil(nT / 2) * TS + Math.ceil(nI / 3) * IS + Math.ceil(nM / 2) * MS + nA * AS;
     // dust kicked up on the march (not for troops waiting at the start line or going by sea): vehicles leave a thin trail
     // behind them, boots only the odd faint puff. Per second, so it doesn't depend on the frame rate.
-    const veh = nT + nA * .5, rate = veh > 0 ? Math.min(3, .8 + veh * .35) : nI > 0 ? .5 : 0;
+    const veh = nT + nA * .5, rate = (veh > 0 ? Math.min(3, .8 + veh * .35) : nI > 0 ? .5 : 0) * (far ? 2.2 : 1);
     if (!a.sea && !a.wait && a.t > 0 && a.t < 1 && Math.random() < rate * this.dtA) {
       const r = Math.random(), bx = x - s * len * (.5 + r * .3), bz = z - c * len * (.5 + r * .3), big = veh > 0;
-      this.fx.spawn(bx + (Math.random() - .5) * .05, y0 + .02, bz + (Math.random() - .5) * .05, (Math.random() - .5) * .02, .015, (Math.random() - .5) * .02, 0, big ? 1.1 : .8, .03, big ? .08 : .05, K.dust, F_DUST);
+      this.fx.spawn(bx + (Math.random() - .5) * .05, y0 + .02, bz + (Math.random() - .5) * .05, (Math.random() - .5) * .02, .015, (Math.random() - .5) * .02, 0, (big ? 1.1 : .8) * (far ? 1.6 : 1), .03 * zk, (big ? .08 : .05) * zk, K.dust, F_DUST);
     }
     let fwd = len / 2;
     // one helper places a figure `fwd` along the march and `side` to the right, standing on the ground
     const P = (side: number) => { const px = x + s * fwd + c * side, pz = z + c * fwd - s * side; return [px, this.hAt(px, pz, y0), pz] as const; };
     for (let k = 0; k < nT; k += 2) {
-      for (let j = 0; j < Math.min(2, nT - k); j++) { const [px, py, pz] = P(nT - k === 1 ? 0 : (j ? .07 : -.07)); m.unit('tank', px, py, pz, face, f, S * .9, 0, 0); }
+      for (let j = 0; j < Math.min(2, nT - k); j++) { const [px, py, pz] = P(nT - k === 1 ? 0 : (j ? .07 : -.07) * sk); m.unit('tank', px, py, pz, face, f, S * .9, 0, 0); }
       if (Math.random() < .02) { const [px, py, pz] = P(0); this.fx.spawn(px - s * .08, py + .05, pz - c * .08, 0, .08, 0, 0, 1.6, .02, .07, K.smoke2, F_MAP); }
       fwd -= TS;
     }
     for (let k = 0; k < nI; k++) {
-      const col = k % 3, side = (col - 1) * .04 + Math.sin(k * 7.1) * .005;
+      const col = k % 3, side = ((col - 1) * .04 + Math.sin(k * 7.1) * .005) * sk;
       const [px, py, pz] = P(side); m.soldier(px, py, pz, face, f, S, false, T * 9 + k * 1.3);
       if (col === 2 || k === nI - 1) fwd -= IS;
     }
-    for (let k = 0; k < nM; k++) { const [px, py, pz] = P(k % 2 ? .045 : -.045); m.unit('mg', px, py, pz, face, f, S * .9, T * 9 + k, 0); if (k % 2 || k === nM - 1) fwd -= MS; }
+    for (let k = 0; k < nM; k++) { const [px, py, pz] = P((k % 2 ? .045 : -.045) * sk); m.unit('mg', px, py, pz, face, f, S * .9, T * 9 + k, 0); if (k % 2 || k === nM - 1) fwd -= MS; }
     for (let k = 0; k < nA; k++) { const [px, py, pz] = P(0); m.unit('art', px, py, pz, face, f, S * .9, 0, 0); fwd -= AS; }
   }
 

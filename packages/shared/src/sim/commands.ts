@@ -1,5 +1,6 @@
 // Player commands. Every mutation a player can cause goes through applyCommand, which validates it.
 // The same function runs on the host (or a future dedicated server) for humans and AI alike.
+import { frontOrder } from './staff';
 import {
   AIR_RANGE, COST, DT, FORMATION, GROUND_TYPES, MAX_SAND, MAX_TRENCH, MAX_WIRE, SLOT_USE, TRENCH_COST, UNIT_TYPES, UT, emptyUnits, groundUnits, isDef, isWork,
   type FortKind, type UnitType,
@@ -352,7 +353,9 @@ export function moveCorps(g: GameState, fid: number, region: number, id: number,
   if (!route && coastal(region) && coastal(to)) { c.man = true; return shipTroops(g, fid, region, c.p, to, toPost, 1, { cid: id }); }
   if (!route) return `No route through your own land leads from ${W.regions[region].name} to ${W.regions[to].name}.`;
   c.ord = 0; c.now = false;
-  const tag = { ...tagOf(c), man: true }, mor = c.mor, st = c.st ?? A.stance, from = c.p;
+  // simple command: troops sent to a region (not to a border of it) are that region's when they arrive, to place as it sees fit
+  const loose = !!g.cfg.staff && toPost < 0 && to !== region;
+  const tag = loose ? { ...tagOf(c), man: undefined, army: undefined } : { ...tagOf(c), man: true }, mor = c.mor, st = c.st ?? A.stance, from = c.p;
   const out = takeCorps(A, c, n);
   if (n && corpsSize(c) > 0) renumber(g, A, c);
   const fb = region === to && toPost >= 0 ? frontsOf(g, region).find(b => b.from === toPost && b.def === fid) : undefined;
@@ -696,6 +699,7 @@ export function applyCommand(g: GameState, fid: number, c: Command): string | nu
     case 'corpsSet': return corpsSet(g, fid, c.region, c.id, c.st, c.man, typeof c.refill === 'boolean' ? c.refill : undefined);
     case 'army': return formArmyHq(g, fid, c.corps, c.front, c.gen);
     case 'armyAssign': return assignArmy(g, fid, c.army, c.corps, !!c.on);
+    case 'front': return frontOrder(g, fid, c.region, c.order, c.target);
     case 'armySet': return setArmy(g, fid, c.army, c);
     case 'reply': { if (!['yes', 'recruit', 'transfer', 'deny', 'more', 'later'].includes(c.opt)) return 'Invalid order.'; const e = reply(g, fid, c.req, c.opt, c.n); if (!e) tutReplied(g, fid); return e; }
     case 'relieve': return relieve(g, fid, c.army, c.gen);

@@ -1,5 +1,6 @@
 // Region card in the War Office sidebar: header, fronts, intelligence, garrison, works, and (for own regions) the Overview, Recruit
 // and Build tabs. Border works live on the border card; nation-wide business in the left panels (design-command §5).
+import { SimpleTroops, isSimple } from './simple';
 import { useState } from 'react';
 import { WEATHER, TREATY_NAMES, railOpen, railsOf, weatherAt, activeSpies, techOn, treatyOf } from '@riskrts/shared';
 import { AIR_RANGE, CONT, COST, DT, FACTIONS, FORMATION, STANCES, UNIT_TYPES, UT, battleCounts, buildWorld, hops, maxTrench, unitPower, worksAt, type Battle, type GameState, type Stance } from '@riskrts/shared';
@@ -66,7 +67,7 @@ export function Drawer() {
   const sim = useSim(); const sel = useUi(s => s.sel); const tab = useUi(s => s.tab);
   if (!sim || sel < 0) return null;
   const { g, me } = sim; const W = buildWorld(); const wr = W.regions[sel]; const r = g.regions[sel];
-  const own = r.owner === me; const F = FACTIONS[r.owner]; const ui = useUi.getState;
+  const own = r.owner === me; const F = FACTIONS[r.owner]; const ui = useUi.getState; const simple = isSimple(g);
   const vis = own ? 3 : r.vis ?? 3, known = vis >= 3 || vis === 2;
   const { u: gar, m: men } = forceOf(g, r);
   const myNb = wr.adj.filter(i => g.regions[i].owner === me);
@@ -129,7 +130,7 @@ export function Drawer() {
           <span className="str">{t('strength|Power')} <b>{Math.round(unitPower(gar) * (.3 + .7 * str) + defPow)}</b></span>
         </div>
       )}
-      {own && (
+      {own && !simple && (
         <div className="stance-row">
           <span className="lv-l" title={t('How the garrison fights when attacked; armies marching out take the stance with them')}>{t('Stance')}</span>
           <div className="seg" role="group" aria-label={t('Garrison stance')}>
@@ -158,7 +159,8 @@ export function Drawer() {
             {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { Sfx.clunk(); ui().setTab(k); }}>{t(l)}</button>)}
           </div>
           <div className="tb-body" role="tabpanel">
-            {tab === 'over' && (
+            {tab === 'over' && simple && <SimpleTroops g={g} me={me} r={r} />}
+            {tab === 'over' && !simple && (
               <>
                 <DeployTab region={r} id={sel} />
                 <BordersList r={r} />

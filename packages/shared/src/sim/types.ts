@@ -43,6 +43,8 @@ export interface FactionState {
   docOffer?: number; docDue?: number;
   /** How far this power trusts each other power's word (0..1); broken treaties lower it. */
   trust?: number[];
+  /** Simple command: regions whose front the player runs himself (front order 'mine'); the staff forms no army there. */
+  mine?: number[];
   /** Its player is away (dedicated server): the computer stands in but keeps the player's stances. */
   away?: boolean;
   /** Armies and corps raised so far (their numbers name the next ones). */
@@ -479,8 +481,14 @@ export interface GameSettings {
   vote?: boolean;
   /** Battle pace: 0 fast, 1 normal, 2 long. */
   pace: number;
+  /** Simple command (design-simple): a staff runs each human power's fronts, requests, shell output and guns; the player gives
+   *  front orders and moves troops by region. */
+  staff?: boolean;
 }
 export const DEFAULT_SETTINGS: GameSettings = { attackCap: 3, pace: 1 };
+
+/** A front order under the simple command (design-simple §3): the general holds, attacks a target, or leaves the front to the player. */
+export type FrontOrder = 'hold' | 'attack' | 'mine';
 export const ATTACK_CAPS = [1, 2, 3, 5, 0] as const;
 export const PACES = [
   { name: 'Fast', rof: .65, charge: 110, go: 40, fuel: 30, move: .6, desc: 'Short, bloody battles' },
@@ -668,6 +676,7 @@ export type Command =
   /** Armies: form one from corps (its front starts with their regions), put corps in or out, change its settings, answer a request. */
   | { t: 'army'; corps: number[]; front?: number[]; gen?: number }
   | { t: 'armyAssign'; army: number; corps: number[]; on: boolean }
+  | { t: 'front'; region: number; order: FrontOrder; target?: number }
   | { t: 'armySet'; army: number; mandate?: Mandate; target?: number; budget?: number; front?: number[]; standing?: ReqKind[]; auto?: boolean }
   | { t: 'reply'; req: number; opt: 'yes' | 'recruit' | 'transfer' | 'deny' | 'more' | 'later'; n?: number }
   | { t: 'relieve'; army: number; gen?: number }

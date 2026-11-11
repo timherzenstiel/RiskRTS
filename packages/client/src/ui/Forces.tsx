@@ -66,7 +66,7 @@ export function orderCorps(target: number, pt?: { x: number; z: number }, sure =
     const f = lookCorps(g, me, id); if (!f) continue;
     const cmd = T.owner === me
       ? { t: 'moveCorps' as const, region: f.r.id, id, to: target, toPost: postAt(W, target, pt) }
-      : { t: 'attackCorps' as const, region: f.r.id, id, to: target, goal: ui.goal as Order };
+      : { t: 'attackCorps' as const, region: f.r.id, id, to: target, goal: (g.cfg?.staff ? 2 : ui.goal) as Order };
     const e = s.send(cmd); if (e) err ??= e; else ok++;
   }
   if (!ok && !err) err = 'The selected corps are on the move or in battle. Wait until they stand at a post.';

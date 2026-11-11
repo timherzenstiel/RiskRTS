@@ -50,7 +50,8 @@ export function inboxOf(g: GameState, me: number): InboxItem[] {
   const W = buildWorld(), st = ui(), out: InboxItem[] = [], f = g.factions[me];
   if (!f) return out;
   // commanders' requests
-  for (const q of (g.requests ?? []).filter(q => q.owner === me)) {
+  // commanders' requests (under the simple command the staff answers them: design-simple §8)
+  for (const q of g.cfg?.staff ? [] : (g.requests ?? []).filter(q => q.owner === me)) {
     const h = (g.hq ?? []).find(x => x.id === q.army), rt = reqText(g, me, q);
     const opts: Opt[] = rt.opts.map(o => ({ label: o.label, danger: o.danger, off: o.off, title: o.title, primary: o.opt === 'yes' || o.opt === 'recruit', run: () => send({ t: 'reply', req: q.id, opt: o.opt, n: o.n }) }));
     if (h && (STANDING_KINDS as readonly ReqKind[]).includes(q.kind) && !h.standing.includes(q.kind) && SHORT_KIND[q.kind]) {
@@ -197,7 +198,7 @@ export function InboxWatcher() {
     if (fresh.length) {
       next = [...next, ...fresh.map(x => ({ key: x.key, until: x.urg > 0 ? Infinity : now + 15 }))].slice(-3);
       if (fresh.some(x => x.urg > 0)) Sfx.ring(); else Sfx.teletype();
-      if (fresh.some(x => x.urg >= 2 && x.src === 'cmd')) st.autoPauseFor('urgent');
+      if (!sim.g.cfg?.staff && fresh.some(x => x.urg >= 2 && x.src === 'cmd')) st.autoPauseFor('urgent');
     }
     if (next.length !== st.toasts.length || next.some((x, i) => x.key !== st.toasts[i]?.key)) useUi.setState({ toasts: next });
     if (st.inboxFocus && !keys.has(st.inboxFocus)) st.focusInbox(null);

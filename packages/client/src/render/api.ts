@@ -13,7 +13,7 @@ export interface RendererCallbacks {
   onSelect(regionId: number): void;
   /** Right click, or a click while orderMode is on (`zone`: the sea zone clicked, when it was water). */
   /** `fast`: Shift was held, an attack goes at once without its card. */
-  onOrder(regionId: number, zone?: number, pt?: { x: number; z: number }, fast?: boolean): void;
+  onOrder(regionId: number, zone?: number, pt?: { x: number; z: number }, fast?: boolean, half?: boolean): void;
   onHover(regionId: number): void;
 }
 

@@ -9,9 +9,12 @@ import { orderCorps, corpsTitle } from './Forces';
 import { nm } from './format';
 import { t } from '../i18n';
 import { tn } from './LangPicker';
-import { frontLevels, corpsIn } from '@riskrts/shared';
+import { frontLevels, corpsIn, frontOrderOf } from '@riskrts/shared';
 
 export { lastPointer } from './pointer';
+
+/** Whether the game on screen uses the simple command (set while the card renders, read by its key handler). */
+const simpleRef = { on: false };
 
 /** How an attack looks before it starts: 2 good, 1 open, 0 bad, -1 nothing known. */
 export function oddsOf(mine: number, their: [number, number], known: boolean): -1 | 0 | 1 | 2 {
@@ -28,20 +31,22 @@ export function AttackAsk() {
     const a = ui().attackAsk; if (!a) return;
     click(); ui().setGoal(k as 1 | 2); ui().askAttack(null);
     if (a.from !== undefined) ui().march(a.from, a.target); else orderCorps(a.target, undefined, true);
+    if (simpleRef.on) useUi.setState({ corps: [] });
   };
+  const cancel = () => { ui().askAttack(null); if (simpleRef.on) useUi.setState({ corps: [] }); };
   useEffect(() => {
     if (!ask) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); ui().askAttack(null); }
+      if (e.key === 'Escape') { e.stopPropagation(); cancel(); }
       else if (e.key === '1') { e.stopPropagation(); go(1); }
       else if (e.key === '2') { e.stopPropagation(); go(2); }
-      else if (e.key === 'Enter') { e.stopPropagation(); go(ui().goal as Order); }
+      else if (e.key === 'Enter') { e.stopPropagation(); go(simpleRef.on ? 2 : ui().goal as Order); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [ask]);
   if (!sim || !ask) return null;
-  const { g, me } = sim, W = buildWorld(), T = g.regions[ask.target];
+  const { g, me } = sim, W = buildWorld(), T = g.regions[ask.target], simple = !!g.cfg?.staff; simpleRef.on = simple;
   if (!T || T.owner === me) return null;
   // who goes: the selected corps that border the target, or the share of a region's reserve
   let who: string, mine: number, from: number, wait: number;
@@ -52,7 +57,7 @@ export function AttackAsk() {
     const can = ids.map(id => lookCorps(g, me, id)).filter((x): x is NonNullable<typeof x> => !!x).filter(x => W.regions[x.r.id].land.includes(ask.target));
     if (!can.length) return null;
     from = can[0].r.id; mine = can.reduce((n, x) => n + groundUnits(x.c.u), 0);
-    who = can.length === 1 ? corpsTitle(me, can[0].r, can[0].c) : t('{0} corps', can.length);
+    who = simple ? t('From {0}', nm(W.regions[can[0].r.id].name)) : can.length === 1 ? corpsTitle(me, can[0].r, can[0].c) : t('{0} corps', can.length);
     wait = Math.max(...can.map(x => marchEta(g, me, x.r.id, x.c.p, x.r.id, ask.target) ?? 0)) + ASSEMBLE * moveK(g);
   }
   const b = borderBalance(g, from, ask.target), their: [number, number] = [b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]];
@@ -66,11 +71,18 @@ export function AttackAsk() {
       <p className="aa-who">{who}</p>
       <p className="aa-n"><b className="lcdn">{mine}</b> <span>{t('btl')}</span> <i>:</i> <b className="lcdn">{theirs}</b>{b.their.trench ? <span> · {t('trench {0}', 'I'.repeat(Math.min(3, b.their.trench)))}</span> : null}<span> · {t('goes in after about {0} s', Math.round(wait))}</span></p>
       <p className="aa-v">{verdict}</p>
-      <div className="aa-b">
+      {simple ? (
+        <div className="aa-b">
+          <button className="btn primary" onClick={() => go(2)}>{t('Attack')}<kbd>↵</kbd></button>
+          <button className="btn sm" onClick={() => { click(); cancel(); }}>{t('Cancel')}</button>
+        </div>
+      ) : (
+        <div className="aa-b">
         <button className={'btn sm' + (goal === 1 ? ' primary' : '')} title={t('Take the enemy\'s first line on this border and hold it')} onClick={() => go(1)}>{t('First line')}<kbd>1</kbd></button>
         <button className={'btn sm' + (goal === 2 ? ' primary' : '')} title={t('Take the first line, then fight on into the region')} onClick={() => go(2)}>{t('Invade')}<kbd>2</kbd></button>
         <button className="btn sm" onClick={() => { click(); ui().askAttack(null); }}>{t('Cancel')}</button>
       </div>
+      )}
       <p className="aa-tip">{t('Shift + right-click attacks at once, with the goal used last.')}</p>
     </div>
   );
@@ -103,11 +115,38 @@ export function FrontAsk() {
     ui().askFront(null); ui().bump();
   };
   const general = () => { click(); ui().askFront(null); if (fr.hq !== undefined) ui().selectArmy(fr.hq); else ui().setPanel('situation'); };
-  const names = fr.regions.slice(0, 3).map(id => nm(W.regions[id].name)).join(', ') + (fr.regions.length > 3 ? ' …' : '');
-  const w = 320, x = Math.max(8, Math.min(window.innerWidth - w - 8, ask.x - w / 2)), y = Math.max(60, Math.min(window.innerHeight - 250, ask.y + 14));
   const row = (on: boolean, label: string, text: string, run: () => void) => (
     <button className={'fa-o' + (on ? ' on' : '')} aria-pressed={on} onClick={run}><b>{label}</b><small>{text}</small></button>
   );
+  const names = fr.regions.slice(0, 3).map(id => nm(W.regions[id].name)).join(', ') + (fr.regions.length > 3 ? ' …' : '');
+  if (g.cfg?.staff) {
+    const fo = frontOrderOf(g, me, ask.region), order = (o: 'hold' | 'mine' | 'attack', target?: number) => { click(); const e = send({ t: 'front', region: ask.region, order: o, target }); if (e) ui().say(e); ui().askFront(null); ui().bump(); };
+    // the regions he could take: every foreign neighbour of the front, the weakest first
+    const targets = [...new Set(fr.regions.flatMap(id => W.regions[id].land.filter(n => g.regions[n].owner !== me)))].map(n => {
+      const from = fr.regions.find(id => W.regions[id].land.includes(n))!, b = borderBalance(g, from, n), their: [number, number] = [b.their.btl[0] + b.their.reserve[0], b.their.btl[1] + b.their.reserve[1]];
+      return { n, their, known: b.know > 0, o: g.regions[n].owner };
+    }).sort((a, b) => a.their[1] - b.their[1]);
+    const w2 = 340, x2 = Math.max(8, Math.min(window.innerWidth - w2 - 8, ask.x - w2 / 2)), y2 = Math.max(60, Math.min(window.innerHeight - 130 - targets.length * 34 - 150, ask.y + 14));
+    return (
+      <div id="frontask" className="plate" role="dialog" aria-label={t('Front order')} style={{ left: x2, top: y2, width: w2 }} onPointerDown={e => e.stopPropagation()}>
+        <div className="aa-h"><small>{t('Front order')}{fo.hq ? ' · ' + fo.hq.cmd.name : ''}</small><b>{names}</b></div>
+        {row(fo.order === 'hold', t('Hold'), t('The general spreads the troops by threat, digs in and throws back what breaks in.'), () => order('hold'))}
+        <div className={'fa-o fa-atk' + (fo.order === 'attack' ? ' on' : '')}>
+          <b>{t('Attack')}</b><small>{t('He gathers what he needs and goes in when the odds are good. Pick the region to take:')}</small>
+          <div className="fa-t">
+            {targets.map(x => (
+              <button key={x.n} className={'btn sm' + (fo.order === 'attack' && fo.target === x.n ? ' primary' : '')} onClick={() => order('attack', x.n)}>
+                <i className="dot" style={{ background: x.o >= 0 ? FACTIONS[x.o].color : '#888' }} />{nm(W.regions[x.n].name)}<em>{x.known ? (x.their[0] === x.their[1] ? x.their[0] : `${x.their[0]}–${x.their[1]}`) : '?'}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+        {row(fo.order === 'mine', t('Mine'), t('No general. You move every battalion on this front yourself.'), () => order('mine'))}
+        <button className="btn sm fa-x" onClick={() => { click(); ui().askFront(null); }}>{t('Close')}</button>
+      </div>
+    );
+  }
+  const w = 320, x = Math.max(8, Math.min(window.innerWidth - w - 8, ask.x - w / 2)), y = Math.max(60, Math.min(window.innerHeight - 250, ask.y + 14));
   return (
     <div id="frontask" className="plate" role="dialog" aria-label={t('Who runs this front')} style={{ left: x, top: y, width: w }} onPointerDown={e => e.stopPropagation()}>
       <div className="aa-h"><small>{t('Who runs this front')} · {fr.borders === 1 ? t('1 hostile border') : t('{0} hostile borders', fr.borders)}</small><b>{names}</b></div>

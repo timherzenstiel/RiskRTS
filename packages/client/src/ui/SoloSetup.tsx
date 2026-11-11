@@ -26,7 +26,7 @@ export function diffLine(i: number): string {
 export function startSolo(me: number, d: number, rules?: GameSettings, guided = false) {
   Sfx.init();
   if (guided) { me = TUT.me; d = 0; }
-  const s = new HostSession(me, guided ? { humans: [me], difficulty: d, seed: TUT.seed, guided: true } : { humans: [me], difficulty: d, settings: rules });
+  const s = new HostSession(me, guided ? { humans: [me], difficulty: d, seed: TUT.seed, guided: true } : { humans: [me], difficulty: d, settings: { ...DEFAULT_SETTINGS, ...rules, staff: true } });
   const ui = useUi.getState();
   // the auto-pause defaults come with the difficulty (design-play §7); the Inbox panel changes them
   const p = DIFFICULTIES[d].pause; ui.setAutoPause({ urgent: p !== 'off', attacked: p !== 'off', lost: p === 'all', won: p === 'all' });

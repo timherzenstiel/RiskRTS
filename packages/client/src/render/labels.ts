@@ -8,9 +8,18 @@ import { battleAnchor, frontLevels, hostileBorders, OVER, capacity, load, type B
 import { getLang, langVersion, t, tx } from '../i18n';
 import { pins } from '../game/pins';
 
+/** What a general on the attack is doing, in a word or two, for his banner. */
+function attackNote(h: { why?: { ok: boolean; going: number; need: number; known: boolean; fresh: boolean; busy: boolean }; op?: unknown }): string {
+  const w = h.why; if (h.op) return ' · ' + t('going in'); if (!w) return '';
+  if (w.busy) return ' · ' + t('fighting'); if (w.ok) return ' · ' + t('going in');
+  if (w.going < w.need) return ` · ${t('massing')} ${w.going}/${w.need}`;
+  if (!w.known || !w.fresh) return ' · ' + t('scouting');
+  return ' · ' + t('waiting for better odds');
+}
+
 /** Where a token may step to when its place is taken, in units of its own size. */
 /** Rough pixel sizes of the tokens that keep clear of each other. */
-const BOX_REGION = [50, 46] as const, BOX_REGION_SM = [36, 22] as const, BOX_CORPS = [54, 22] as const, BOX_CHIP = [76, 24] as const;
+const BOX_REGION = [50, 46] as const, BOX_REGION_SM = [36, 22] as const, BOX_CORPS = [54, 22] as const, BOX_CHIP = [76, 24] as const, BOX_BANNER = [190, 24] as const;
 const STEP: readonly (readonly [number, number])[] = [[0, 0], [0, -1], [1, 0], [-1, 0], [0, 1], [1, -1], [-1, -1], [0, -2]];
 
 /** Formations of the main army as the viewer knows them: exact, "~n" across the border (the whole region), "n?" from an old report, "?" unknown. */
@@ -291,11 +300,14 @@ export class Labels {
       if (dist < 20) { this.hide(l); continue; }
       if (ctx.now >= l.nextText) {
         l.nextText = ctx.now + .25;
-        let alive = 0; for (const [, c] of battleCounts(b)) alive += c[0];
-        const stage = b.goal === undefined ? '' : ' · ' + t(['1st line', 'consolidating', 'depth', 'foothold'][b.stage ?? 0]);
+        // two health bars: the attackers' men still standing against the defenders' (design-simple §4)
+        const hp = { a: [0, 0], d: [0, 0] }; for (const [f, c] of battleCounts(b)) { const s2 = f === b.def ? hp.d : hp.a; s2[0] += c[0]; s2[1] += c[1]; }
+        const bars = l.el.querySelectorAll<HTMLElement>('.hp'); const dc = FACTIONS[b.def]?.color ?? '#888', ac = FACTIONS[b.attacker]?.color ?? '#888';
+        for (const [i, v, c] of [[0, hp.a, ac], [1, hp.d, dc]] as const) { const e = bars[i]; if (!e) continue; (e.firstChild as HTMLElement).style.width = (v[1] ? Math.round(100 * v[0] / v[1]) : 0) + '%'; (e.firstChild as HTMLElement).style.background = c; (e.lastChild as HTMLElement).textContent = String(v[0]); }
+        const stage = b.goal === undefined || g.cfg?.staff ? '' : ' · ' + t(['1st line', 'consolidating', 'depth', 'foothold'][b.stage ?? 0]);
         // who attacks whom: "Germany → Verdun"; your own fights stand out (red when you defend, gold when you attack)
         const who = b.attacker === ctx.me ? t('You') : FACTIONS[b.attacker] ? t('{0}', FACTIONS[b.attacker].short) : '?';
-        const s = `${who} → ${tx(rname)} · ${alive}${stage}`; if (s !== l.label) { l.label = s; l.text.textContent = s; }
+        const s = `${who} → ${tx(rname)}${stage}`; if (s !== l.label) { l.label = s; l.text.textContent = s; }
         const cls = 'bm' + (b.def === ctx.me ? ' def' : b.sides.includes(ctx.me) ? ' atk' : ' oth');
         if (l.el.className !== cls) { l.el.className = cls; l.el.style.setProperty('--c', FACTIONS[b.attacker]?.color ?? '#888'); }
       }
@@ -355,7 +367,9 @@ export class Labels {
     for (const [k, l] of this.chips) if (l.seen !== ctx.frame) { l.el.remove(); this.chips.delete(k); }
 
     // Fronts mode: a banner on each of the viewer's fronts saying who runs it (design-play §3.1)
-    if (ctx.me >= 0 && this.mode === 1 && dist >= 20 && dist < 240) {
+    // under the simple command the banner carries the front's order and shows in every map mode (design-simple §3)
+    const simple = !!g.cfg?.staff;
+    if (ctx.me >= 0 && (this.mode === 1 || simple) && dist >= 20 && dist < 240) {
       if (ctx.now >= this.nextFront) { this.nextFront = ctx.now + .5; this.fronts = frontLevels(g, ctx.me); }
       for (const fr of this.fronts) {
         const key = String(fr.regions[0]);
@@ -370,13 +384,16 @@ export class Labels {
         }
         l.seen = ctx.frame;
         const h = fr.hq !== undefined ? (g.hq ?? []).find(x => x.id === fr.hq) : undefined;
-        const text = h ? `⚑ ${h.cmd.name.split(' ').slice(-1)[0]} · ${t(['Hold', 'Defend', 'Attack'][h.mandate])}` : `${fr.level === 'you' ? '✋ ' + t('You') : t('Auto')} · ${t('Appoint a commander')}`;
-        const k2 = fr.level + '|' + text;
+        const last = h ? h.cmd.name.split(' ').slice(-1)[0] : '';
+        const text = simple
+          ? (h ? (h.mandate === 2 && h.target !== undefined ? `⚑ ${last} · ${t('Attack')} → ${tx(this.world.regions[h.target].name)}${attackNote(h)}` : `⚑ ${last} · ${t('Hold')}`) : `✋ ${t('You')}`)
+          : h ? `⚑ ${last} · ${t(['Hold', 'Defend', 'Attack'][h.mandate])}` : `${fr.level === 'you' ? '✋ ' + t('You') : t('Auto')} · ${t('Appoint a commander')}`;
+        const k2 = (simple ? (h ? (h.mandate === 2 ? 'atk' : 'cmd') : 'you') : fr.level) + '|' + text;
         if (l.key !== k2) {
-          l.key = k2; l.el.className = 'fbn ' + fr.level; l.el.textContent = text;
-          l.el.title = h ? `${h.cmd.name}: ${t('his army runs this front. Click to open the army.')}` : fr.level === 'you' ? t('You run this front corps by corps. Click to appoint a commander.') : t('The regions run this front by themselves. Click to appoint a commander.');
+          l.key = k2; l.el.className = 'fbn ' + k2.split('|')[0]; l.el.textContent = text;
+          l.el.title = simple ? t('Click to give this front its order: hold, attack a region, or run it yourself.') : h ? `${h.cmd.name}: ${t('his army runs this front. Click to open the army.')}` : fr.level === 'you' ? t('You run this front corps by corps. Click to appoint a commander.') : t('The regions run this front by themselves. Click to appoint a commander.');
         }
-        this.place(l, ctx, this.world.regions[at].cx, ctx.anchorH(at) + 1.9, this.world.regions[at].cz);
+        this.place(l, ctx, this.world.regions[at].cx, ctx.anchorH(at) + 1.9, this.world.regions[at].cz, simple ? BOX_BANNER : undefined);
       }
     }
     for (const [k, l] of this.banners) if (l.seen !== ctx.frame) { l.el.remove(); this.banners.delete(k); }
@@ -447,10 +464,10 @@ export class Labels {
   private makeBattle(b: Battle, rname: string): BattleLabel {
     const aria = () => t('Watch the battle of {0}', rname);
     const el = document.createElement('button'); el.className = 'bm'; el.type = 'button'; el.style.pointerEvents = 'auto'; el.setAttribute('aria-label', aria());
-    el.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 1h2v1h1v1h1v1h1v1h1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1zM13 1h-2v1h-1v1h-1v1h-1v1h-1v1h1v1h1v-1h1v-1h1v-1h1v-1h1zM2 10h2v2h-2zM10 10h2v2h-2zM4 9h1v1h-1zM9 9h1v1h-1z" fill="currentColor"/></svg><span></span>';
+    el.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 1h2v1h1v1h1v1h1v1h1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1zM13 1h-2v1h-1v1h-1v1h-1v1h-1v1h1v1h1v-1h1v-1h1v-1h1v-1h1zM2 10h2v2h-2zM10 10h2v2h-2zM4 9h1v1h-1zM9 9h1v1h-1z" fill="currentColor"/></svg><span></span><div class="hps"><div class="hp"><i></i><b></b></div><div class="hp"><i></i><b></b></div></div>';
     el.addEventListener('click', () => this.onBattleClick(b.region, b.id));
     this.root.appendChild(el);
-    const l: BattleLabel = { el, text: el.lastChild as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0, aria };
+    const l: BattleLabel = { el, text: el.querySelector('span') as HTMLSpanElement, label: '', shown: true, tf: '', seen: 0, nextText: 0, aria };
     this.battles.set(b.id, l); return l;
   }
 

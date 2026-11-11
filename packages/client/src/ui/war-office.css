@@ -943,3 +943,27 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 #frontask .fa-o.on{border-left-color:var(--brass-hi);background:#33352b}
 #frontask .fa-o.on b{color:var(--brass-hi)}
 #frontask .fa-x{align-self:flex-end}
+
+/* ---- simple command: front banners with their order, the order card, the troops block of the region card ---- */
+.fbn.atk{border-color:var(--alarm);color:#ffd6c6;background:rgba(60,16,10,.94)}
+#frontask .fa-atk{cursor:default}
+#frontask .fa-t{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+#frontask .fa-t .btn{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:.02em}
+#frontask .fa-t .dot{width:9px;height:9px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px #000}
+#frontask .fa-t em{font:400 12px var(--f-lcd);color:var(--lcd);font-style:normal}
+#frontask .fa-t .primary em{color:#1b1407}
+.simple-troops .st-u{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 0 6px;font-size:14px;color:var(--fg)}
+.simple-troops .st-u b{font:400 17px var(--f-lcd);color:var(--lcd)}
+.simple-troops .st-l{list-style:none;margin:0 0 6px;padding:0;display:flex;flex-direction:column;gap:2px}
+.simple-troops .st-l li{display:flex;justify-content:space-between;padding:3px 8px;background:var(--well);border-radius:2px;font-size:13px;color:var(--mute)}
+.simple-troops .st-l b{font:400 14px var(--f-lcd);color:var(--khaki)}
+.simple-troops .st-w{margin:0 0 6px;font-size:13px;color:var(--khaki)}
+/* battle markers: one health bar per side, attacker on top */
+.bm{flex-wrap:wrap;max-width:230px}
+.bm .hps{flex:0 0 100%;display:flex;flex-direction:column;gap:2px;margin-top:2px}
+.bm .hp{position:relative;height:9px;background:#120a08;border:1px solid #000;border-radius:1px;overflow:hidden}
+.bm .hp i{position:absolute;left:0;top:0;bottom:0;transition:width .25s linear;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+.bm .hp b{position:absolute;right:3px;top:-3px;font:400 11px var(--f-lcd);color:#fff;text-shadow:0 0 2px #000,0 0 2px #000}
+.bm.sea .hps{display:none}
+.bm.oth .hp{height:5px}
+.bm.oth .hp b{display:none}

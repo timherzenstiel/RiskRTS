@@ -12,7 +12,7 @@ export interface InputHost {
   orderMode(): boolean;
   onSelect(id: number): void;
   /** `fast`: Shift was held (an attack goes at once, without its card). */
-  onOrder(id: number, fast?: boolean): void;
+  onOrder(id: number, fast?: boolean, half?: boolean): void;
   /** Shift + drag drew a box (client pixels); `add` keeps the current selection. */
   onBox?(x0: number, y0: number, x1: number, y1: number): void;
   onHover(id: number): void;
@@ -125,7 +125,7 @@ export class Input {
     if (!this.ptrs.has(e.pointerId)) return;
     if (this.ptrs.size === 1 && this.down && !this.dragging) {
       const id = h.regionAt(e.clientX, e.clientY);
-      if (this.down.b === 2 || (this.down.b === 0 && h.orderMode())) h.onOrder(id, e.shiftKey); else if (this.down.b === 0) h.onSelect(id);
+      if (this.down.b === 2 || (this.down.b === 0 && h.orderMode())) h.onOrder(id, e.shiftKey, e.ctrlKey || e.metaKey); else if (this.down.b === 0) h.onSelect(id);
     }
     if (this.boxEl) { const d = this.down; this.boxEl.remove(); this.boxEl = null; if (d && this.dragging) h.onBox?.(Math.min(d.x, e.clientX), Math.min(d.y, e.clientY), Math.max(d.x, e.clientX), Math.max(d.y, e.clientY)); }
     this.ptrs.delete(e.pointerId);

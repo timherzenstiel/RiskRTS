@@ -193,13 +193,13 @@ export const shellTarget = (g: GameState, fid: number) => {
 };
 
 /** Battle levers: shells, barrage, when to go over the top, reinforcing, withdrawing, stance of the capital. */
-function levers(g: GameState, f: FactionState, mine: RegionState[]) {
+export function levers(g: GameState, f: FactionState, mine: RegionState[], staff = false) {
   const fid = f.id, target = shellTarget(g, fid), P = paceOf(g);
   // the war economy follows the shell stock: munitions first below the target, civil when there is plenty
   const econ = f.shells < target ? 2 : f.shells > target * 2 ? 0 : 1;
   if (econ !== (f.econ ?? 1) && !f.away) setEcon(g, fid, econ);
   const capital = mine.find(r => r.capitalOf === fid);
-  if (capital && capital.stance !== 3 && !f.away) setStance(g, fid, capital.id, 3);
+  if (!staff && capital && capital.stance !== 3 && !f.away) setStance(g, fid, capital.id, 3);
   for (const b of g.battles) {
     if (b.ended || !(b.def === fid || b.sides.includes(fid))) continue;
     const att = b.def !== fid, [me, foe] = sidePower(b, fid);
@@ -212,6 +212,8 @@ function levers(g: GameState, f: FactionState, mine: RegionState[]) {
       const pat = nationOf(fid).ai.patience;
       if (supp > 55 * pat || (cut < .4 && supp > 35 * pat) || b.age > P.go * .8 || me > foe * 3) charge(g, fid, b.id);
     }
+    // a player's staff works the guns and the whistle; breaking off and sending more stay with the player
+    if (staff) continue;
     // a hopeless attack is called off; a front that is losing gets fresh troops from next door
     if (att && b.go && me < foe * .35 && (b.mor[fid] ?? 70) < 30 && rnd(g) < .3 * nationOf(fid).ai.retreat) { withdraw(g, fid, b.id); continue; }
     if (me < foe * 1.1 && rnd(g) < .25) {

@@ -1,5 +1,6 @@
 // The War Office sidebar, docked on the right: radar (minimap) with the map layers under it, the selected region's
 // file (header, tabs, cameo grids), and a supply gauge along the inner edge. On phones it becomes a bottom tray.
+import { isSimple } from './simple';
 import { FleetList } from './Navy';
 import { FACTIONS, TICK_SECONDS, buildWorld, convoyIn, income, sectorName } from '@riskrts/shared';
 import { MAP_MODES, useSim, useUi, type MapMode } from '../game/store';
@@ -77,6 +78,7 @@ function Idle() {
 }
 
 export function Sidebar() {
+  const simple = isSimple(useSim()?.g);
   const sel = useUi(s => s.sel);
   return (
     <aside id="side" className={'plate' + (sel >= 0 ? ' open' : '')} aria-label={t('War Office')}>
@@ -84,8 +86,8 @@ export function Sidebar() {
         <div className="crt"><Minimap /></div>
         <LayerPicker />
       </div>
-      <CommandBar />
-      <div className="side-body"><ArmyCard /><CorpsCard /><BorderCard />{sel >= 0 ? <Drawer /> : <Idle />}</div>
+      {!simple && <CommandBar />}
+      <div className="side-body">{!simple && <><ArmyCard /><CorpsCard /><BorderCard /></>}{sel >= 0 ? <Drawer /> : <Idle />}</div>
       <Lane />
       <SupplyGauge />
     </aside>

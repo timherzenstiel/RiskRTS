@@ -1,4 +1,5 @@
 // Creating and advancing a game.
+import { staffThink } from './staff';
 import { FACTIONS, NUM_FACTIONS } from '../data/factions';
 import { nationOf } from '../data/nations';
 import { FORMATION, GROUND_TYPES, UNIT_TYPES, emptyUnits, groundUnits, type Units } from '../data/units';
@@ -213,6 +214,8 @@ export function step(g: GameState, dt: number) {
   for (let i = g.battles.length - 1; i >= 0; i--) if (g.battles[i].ended && g.time > g.battles[i].removeAt) g.battles.splice(i, 1);
   const d = DIFFICULTIES[g.diff] ?? DIFFICULTIES[1];
   for (const f of g.factions) { if (!f.alive || !f.ai) continue; f.aiT -= dt; if (f.aiT <= 0) { f.aiT = (2.5 + rnd(g) * 1.8) * d.ai; aiThink(g, f); } }
+  // simple command: every human power has a staff that runs its fronts between the player's orders
+  if (g.cfg.staff) for (const f of g.factions) { if (!f.alive || f.ai) continue; f.aiT -= dt; if (f.aiT <= 0) { f.aiT = 2; staffThink(g, f); } }
 }
 
 /** Convenience for tests and tools: run for `seconds` of game time in 0.05 s steps. */

@@ -69,7 +69,8 @@ export function LeftRail() {
   const danger = hostileBorders(sim.g, sim.me).filter(b => b.danger === 3 && (b.massing || vital(sim.g, b.region, sim.me))).length, inbox = inboxOf(sim.g, sim.me), crit = inbox.some(x => x.urg > 0);
   const count = (k: string) => k === 'situation' ? danger : k === 'staff' ? inbox.length : k === 'reports' && paper !== null ? -1 : 0;
   const open = (grp: string, m: Member) => { Sfx.clunk(); lastOf[grp] = m.k; setMenu(''); if (m.sheet) ui().setOverlay(m.k as Overlay); else ui().setPanel(m.k as Panel); };
-  const groups = GROUPS.map(G => ({ ...G, members: G.members.filter(m => unlocked(sim.g, m.k)) })).filter(G => G.members.length);
+  // under the simple command the generals own the corps: no Forces panel
+  const groups = GROUPS.map(G => ({ ...G, members: G.members.filter(m => unlocked(sim.g, m.k) && !(sim.g.cfg?.staff && G.id === 'forces')) })).filter(G => G.members.length);
   const cur = groups.find(G => G.members.some(m => !m.sheet && m.k === panel));
   return (
     <>

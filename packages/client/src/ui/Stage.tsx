@@ -7,6 +7,7 @@ import { useUi } from '../game/store';
 import { rendererRef } from './refs';
 import { t } from '../i18n';
 import { orderCorps } from './Forces';
+import { isSimple, selectRegionTroops } from './simple';
 import { lastPointer } from './AttackAsk';
 
 export function Stage() {
@@ -25,9 +26,16 @@ export function Stage() {
     try {
       renderer = createWorldRenderer(canvas, labels, {
         onSelect: (id) => ui().select(id < 0 ? -1 : id),
-        onOrder: (id, zone, pt, fast) => {
+        onOrder: (id, zone, pt, fast, half) => {
           const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal, corps } = ui();
           if (!s) return;
+          // simple command: the selected region's troops take the order (all of them, or half with Ctrl)
+          if (isSimple(s.state) && !orderMode && id >= 0 && sel >= 0 && s.state.regions[sel].owner === s.me && id !== sel) {
+            const T = s.state.regions[id], Wd = buildWorld();
+            if (T.owner !== s.me && !Wd.regions[sel].land.includes(id)) { if (Wd.regions[sel].zones.length && Wd.regions[id].zones.length) { ui().say('Across the sea: use the harbour in Build to ship troops or land them.'); } else ui().say('That region does not border the one you selected.'); return; }
+            if (selectRegionTroops(sel, !!half).length) { orderCorps(id, T.owner === s.me ? undefined : pt, fast); if (T.owner === s.me || fast) useUi.setState({ corps: [] }); }
+            return;
+          }
           // selected corps take the order: move to an own region or border, attack an enemy region
           if (corps.length && (!orderMode || orderKind === 'corps') && id >= 0) { if (orderMode) ui().cancelOrder(); orderCorps(id, pt, fast); return; }
           const W = buildWorld(), me = s.me, g = s.state;

@@ -144,6 +144,7 @@ class WorldRenderer implements WorldRendererApi {
     this.labels = new Labels(labelsEl, this.world, this.terrain.cities, (c) => this.terrain.tileH[c.tile], (id, bid) => { this.flyToBattle(bid, 6); cb.onSelect(id); },
       (id, post, how) => {
         const u = useUi.getState(), st = this.session?.state, me = this.session?.me ?? -1;
+        if (st?.cfg?.staff) { if (how === 'order') cb.onOrder(id, undefined, undefined); else cb.onSelect(id); return; }
         if (how === 'order') { if (u.corps.length) { const p = sectorPoint(this.world, id, post); cb.onOrder(id, undefined, { x: p.x, z: p.z }); } return; }
         if (st && st.regions[id].owner === me) { const ids = corpsAtPost(st.regions[id], post).map(c => c.id); if (post < 0 && lookCorps(st, me, reserveId(id))) ids.push(reserveId(id)); if (ids.length) u.selectCorps(ids, how === 'add', id); else cb.onSelect(id); return; }
         cb.onSelect(id);
@@ -161,7 +162,7 @@ class WorldRenderer implements WorldRendererApi {
     this.input = new Input({
       canvas, rig: this.rig, regionAt: (x, y) => this.regionAt(x, y), orderMode: () => useUi.getState().orderMode,
       onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); },
-      onOrder: (id, fast) => { if (this.pickSector(id, true)) return; cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }, fast); },
+      onOrder: (id, fast, half) => { if (!this.session?.state.cfg?.staff && this.pickSector(id, true)) return; cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }, fast, half); },
       // Shift + drag: every own corps (and reserve) whose post lies in the box is selected
       onBox: (x0, y0, x1, y1) => {
         const st = this.session?.state, me = this.session?.me ?? -1; if (!st || me < 0) return;

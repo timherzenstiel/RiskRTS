@@ -615,4 +615,6 @@ export const UI_PLAY: Record<string, string> = {
   'He holds the line, asks for what he lacks and attacks by his mandate. Pick one in Situation.': 'Er hält die Linie, fordert an, was ihm fehlt, und greift nach seinem Auftrag an. Wähle einen unter Lage.',
   'The regions man their borders and refill them. Auto never attacks.': 'Die Regionen besetzen ihre Grenzen und füllen sie auf. Auto greift nie an.',
   '1 hostile border': '1 feindliche Grenze',
+  'Never pause for this': 'Dafür nie mehr anhalten',
+  'The game will no longer stop for this. You can turn it back on in the Inbox panel under "Pause the game when".': 'Das Spiel hält dafür nicht mehr an. Unter Posteingang, „Das Spiel anhalten, wenn“, lässt es sich wieder einschalten.',
 };

@@ -154,8 +154,8 @@ interface Ui {
   /** The owner switch of a front (design-play §3.1): one of its regions and where on screen its banner was clicked. */
   frontAsk: { region: number; x: number; y: number } | null;
   askFront(a: Ui['frontAsk']): void;
-  /** Why the game paused itself ('' when the player paused it), for the pause banner. */
-  pauseWhy: string;
+  /** Why the game paused itself ('' when the player paused it), for the pause banner, and which switch did it. */
+  pauseWhy: string; pauseKind: PauseWhy | null;
   focusInbox(key: string | null): void;
   /** Leave an Inbox item alone: drop its toast, and for a while the item itself (game seconds). */
   dropInbox(key: string, quiet?: number): void;
@@ -182,11 +182,15 @@ export function loadVoiceMode(get: (k: string) => string | null = lsGet): VoiceM
   return v === '0' ? 'off' : v === 'b' ? 'basic' : v === 'n' ? 'neural' : defaultVoiceMode();
 }
 Sfx.on = lsGet('f14snd') !== '0'; Radio.mode = loadVoiceMode();
+/** When the game last paused itself (ms), the speed it ran at then, and the speed before a sheet covered the game. */
+let lastAutoPause = -1e9, speedBefore = 1, overlaySpeed = 1;
+/** The speed to return to after a self-pause. */
+export const speedBeforePause = () => speedBefore;
 function loadAutoPause(): AutoPause { try { const v = JSON.parse(lsGet('f14ap') ?? 'null') as Partial<AutoPause> | null; return { ...AP_DEFAULT, ...(v ?? {}) }; } catch { return { ...AP_DEFAULT }; } }
 
 export const useUi = create<Ui>((set, get) => ({
   screen: 'title', session: null, rev: 0, sel: -1, hover: -1, tab: 'over', sendFrac: .5, goal: 2, layer: 0, mode: 0, modeSet: false, panel: null, dismissed: {}, border: null, borderTool: '', corps: [], armySel: -1, relieveFor: -1, orderMode: false, orderKind: 'march', orderArg: -1, orderSub: 'bb', fleet: -1, seaSel: -1, fortMarker: null, tutPoint: null, overlay: null, scoreOpen: false, reportId: -1,
-  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), pauseWhy: '', attackAsk: null, frontAsk: null, wwWeek: null,
+  trained: {}, inboxFocus: null, toasts: [], autoPause: loadAutoPause(), pauseWhy: '', pauseKind: null, attackAsk: null, frontAsk: null, wwWeek: null,
   toast: null, feed: [], log: [], tut: 0, tips: lsGet('f14tips') !== '0',
   quality: loadPixelScale(),
   sound: lsGet('f14snd') !== '0', radio: loadVoiceMode(), onAir: null, voiceState: { state: 'idle', p: 0 }, fatal: null, look: lsGet('f14look') === '1' ? 1 : 0,
@@ -227,12 +231,12 @@ export const useUi = create<Ui>((set, get) => ({
   cancelOrder: () => set({ orderMode: false }),
   rulesAt: null,
   openRules: (at) => { set({ rulesAt: at ?? null }); get().setOverlay('rules'); },
-  setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) s.speed = 0; else if (s.speed === 0) s.speed = 1; } set({ overlay }); },
+  setOverlay: (overlay) => { const s = get().session; if (s?.kind === 'local' && s.canControlTime) { if (overlay) { if (s.speed > 0) overlaySpeed = s.speed; s.speed = 0; } else if (s.speed === 0 && !get().pauseKind) s.speed = overlaySpeed || 1; } set({ overlay }); },
   toggleScore: () => set(st => ({ scoreOpen: !st.scoreOpen })),
   say: (text) => set({ toast: { text: tx(text), id: ++feedId } }),
   askAttack: (attackAsk) => set({ attackAsk }),
   askFront: (frontAsk) => set({ frontAsk }),
-  setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; set({ pauseWhy: '' }); get().bump(); } },
+  setSpeed: (n) => { const s = get().session; if (s?.canControlTime && (n <= 1 || s.canChangeSpeed)) { s.speed = n; set({ pauseWhy: '', pauseKind: null }); get().bump(); } },
   setQuality: (quality) => { lsSet('f14px', String(quality)); set({ quality }); },
   setLook: (look) => { lsSet('f14look', String(look)); set({ look }); },
   setSound: (sound) => { lsSet('f14snd', sound ? '1' : '0'); Sfx.on = sound; if (!sound) Radio.reset(); set({ sound }); },
@@ -267,7 +271,9 @@ export const useUi = create<Ui>((set, get) => ({
       if (e.k === 'over') { set({ overlay: 'end' }); continue; }
       if (e.k === 'battleStart' && (e.attacker === s.me || e.defender === s.me)) get().setMode(1, true);
       if (e.k === 'trained' && e.faction === s.me) { const tr = get().trained, old = tr[e.region]; set({ trained: { ...tr, [e.region]: { n: (old && s.state.time - old.at < 60 ? old.n : 0) + e.n, at: s.state.time } } }); }
-      if (e.k === 'battleStart' && e.defender === s.me && e.attacker !== s.me) get().autoPauseFor('attacked');
+      // an attack pauses the game only where there is something to lose at once: the capital, a factory, barracks or a port.
+      // A raid on a colony goes to the news lane without stopping the war.
+      if (e.k === 'battleStart' && e.defender === s.me && e.attacker !== s.me) { const r = s.state.regions[e.region]; if (r && (r.capitalOf === s.me || r.factory || r.barracks || r.port)) get().autoPauseFor('attacked'); }
       if (e.k === 'battleEnd' && e.prev === s.me && e.winner !== null && e.winner !== s.me) get().autoPauseFor('lost');
       if (e.k === 'battleEnd' && e.winner === s.me && e.sides.includes(s.me) && e.prev !== s.me) get().autoPauseFor('won');
       const d = describeEvent(s.state, e, s.me); if (!d) continue;
@@ -282,8 +288,10 @@ export const useUi = create<Ui>((set, get) => ({
   autoPauseFor: (why) => {
     const s = get().session; if (!s || !get().autoPause[why] || s.state.over) return;
     const g = s.state, humans = g.factions.filter(f => f.alive && !f.ai).length;
+    // not again right after the last one: several battles opening together are one interruption, not five
+    if (performance.now() - lastAutoPause < 20000) return;
     const msg = { urgent: 'Paused: a decision is waiting in the Inbox.', attacked: 'Paused: one of our regions is under attack.', lost: 'Paused: we lost a region.', won: 'Paused: we won a battle.' }[why];
-    if (s.canControlTime && humans <= 1) { if (s.speed > 0) { s.speed = 0; set({ pauseWhy: msg }); get().say(msg); get().bump(); } return; }
+    if (s.canControlTime && humans <= 1) { if (s.speed > 0) { lastAutoPause = performance.now(); speedBefore = s.speed; s.speed = 0; set({ pauseWhy: msg, pauseKind: why }); get().say(msg); get().bump(); } return; }
     // multiplayer: ask the others, at most once in half a minute and never over an open vote
     if (g.vote || g.cfg.vote === false || performance.now() - lastCall < 30000) return;
     lastCall = performance.now(); s.send({ t: 'pauseCall' });

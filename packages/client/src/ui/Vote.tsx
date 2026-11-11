@@ -1,7 +1,7 @@
 // Pause by vote in multiplayer (design-play §2, decided §10): the banner under the top strip while a call is open or the war
 // stands still, and the button that calls a pause.
 import { FACTIONS, VOTE, callsLeft, humansOf, votePaused } from '@riskrts/shared';
-import { useSim, useUi } from '../game/store';
+import { speedBeforePause, useSim, useUi } from '../game/store';
 import { click } from './actions';
 import { t, tx } from '../i18n';
 import { tn } from './LangPicker';
@@ -52,14 +52,16 @@ export function PauseCall() {
  * resumes with one click. Orders given meanwhile are taken but nothing moves, which is easy to miss without it.
  */
 export function PauseBanner() {
-  const sim = useSim(); const why = useUi(s => s.pauseWhy); const overlay = useUi(s => s.overlay);
+  const sim = useSim(); const why = useUi(s => s.pauseWhy); const kind = useUi(s => s.pauseKind); const overlay = useUi(s => s.overlay);
   if (!sim || overlay) return null;
   const { g, session } = sim;
   if (g.over || g.vote || !session.canControlTime || session.speed !== 0) return null;
+  const resume = () => ui().setSpeed(session.canChangeSpeed ? speedBeforePause() : 1);
   return (
     <div id="pausebar" className="plate" role="status">
       <span><b>{t('The game is paused')}</b>{why ? <> · {t(why).replace(/^[^:]+:\s*/, '').replace(/\.$/, '')}</> : null} · {t('nothing moves until you resume')}</span>
-      <button className="btn sm primary" onClick={() => { click(); ui().setSpeed(1); }}>{t('Resume (Space)')}</button>
+      <button className="btn sm primary" onClick={() => { click(); if (kind) resume(); else ui().setSpeed(1); }}>{t('Resume (Space)')}</button>
+      {kind && <button className="btn sm" title={t('The game will no longer stop for this. You can turn it back on in the Inbox panel under "Pause the game when".')} onClick={() => { click(); ui().setAutoPause({ [kind]: false }); resume(); }}>{t('Never pause for this')}</button>}
     </div>
   );
 }

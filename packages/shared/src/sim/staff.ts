@@ -49,15 +49,11 @@ function answer(g: GameState, f: FactionState) {
   }
 }
 
-/** Troops the player moved by hand go back to the general once they have stood still for a week. */
-function handBack(g: GameState, f: FactionState) {
-  for (const r of g.regions) if (r.owner === f.id && !(f.mine ?? []).includes(r.id)) for (const c of corpsIn(r)) if (c.man && (c.ord ?? 0) === 0 && g.time - (c.since ?? 0) > TICK_SECONDS) c.man = undefined;
-}
 
 /** One look of the staff (every few seconds, like a computer power's). */
 export function staffThink(g: GameState, f: FactionState) {
   const own = g.regions.filter(r => r.owner === f.id); if (!own.length) return;
-  staffArmies(g, f); answer(g, f); handBack(g, f);
+  staffArmies(g, f); answer(g, f);
   levers(g, f, own, true);
 }
 
@@ -79,7 +75,8 @@ export function frontOrder(g: GameState, fid: number, region: number, order: Fro
     const e = treatyCheck(g, fid, target!, false); if (e) return e;
   }
   if (f.mine) { f.mine = f.mine.filter(id => !fr.regions.includes(id)); if (!f.mine.length) f.mine = undefined; }
-  for (const id of fr.regions) { const r = g.regions[id]; if (r.deploy === 1) r.deploy = 0; }
+  // a new order hands the general everything on his front again, also what the player had placed on a border by hand
+  for (const id of fr.regions) { const r = g.regions[id]; if (r.deploy === 1) r.deploy = 0; for (const c of corpsIn(r)) if (c.man && (c.ord ?? 0) === 0) c.man = undefined; }
   staffArmies(g, f);
   const h = armyOf(g, fid, fr.regions); if (!h) return 'No general is free for that front.';
   if (order === 'attack') { h.mandate = 2; h.target = target; h.op = undefined; } else { h.mandate = 0; h.target = undefined; h.op = undefined; }

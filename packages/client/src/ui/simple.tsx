@@ -49,7 +49,7 @@ export function SimpleTroops({ g, me, r }: { g: GameState; me: number; r: Region
         {[...posts].sort((a, b) => b[1] - a[1]).map(([p, n]) => <li key={p}><span>{p >= 1000 ? t('On the coast') : t('Facing {0}', nm(W.regions[p].name))}</span><b>{n}</b></li>)}
       </ul>
       {who && <p className="st-w">{who}</p>}
-      <p className="note">{t('Right-click the map to send these troops: your own land to march there, an enemy neighbour to attack it. One battalion stays behind. Hold Ctrl to send half.')}</p>
+      <p className="note">{t('Right-click the map to send these troops: near a border of your own land to line up there, an enemy neighbour to attack it or march to its border. Hold Ctrl to send half. What you place on a border stays there until you give the front a new order.')}</p>
     </div>
   );
 }

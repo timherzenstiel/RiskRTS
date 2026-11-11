@@ -34,6 +34,13 @@ export function AttackAsk() {
     if (simpleRef.on) useUi.setState({ corps: [] });
   };
   const cancel = () => { ui().askAttack(null); if (simpleRef.on) useUi.setState({ corps: [] }); };
+  /** Simple command: do not attack, only line the troops up on the border facing the target. */
+  const toBorder = () => {
+    const a = ui().attackAsk, s = ui().session; if (!a || !s) return; click(); ui().askAttack(null);
+    let ok = 0, err: string | null = null;
+    for (const id of ui().corps) { const f = lookCorps(s.state, s.me, id); if (!f || !buildWorld().regions[f.r.id].land.includes(a.target)) continue; const e = s.send({ t: 'moveCorps', region: f.r.id, id, to: f.r.id, toPost: a.target }); if (e) err ??= e; else ok++; }
+    if (err && !ok) ui().say(err); useUi.setState({ corps: [] }); ui().bump();
+  };
   useEffect(() => {
     if (!ask) return;
     const onKey = (e: KeyboardEvent) => {
@@ -74,6 +81,7 @@ export function AttackAsk() {
       {simple ? (
         <div className="aa-b">
           <button className="btn primary" onClick={() => go(2)}>{t('Attack')}<kbd>↵</kbd></button>
+          <button className="btn" title={t('Do not attack yet: line these troops up on the border facing this region')} onClick={toBorder}>{t('To the border')}</button>
           <button className="btn sm" onClick={() => { click(); cancel(); }}>{t('Cancel')}</button>
         </div>
       ) : (
@@ -136,7 +144,7 @@ export function FrontAsk() {
           <div className="fa-t">
             {targets.map(x => (
               <button key={x.n} className={'btn sm' + (fo.order === 'attack' && fo.target === x.n ? ' primary' : '')} onClick={() => order('attack', x.n)}>
-                <i className="dot" style={{ background: x.o >= 0 ? FACTIONS[x.o].color : '#888' }} />{nm(W.regions[x.n].name)}<em>{x.known ? (x.their[0] === x.their[1] ? x.their[0] : `${x.their[0]}–${x.their[1]}`) : '?'}</em>
+                <i className="dot" style={{ background: x.o >= 0 ? FACTIONS[x.o].color : '#888' }} />{nm(W.regions[x.n].name)}<em>{t('{0} btl. enemy', x.known ? (x.their[0] === x.their[1] ? String(x.their[0]) : `${x.their[0]}–${x.their[1]}`) : '?')}</em>
               </button>
             ))}
           </div>

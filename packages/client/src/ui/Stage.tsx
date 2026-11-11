@@ -30,10 +30,10 @@ export function Stage() {
           const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal, corps } = ui();
           if (!s) return;
           // simple command: the selected region's troops take the order (all of them, or half with Ctrl)
-          if (isSimple(s.state) && !orderMode && id >= 0 && sel >= 0 && s.state.regions[sel].owner === s.me && id !== sel) {
+          if (isSimple(s.state) && !orderMode && id >= 0 && sel >= 0 && s.state.regions[sel].owner === s.me) {
             const T = s.state.regions[id], Wd = buildWorld();
             if (T.owner !== s.me && !Wd.regions[sel].land.includes(id)) { if (Wd.regions[sel].zones.length && Wd.regions[id].zones.length) { ui().say('Across the sea: use the harbour in Build to ship troops or land them.'); } else ui().say('That region does not border the one you selected.'); return; }
-            if (selectRegionTroops(sel, !!half).length) { orderCorps(id, T.owner === s.me ? undefined : pt, fast); if (T.owner === s.me || fast) useUi.setState({ corps: [] }); }
+            if (selectRegionTroops(sel, !!half).length) { orderCorps(id, pt, fast); if (T.owner === s.me || fast) useUi.setState({ corps: [] }); }
             return;
           }
           // selected corps take the order: move to an own region or border, attack an enemy region

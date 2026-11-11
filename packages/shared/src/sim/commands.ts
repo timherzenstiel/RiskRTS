@@ -354,7 +354,7 @@ export function moveCorps(g: GameState, fid: number, region: number, id: number,
   if (!route) return `No route through your own land leads from ${W.regions[region].name} to ${W.regions[to].name}.`;
   c.ord = 0; c.now = false;
   // simple command: troops sent to a region (not to a border of it) are that region's when they arrive, to place as it sees fit
-  const loose = !!g.cfg.staff && toPost < 0 && to !== region;
+  const loose = !!g.cfg.staff && toPost < 0; // sent to the interior: the general may use them again
   const tag = loose ? { ...tagOf(c), man: undefined, army: undefined } : { ...tagOf(c), man: true }, mor = c.mor, st = c.st ?? A.stance, from = c.p;
   const out = takeCorps(A, c, n);
   if (n && corpsSize(c) > 0) renumber(g, A, c);

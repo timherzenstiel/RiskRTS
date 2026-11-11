@@ -1,5 +1,5 @@
 // The in-game screen: map, top strip, War Office sidebar (docked right), dispatches, front command bar, overlays.
-import { AttackAsk } from './AttackAsk';
+import { AttackAsk, FrontAsk } from './AttackAsk';
 import { useEffect } from 'react';
 import { rendererRef } from './refs';
 import { useSim, useUi } from '../game/store';
@@ -113,6 +113,7 @@ export function Game() {
       <VoteBanner />
       <PauseBanner />
       <AttackAsk />
+      <FrontAsk />
       <div id="leftcol"><Objectives /><Feed /></div>
       <div id="bottom"><SeaCard /><FleetCard /><BattleCard /><Hint /></div>
       <Connection />

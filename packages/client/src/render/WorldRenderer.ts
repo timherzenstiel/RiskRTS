@@ -1,5 +1,6 @@
 // Three.js world renderer: a Command & Conquer style top-down war map that zooms into painted, pixel-art ground and battlefields.
 // Implements the contract in api.ts. It never mutates game state; it only reads session.state and drains visual effects.
+import { lastPointer } from '../ui/pointer';
 import * as THREE from 'three';
 import { AIR_RANGE, HW, atWar, buildWorld, carrierAt, carrierHops, fleetPos, hops, tileAtW, wrapDx, type Battle, type Fx, type GameState, type World } from '@riskrts/shared';
 import type { Session } from '../game/session';
@@ -149,7 +150,8 @@ class WorldRenderer implements WorldRendererApi {
       },
       (fleet) => useUi.getState().selectFleet(fleet), (sea) => { useUi.getState().selectSea(sea); this.flyToSea(sea); },
       (id, sector) => { cb.onSelect(id); useUi.getState().selectBorder(id, sector); },
-      (hq, id) => { const u = useUi.getState(); if (hq >= 0) u.selectArmy(hq); else { this.flyTo(id, 34); u.setPanel('situation'); } });
+      // a front's banner opens its owner switch: You, a general, or Auto
+      (_hq, id) => { const p = lastPointer(); useUi.getState().askFront({ region: id, x: p.x, y: p.y }); });
     this.labelCtx = {
       g: null, cam: this.rig, w: 1, h: 1, sel: -1, hover: -1, pin: null, corps: [], frame: 0, now: 0, me: -1,
       isTarget: (id) => this.isTarget(id), anchorH: (id) => this.terrain.anchorH(id), groundY: (id) => this.terrain.groundY[id],
@@ -159,7 +161,21 @@ class WorldRenderer implements WorldRendererApi {
     this.input = new Input({
       canvas, rig: this.rig, regionAt: (x, y) => this.regionAt(x, y), orderMode: () => useUi.getState().orderMode,
       onSelect: (id) => { if (id < 0 && this.pickSea()) return; if (!this.pickSector(id)) cb.onSelect(id); },
-      onOrder: (id) => { if (this.pickSector(id, true)) return; cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }); },
+      onOrder: (id, fast) => { if (this.pickSector(id, true)) return; cb.onOrder(id, id < 0 ? this.pickZone : undefined, { x: this.pickX, z: this.pickZ }, fast); },
+      // Shift + drag: every own corps (and reserve) whose post lies in the box is selected
+      onBox: (x0, y0, x1, y1) => {
+        const st = this.session?.state, me = this.session?.me ?? -1; if (!st || me < 0) return;
+        const r = this.canvas.getBoundingClientRect(), ids: number[] = [], P = { x: 0, y: 0, z: 0 }, v = new THREE.Vector3();
+        const hit = (x: number, y: number, z: number) => { this.rig.project(x, y, z, r.width, r.height, P, v); const sx = P.x + r.left, sy = P.y + r.top; return P.z <= 1 && sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1; };
+        for (const def of this.world.regions) {
+          const reg = st.regions[def.id]; if (reg.owner !== me) continue;
+          const y = this.terrain.anchorH(def.id);
+          if (hit(def.cx, y, def.cz)) { for (const c of reg.cs ?? []) if (c.p < 0) ids.push(c.id); if (lookCorps(st, me, reserveId(def.id))) ids.push(reserveId(def.id)); }
+          for (const c of reg.cs ?? []) if (c.p >= 0) { const p = sectorPoint(this.world, def.id, c.p); if (hit(p.x, y, p.z)) ids.push(c.id); }
+        }
+        const u = useUi.getState();
+        if (ids.length) u.selectCorps(ids, false); else u.say('No corps of yours in the box. Hold Shift and drag across your troops.');
+      },
       onHover: (id) => { if (id !== this.lastHover) { this.lastHover = id; cb.onHover(id); } },
       band: (b) => this.zoomBand(b),
       onDoubleClick: (id) => {
@@ -276,6 +292,8 @@ class WorldRenderer implements WorldRendererApi {
       else if (ui.orderMode && ui.orderKind === 'cvair') c = 'c-air';
       else if (ui.orderMode && (ui.orderKind === 'ship' || ui.orderKind === 'landing')) c = !rs || !this.world.regions[hov].zones.length ? 'c-no' : ui.orderKind === 'ship' ? (rs.owner === me ? 'c-move' : 'c-no') : rs.owner !== me ? 'c-atk' : 'c-no';
       else if (ui.orderMode) c = ui.orderKind === 'air' ? 'c-air' : !rs ? 'c-no' : sel >= 0 && !this.world.regions[sel].adj.includes(hov) ? 'c-no' : rs.owner === me ? 'c-move' : 'c-atk';
+      // corps selected: the cursor says what a right-click would do there (design-optimize §4.4)
+      else if (ui.corps.length && rs && g) c = rs.owner === me ? 'c-move' : ui.corps.some(id => { const f = lookCorps(g, me, id); return !!f && this.world.regions[f.r.id].land.includes(hov); }) ? 'c-atk' : 'c-no';
       else if (rs && rs.owner !== me && (rs.vis ?? 3) < 2) c = 'c-scout';
       if (c !== this.cursorCls) { if (this.cursorCls) this.canvas.classList.remove(this.cursorCls); if (c) this.canvas.classList.add(c); this.cursorCls = c; }
       if (ui.orderMode !== this.orderCursor) { this.orderCursor = ui.orderMode; this.canvas.classList.toggle('order', ui.orderMode); }

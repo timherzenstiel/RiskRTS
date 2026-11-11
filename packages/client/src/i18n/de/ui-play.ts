@@ -605,4 +605,14 @@ export const UI_PLAY: Record<string, string> = {
   'Good odds.': 'Gute Aussichten.',
   "Take the enemy's first line on this border and hold it": 'Die erste Linie des Feindes an dieser Grenze nehmen und halten',
   'Take the first line, then fight on into the region': 'Die erste Linie nehmen und weiter in die Region vorstoßen',
+  // design-optimize, handling: box selection, fast attack, the front's owner switch
+  'No corps of yours in the box. Hold Shift and drag across your troops.': 'Kein eigenes Korps im Rahmen. Halte die Umschalttaste und ziehe über deine Truppen.',
+  'Shift + right-click attacks at once, with the goal used last.': 'Umschalt + Rechtsklick greift sofort an, mit dem zuletzt gewählten Ziel.',
+  'Who runs this front': 'Wer führt diese Front',
+  'A general': 'Ein General',
+  'You place every corps yourself. Nothing moves while you look away.': 'Du stellst jedes Korps selbst auf. Nichts bewegt sich, während du wegsiehst.',
+  'He holds the line, asks for what he lacks and attacks by his mandate. Opens his army.': 'Er hält die Linie, fordert an, was ihm fehlt, und greift nach seinem Auftrag an. Öffnet seine Armee.',
+  'He holds the line, asks for what he lacks and attacks by his mandate. Pick one in Situation.': 'Er hält die Linie, fordert an, was ihm fehlt, und greift nach seinem Auftrag an. Wähle einen unter Lage.',
+  'The regions man their borders and refill them. Auto never attacks.': 'Die Regionen besetzen ihre Grenzen und füllen sie auf. Auto greift nie an.',
+  '1 hostile border': '1 feindliche Grenze',
 };

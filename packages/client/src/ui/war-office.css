@@ -928,3 +928,18 @@ input:focus-visible{outline-color:var(--lcd);border-color:var(--lcd-dim)}
 .tl.cp.atk .n{background:color-mix(in srgb,var(--c) 35%,#6a1c10)}
 .tl.cp.on .n{outline:2px solid var(--lcd);outline-offset:2px;background:color-mix(in srgb,var(--c) 58%,#0d0e0b)}
 #labels.md4 .tl .n,#labels.md3 .tl .n{text-shadow:none}
+
+/* ---- selection box, the front's owner switch, the tip on the attack card (design-optimize, handling) ---- */
+#selbox{position:fixed;z-index:19;border:1px solid var(--lcd);background:rgba(159,224,112,.12);box-shadow:0 0 0 1px rgba(0,0,0,.6);pointer-events:none}
+#atkask .aa-tip{font-size:11px;color:var(--mute)}
+#frontask{position:fixed;z-index:20;padding:10px 12px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 28px rgba(0,0,0,.65);color:var(--khaki)}
+#frontask .aa-h{display:flex;flex-direction:column;margin-bottom:2px}
+#frontask .aa-h small{font:600 10.5px var(--f-head);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+#frontask .aa-h b{font:400 18px/1.1 var(--f-stencil);letter-spacing:.03em}
+#frontask .fa-o{display:flex;flex-direction:column;gap:2px;text-align:left;padding:7px 9px;border:1px solid #121310;border-left:4px solid #55574d;border-radius:2px;background:var(--well);color:var(--fg);cursor:pointer}
+#frontask .fa-o b{font:600 13px var(--f-head);letter-spacing:.08em;text-transform:uppercase;color:var(--khaki)}
+#frontask .fa-o small{font-size:12px;color:var(--mute)}
+#frontask .fa-o:hover{border-color:var(--brass-lo)}
+#frontask .fa-o.on{border-left-color:var(--brass-hi);background:#33352b}
+#frontask .fa-o.on b{color:var(--brass-hi)}
+#frontask .fa-x{align-self:flex-end}

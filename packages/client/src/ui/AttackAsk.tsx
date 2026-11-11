@@ -9,11 +9,9 @@ import { orderCorps, corpsTitle } from './Forces';
 import { nm } from './format';
 import { t } from '../i18n';
 import { tn } from './LangPicker';
+import { frontLevels, corpsIn } from '@riskrts/shared';
 
-/** Where the pointer last went down, for placing the card. */
-let ptr = { x: 0, y: 0 };
-if (typeof window !== 'undefined') window.addEventListener('pointerdown', (e) => { ptr = { x: e.clientX, y: e.clientY }; }, true);
-export const lastPointer = () => ptr;
+export { lastPointer } from './pointer';
 
 /** How an attack looks before it starts: 2 good, 1 open, 0 bad, -1 nothing known. */
 export function oddsOf(mine: number, their: [number, number], known: boolean): -1 | 0 | 1 | 2 {
@@ -73,6 +71,50 @@ export function AttackAsk() {
         <button className={'btn sm' + (goal === 2 ? ' primary' : '')} title={t('Take the first line, then fight on into the region')} onClick={() => go(2)}>{t('Invade')}<kbd>2</kbd></button>
         <button className="btn sm" onClick={() => { click(); ui().askAttack(null); }}>{t('Cancel')}</button>
       </div>
+      <p className="aa-tip">{t('Shift + right-click attacks at once, with the goal used last.')}</p>
+    </div>
+  );
+}
+
+/**
+ * The owner switch of a front (design-play §3.1, design-optimize §3.3), opened from the front's banner on the map: you place
+ * every corps yourself, a general runs it, or the regions look after themselves.
+ */
+export function FrontAsk() {
+  const ask = useUi(s => s.frontAsk); const sim = useSim(); const ui = useUi.getState;
+  useEffect(() => {
+    if (!ask) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); ui().askFront(null); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [ask]);
+  if (!sim || !ask) return null;
+  const { g, me, session } = sim, W = buildWorld(), fr = frontLevels(g, me).find(f => f.regions.includes(ask.region));
+  if (!fr) return null;
+  const send = (c: Parameters<typeof session.send>[0]) => session.send(c);
+  // You: no army, every region placed by hand. Auto: no army, the regions place their troops, corps go back to them.
+  const set = (level: 'you' | 'auto') => {
+    click();
+    if (fr.hq !== undefined) send({ t: 'disband', army: fr.hq });
+    for (const id of fr.regions) {
+      send({ t: 'deploy', region: id, mode: level === 'you' ? 1 : 0 });
+      if (level === 'auto') for (const c of corpsIn(g.regions[id])) if (c.man && (c.ord ?? 0) === 0) send({ t: 'corpsSet', region: id, id: c.id, man: false });
+    }
+    ui().askFront(null); ui().bump();
+  };
+  const general = () => { click(); ui().askFront(null); if (fr.hq !== undefined) ui().selectArmy(fr.hq); else ui().setPanel('situation'); };
+  const names = fr.regions.slice(0, 3).map(id => nm(W.regions[id].name)).join(', ') + (fr.regions.length > 3 ? ' …' : '');
+  const w = 320, x = Math.max(8, Math.min(window.innerWidth - w - 8, ask.x - w / 2)), y = Math.max(60, Math.min(window.innerHeight - 250, ask.y + 14));
+  const row = (on: boolean, label: string, text: string, run: () => void) => (
+    <button className={'fa-o' + (on ? ' on' : '')} aria-pressed={on} onClick={run}><b>{label}</b><small>{text}</small></button>
+  );
+  return (
+    <div id="frontask" className="plate" role="dialog" aria-label={t('Who runs this front')} style={{ left: x, top: y, width: w }} onPointerDown={e => e.stopPropagation()}>
+      <div className="aa-h"><small>{t('Who runs this front')} · {fr.borders === 1 ? t('1 hostile border') : t('{0} hostile borders', fr.borders)}</small><b>{names}</b></div>
+      {row(fr.level === 'you', t('You'), t('You place every corps yourself. Nothing moves while you look away.'), () => set('you'))}
+      {row(fr.level === 'cmd', t('A general'), fr.hq !== undefined ? t('He holds the line, asks for what he lacks and attacks by his mandate. Opens his army.') : t('He holds the line, asks for what he lacks and attacks by his mandate. Pick one in Situation.'), general)}
+      {row(fr.level === 'auto', t('Auto'), t('The regions man their borders and refill them. Auto never attacks.'), () => set('auto'))}
+      <button className="btn sm fa-x" onClick={() => { click(); ui().askFront(null); }}>{t('Close')}</button>
     </div>
   );
 }

@@ -25,11 +25,11 @@ export function Stage() {
     try {
       renderer = createWorldRenderer(canvas, labels, {
         onSelect: (id) => ui().select(id < 0 ? -1 : id),
-        onOrder: (id, zone, pt) => {
+        onOrder: (id, zone, pt, fast) => {
           const { sel, session: s, orderMode, orderKind, orderArg, orderSub, sendFrac, goal, corps } = ui();
           if (!s) return;
           // selected corps take the order: move to an own region or border, attack an enemy region
-          if (corps.length && (!orderMode || orderKind === 'corps') && id >= 0) { if (orderMode) ui().cancelOrder(); orderCorps(id, pt); return; }
+          if (corps.length && (!orderMode || orderKind === 'corps') && id >= 0) { if (orderMode) ui().cancelOrder(); orderCorps(id, pt, fast); return; }
           const W = buildWorld(), me = s.me, g = s.state;
           // the navy: station warships in the zone clicked (or off the region clicked), carrier strikes, shipping, landings
           if (orderMode && orderKind === 'station') {
@@ -52,7 +52,7 @@ export function Stage() {
             ui().say(`${W.regions[id].name} does not border ${W.regions[sel].name}. Infantry and tanks need a direct border; aircraft reach two borders.`); return;
           }
           // an attack over a land border asks for its goal first; a march inside own land goes at once
-          if (g.regions[id].owner !== me && W.regions[sel].land.includes(id)) { const p = lastPointer(); ui().askAttack({ target: id, x: p.x, y: p.y, from: sel }); return; }
+          if (!fast && g.regions[id].owner !== me && W.regions[sel].land.includes(id)) { const p = lastPointer(); ui().askAttack({ target: id, x: p.x, y: p.y, from: sel }); return; }
           ui().march(sel, id);
         },
         onHover: (id) => ui().setHover(id),
